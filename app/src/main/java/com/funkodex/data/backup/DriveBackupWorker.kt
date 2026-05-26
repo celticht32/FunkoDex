@@ -49,7 +49,23 @@ class DriveBackupWorker @AssistedInject constructor(
     private val secureKeyStore: SecureKeyStore,
 ) : CoroutineWorker(context, params) {
 
-    companion object {
+    private fun sendBackupNotification(fileName: String) {
+        try {
+            val nm = applicationContext.getSystemService(android.content.Context.NOTIFICATION_SERVICE)
+                as android.app.NotificationManager
+            val notification = androidx.core.app.NotificationCompat
+                .Builder(applicationContext, "backup_status")
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("FunkoDex backup complete")
+                .setContentText(fileName)
+                .setAutoCancel(true)
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
+                .build()
+            nm.notify(3001, notification)
+        } catch (_: Exception) { /* notification failed — non-critical */ }
+    }
+
+        companion object {
         const val WORK_NAME        = "drive_backup"
         const val KEY_MANUAL       = "manual_trigger"
         const val PREF_LAST_BACKUP = "drive_last_backup"
@@ -117,6 +133,7 @@ class DriveBackupWorker @AssistedInject constructor(
             zipFile.delete()
 
             Log.i(TAG, "Backup complete: ${zipFile.name}")
+            sendBackupNotification(zipFile.name)
             Result.success(workDataOf("file" to zipFile.name))
         } catch (e: Exception) {
             Log.e(TAG, "Backup failed: ${e.message}", e)

@@ -11,6 +11,8 @@ import com.funkodex.data.preload.PreloadResult
 import com.funkodex.network.ConnectivityObserver
 import androidx.hilt.work.HiltWorkerFactory
 import com.funkodex.data.backup.DriveBackupWorker
+import com.funkodex.data.preload.CatalogRefreshWorker
+import com.funkodex.data.model.CatalogRefreshConfig
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -46,7 +48,11 @@ class FunkoDexApp : Application(), Configuration.Provider {
         // 3. Register connectivity observer for offline UPC queue (A5)
         connectivityObserver.register()
 
-        // 4a. Schedule daily price alert check (D3)
+        // 4a. Schedule periodic catalog refresh (default: 7 days, WiFi only)
+        // Uses KEEP policy so existing schedules are not reset on every launch
+        CatalogRefreshWorker.schedule(this, CatalogRefreshConfig())
+
+        // 4b. Schedule daily price alert check (D3)
         com.funkodex.data.preload.PriceAlertWorker.schedule(this)
 
         // 4b. Schedule daily Drive backup if user has connected Google Drive (E2)

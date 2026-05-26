@@ -1,0 +1,18 @@
+name = "funkodex-contrib"
+main = "worker.js"
+compatibility_date = "2024-01-15"
+compatibility_flags = ["nodejs_compat"]
+
+# KV namespace for rate limiting (create with: wrangler kv:namespace create RATE_LIMIT)
+# After creating, replace the placeholder id below with the real one from wrangler output
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Required secrets (set via: wrangler secret put SECRET_NAME)
+# GITHUB_PAT    — GitHub PAT with repo write scope
+# WORKER_SECRET — 32-byte random hex string
+# GITHUB_REPO   — "celtic-heart-steamworks/funko-upc-community"
+
+[env.production]
+name = "funkodex-contrib"

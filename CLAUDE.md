@@ -191,6 +191,8 @@ Test files:
 
 ## Future work
 
+See **`GITHUB_SETUP.md`** for complete step-by-step GitHub + Cloudflare Worker setup.
+
 See **`FUTURE.md`** for 25 detailed enhancement items with implementation instructions,
 all designed to be implementable in a single Claude session. Groups: Auth, Prices,
 Collection features, Platform, Data/Sync, QA, UI/UX, Security, Performance, i18n.

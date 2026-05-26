@@ -49,7 +49,10 @@ FunkoDex/
 ├── launcher-icon/          SVG source + generation instructions
 ├── gradle/libs.versions.toml
 ├── CLAUDE.md               Full architecture guide for future Claude sessions
-└── LESSONS_LEARNED.md      Practical lessons from the build
+├── LESSONS_LEARNED.md      Practical lessons from the build
+├── FUTURE.md               25 future enhancements with implementation instructions
+├── GITHUB_SETUP.md         Step-by-step GitHub + Cloudflare + eBay setup guide
+└── cloudflare-worker/      Cloudflare Worker (worker.js, wrangler.toml, README)
 ```
 
 ---
@@ -99,7 +102,12 @@ to generate all mipmap densities in Android Studio (90 seconds).
 
 `File → Sync Project with Gradle Files` — all 30 dependencies resolve from Maven Central automatically.
 
-### 7. Run
+### 7. Git + Cloudflare setup
+
+For pushing to GitHub and deploying the Cloudflare Worker, follow **`GITHUB_SETUP.md`** in the project root.
+It covers both repos, Cloudflare Worker deployment, eBay developer registration, and a first-build checklist.
+
+### 8. Run
 
 Connect a device (USB debugging on) or start an emulator. Press **Run ▶**.
 

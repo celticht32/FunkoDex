@@ -153,6 +153,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.coroutines.test)
+    testImplementation("io.mockk:mockk:1.13.12")  // F-QA-1: ScannerViewModel state machine tests
     androidTestImplementation(libs.androidx.test.ext)
     androidTestImplementation(libs.androidx.test.espresso)
     androidTestImplementation(platform(libs.compose.bom))

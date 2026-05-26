@@ -31,13 +31,16 @@ class MainActivity : ComponentActivity() {
             val deepLinkItemId = rawDeepLink
                 ?.takeIf { it.startsWith("funko::") && it.length in 14..60 }
 
+            // F-PLAT-4: Quick-scan shortcut — open scanner tab directly
+            val quickScan = intent?.action == "com.funkodex.ACTION_QUICK_SCAN"
+
             FunkoDexTheme(appTheme = currentTheme) {
                 var splashDone by remember { mutableStateOf(false) }
 
                 if (!splashDone) {
                     SplashScreen(onSplashComplete = { splashDone = true })
                 } else {
-                    FunkoDexNavHost(deepLinkItemId = deepLinkItemId)
+                    FunkoDexNavHost(deepLinkItemId = deepLinkItemId, openScannerOnStart = quickScan)
                 }
             }
         }

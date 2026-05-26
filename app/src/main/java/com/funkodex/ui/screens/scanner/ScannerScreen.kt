@@ -22,6 +22,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +58,25 @@ fun ScannerScreen(
     viewModel: ScannerViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
+
+    // F-UI-2: Haptic feedback on successful barcode scan (Preview / AlreadyOwned)
+    LaunchedEffect(state) {
+        if (state is ScanState.Preview || state is ScanState.AlreadyOwned) {
+            runCatching {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    val vm = context.getSystemService(VibratorManager::class.java)
+                    vm?.defaultVibrator?.vibrate(
+                        VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE)
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    val v = context.getSystemService(Vibrator::class.java)
+                    v?.vibrate(50)
+                }
+            } // silently ignore if vibrator unavailable (Do Not Disturb, no hardware)
+        }
+    }
     var showBatchScan by remember { mutableStateOf(false) }
 
     // Request CAMERA + POST_NOTIFICATIONS together on first scanner open.

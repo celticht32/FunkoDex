@@ -21,7 +21,7 @@ between Tier 2a (RSS) and Tier 2b (UPCitemdb). Return a `PriceSnapshot` with
 `source = PriceSource.EBAY_BROWSE`.
 **Effort:** ~1 session. Requires a real eBay CLIENT_ID (developer.ebay.com).
 
-### F-AUTH-2: Automatic token refresh notification
+### ~~F-AUTH-2~~: Automatic token refresh notification ✅ DONE
 **Current state:** When `TokenKeeperWorker` detects an expired refresh token
 (400/401 from provider), it logs a warning but the user has no idea.
 **What to build:** Post a notification on the `backup_status` channel:
@@ -128,7 +128,7 @@ scanner directly. Register a shortcut for "Show my collection value".
 **Files:** `shortcuts.xml` in `res/xml/`; `AndroidManifest.xml`.
 **Effort:** ~1 session.
 
-### F-PLAT-4: Home screen shortcut (quick scan)
+### ~~F-PLAT-4~~: Home screen shortcut (quick scan) ✅ DONE
 **Current state:** Widget shows stats only.
 **What to build:** A pinned shortcut (long-press the app icon) that opens directly
 to `ScannerScreen`, bypassing the splash and collection grid.
@@ -169,7 +169,7 @@ Capella cloud endpoint. The `funko::` document schema is unchanged — Capella s
 
 ## Quality & Testing
 
-### F-QA-1: Wire ScannerViewModelStateTest with Mockk
+### ~~F-QA-1~~: Wire ScannerViewModelStateTest with Mockk ✅ DONE
 **Current state:** `ScannerViewModelStateTest` contains only placeholder assertions.
 **What to build:** Add `io.mockk:mockk:1.13.12` to `testImplementation` in
 `build.gradle.kts`. Replace placeholder tests with real `mockk()` fakes for
@@ -206,7 +206,7 @@ in Reports covering the last 90 days.
 new `CollectionValueChart.kt` composable.
 **Effort:** ~1.5 sessions.
 
-### F-UI-2: Barcode scan sound / haptic feedback
+### ~~F-UI-2~~: Barcode scan sound / haptic feedback ✅ DONE
 **Current state:** No feedback when a barcode is successfully scanned.
 **What to build:** Brief haptic pulse (`VibrationEffect.createOneShot(50, 200)`) on
 successful barcode detection. Optional: play a short beep using `ToneGenerator`.
@@ -272,7 +272,7 @@ Only recommended if the threat model justifies it (high-value collector data).
 
 ## Performance
 
-### F-PERF-1: Lazy image loading with memory cache tuning
+### ~~F-PERF-1~~: Lazy image loading with memory cache tuning ✅ DONE
 **Current state:** Coil uses default memory cache (25% of heap).
 **What to build:** Configure `ImageLoader` singleton in `FunkoDexApp` with
 `memoryCachePolicy = CachePolicy.ENABLED`, `diskCachePolicy = CachePolicy.ENABLED`,
@@ -314,6 +314,7 @@ already constants.
 
 ---
 
-*Last updated: May 2026. Maintained by Celtic Heart Steamworks.*
+*Last updated: May 2026. Maintained by Celtic Heart Steamworks.
+5 items completed this session: F-QA-1, F-PERF-1, F-PLAT-4, F-AUTH-2, F-UI-2.*
 *To implement any item: start a new Claude session, share `CLAUDE.md` and `FUTURE.md`,
 and say "Implement F-XXX-N".*

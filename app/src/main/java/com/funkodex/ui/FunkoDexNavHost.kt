@@ -41,6 +41,7 @@ private val bottomNavItems = listOf(
 @Composable
 fun FunkoDexNavHost(
     deepLinkItemId: String? = null,
+    openScannerOnStart: Boolean = false,
 ) {
     val navController = rememberNavController()
 
@@ -50,6 +51,16 @@ fun FunkoDexNavHost(
             navController.navigate(Screen.Detail.routeFor(deepLinkItemId)) {
                 // Don't stack multiple detail screens if the user taps multiple notifications
                 launchSingleTop = true
+            }
+        }
+    }
+
+    // F-PLAT-4: Navigate to Scanner tab when launched via quick-scan shortcut
+    LaunchedEffect(openScannerOnStart) {
+        if (openScannerOnStart) {
+            navController.navigate(Screen.Scanner.route) {
+                launchSingleTop = true
+                popUpTo(Screen.Collection.route)
             }
         }
     }

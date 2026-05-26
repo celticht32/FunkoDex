@@ -1,10 +1,20 @@
 package com.funkodex
 
 import android.app.Application
+import android.content.Intent
+import android.content.pm.ShortcutInfo
+import android.content.pm.ShortcutManager
+import android.graphics.drawable.Icon
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
 import android.util.Log
+import coil.Coil
+import coil.ImageLoader
+import coil.decode.SvgDecoder
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
+import coil.request.CachePolicy
 import com.couchbase.lite.CouchbaseLite
 import com.funkodex.data.preload.CatalogPreloader
 import com.funkodex.data.preload.PreloadResult
@@ -53,6 +63,28 @@ class FunkoDexApp : Application(), Configuration.Provider {
 
         // 1. Initialise Couchbase Lite — must be first
         CouchbaseLite.init(this)
+
+        // 1b. Configure Coil image loader — F-PERF-1
+        //     30% memory, full disk cache, crossfade globally for smooth loads
+        Coil.setImageLoader(
+            ImageLoader.Builder(this)
+                .memoryCache {
+                    MemoryCache.Builder(this)
+                        .maxSizePercent(0.30)   // 30% of available heap (default is 25%)
+                        .build()
+                }
+                .diskCache {
+                    DiskCache.Builder()
+                        .directory(cacheDir.resolve("image_cache"))
+                        .maxSizePercent(0.02)   // ~2% of disk space
+                        .build()
+                }
+                .memoryCachePolicy(CachePolicy.ENABLED)
+                .diskCachePolicy(CachePolicy.ENABLED)
+                .crossfade(true)                // animate all image loads globally
+                .crossfade(150)                 // 150ms — snappy but smooth
+                .build()
+        )
 
         // 2. Create notification channels (Android 8+ requirement)
         createNotificationChannels()
@@ -146,5 +178,23 @@ class FunkoDexApp : Application(), Configuration.Provider {
         )
 
         FunkoDexLogger.d("FunkoDexApp", "Notification channels created")
+
+        // F-PLAT-4: Register quick-scan home screen shortcut (long-press app icon)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N_MR1) {
+            val sm = getSystemService(ShortcutManager::class.java)
+            if (sm != null && sm.dynamicShortcuts.none { it.id == "quick_scan" }) {
+                val scanIntent = Intent(this, com.funkodex.MainActivity::class.java).apply {
+                    action = "com.funkodex.ACTION_QUICK_SCAN"
+                    flags  = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                }
+                val shortcut = ShortcutInfo.Builder(this, "quick_scan")
+                    .setShortLabel("Scan")
+                    .setLongLabel("Scan a Funko barcode")
+                    .setIcon(Icon.createWithResource(this, android.R.drawable.ic_menu_camera))
+                    .setIntent(scanIntent)
+                    .build()
+                runCatching { sm.setDynamicShortcuts(listOf(shortcut)) }
+            }
+        }
     }
 }

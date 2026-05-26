@@ -1,6 +1,11 @@
 package com.funkodex.auth
 
 import android.content.Context
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import androidx.core.app.NotificationCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import com.funkodex.util.FunkoDexLogger
@@ -41,6 +46,38 @@ class TokenKeeperWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val tokenRefresh: TokenRefreshManager,
 ) : CoroutineWorker(context, params) {
+
+    // ─── F-AUTH-2: Re-authentication notification ─────────────────────────────
+
+    private fun sendReauthNotification(context: Context, provider: String) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        }
+
+        // Deep-link to Settings > Data Sources
+        val settingsIntent = Intent(context, com.funkodex.MainActivity::class.java).apply {
+            action  = "com.funkodex.ACTION_OPEN_SETTINGS"
+            flags   = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pi = PendingIntent.getActivity(
+            context, provider.hashCode(), settingsIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, "backup_status")
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("$provider sign-in expired")
+            .setContentText("Tap to re-connect $provider in Settings → Data Sources")
+            .setContentIntent(pi)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+
+        val nm = context.getSystemService(NotificationManager::class.java)
+        nm?.notify(provider.hashCode(), notification)
+        FunkoDexLogger.i(TAG, "Re-auth notification sent for $provider")
+    }
 
     companion object {
         const val WORK_NAME = "token_keeper"
@@ -86,6 +123,7 @@ class TokenKeeperWorker @AssistedInject constructor(
             tokenRefresh.hasHobbyDbRefreshToken() -> {
                 // Had a token but refresh failed (cleared by TokenRefreshManager)
                 FunkoDexLogger.w(TAG, "HobbyDB refresh failed — user needs to re-authenticate")
+                sendReauthNotification(applicationContext, "HobbyDB")
                 failed++
             }
             else -> FunkoDexLogger.d(TAG, "HobbyDB not connected — skipping")
@@ -100,6 +138,7 @@ class TokenKeeperWorker @AssistedInject constructor(
             }
             tokenRefresh.hasEbayRefreshToken() -> {
                 FunkoDexLogger.w(TAG, "eBay refresh failed — user needs to re-authenticate")
+                sendReauthNotification(applicationContext, "eBay")
                 failed++
             }
             else -> FunkoDexLogger.d(TAG, "eBay not connected — skipping")

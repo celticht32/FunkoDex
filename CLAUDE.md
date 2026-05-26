@@ -62,7 +62,7 @@ com.funkodex/
 │   └── repository/             FunkoRepository (+updateWidget +getOwnedFiltered),
 │                               CategoryPreferenceRepository, AlertRepository (+upc field),
 │                               ContributionRepository, ImageBlobRepository, PhotoRepository
-├── di/AppModule.kt             All @Provides — 12 providers; OkHttp writeTimeout(30s)
+├── di/AppModule.kt             All @Provides — 13 providers; OkHttp writeTimeout(30s)
 ├── network/                    ConnectivityObserver (+POST_NOTIF guard), FunkoLookupService,
 │                               PriceService (5-tier: retail → eBay RSS → UPCitemdb →
 │                               Channel3 free/premium → HobbyDB via TokenRefreshManager)
@@ -182,10 +182,10 @@ registering at `developer.ebay.com`.
 Test files:
 - `data/db/FunkoMapperTest.kt` — Couchbase document roundtrip (9 tests)
 - `data/repository/CollectionStatsTest.kt` — FunkoItem defaults + arithmetic (11 tests)
-- `network/FunkoLookupServiceTest.kt` — record mapping (10 tests)
-- `ui/screens/scanner/ScannerViewModelStateTest.kt` — state machine skeleton
+- `network/FunkoLookupServiceTest.kt` — record mapping (8 tests)
+- `ui/screens/scanner/ScannerViewModelStateTest.kt` — 20 Mockk tests (all 10 ScanState branches)
 - `auth/PkceHelperTest.kt` — RFC 7636 crypto incl. official test vector (9 tests)
-- `security/SecureKeyStoreTokenTest.kt` — token parsing/expiry logic (17 tests)
+- `security/SecureKeyStoreTokenTest.kt` — token parsing/expiry logic (15 tests)
 
 ---
 
@@ -197,6 +197,13 @@ See **`FUTURE.md`** for 25 detailed enhancement items with implementation instru
 all designed to be implementable in a single Claude session. Groups: Auth, Prices,
 Collection features, Platform, Data/Sync, QA, UI/UX, Security, Performance, i18n.
 
+## Recently completed (from FUTURE.md)
+- **F-QA-1:** ScannerViewModelStateTest wired with Mockk — 20 tests covering all 10 ScanState branches
+- **F-PERF-1:** Coil ImageLoader singleton — 30% memory cache, disk cache, global crossfade(150ms)
+- **F-PLAT-4:** Quick-scan home screen shortcut — long-press app icon → opens scanner directly
+- **F-AUTH-2:** Re-auth notification — TokenKeeperWorker posts notification when refresh token expires
+- **F-UI-2:** Haptic feedback — 50ms vibration pulse on successful barcode scan
+
 ## Remaining limitations
 
 - Couchbase Lite Community is unencrypted on disk (accepted — collector data, not financial)
@@ -204,8 +211,7 @@ Collection features, Platform, Data/Sync, QA, UI/UX, Security, Performance, i18n
 - Play Integrity API in Cloudflare Worker not yet implemented (optional hardening)
 - eBay `CLIENT_ID` requires developer.ebay.com registration
 - Wear OS companion, tablet two-pane layout, value-over-time chart not built
-- `ScannerViewModelStateTest` is fully wired with Mockk (20 tests covering all 10 ScanState branches)
-
+- 
 ---
 
 ## Lessons learned (see LESSONS_LEARNED.md)

@@ -52,7 +52,9 @@ FunkoDex/
 ├── LESSONS_LEARNED.md      Practical lessons from the build
 ├── FUTURE.md               25 future enhancements with implementation instructions
 ├── GITHUB_SETUP.md         Step-by-step GitHub + Cloudflare + eBay setup guide
-└── cloudflare-worker/      Cloudflare Worker (worker.js, wrangler.toml, README)
+├── cloudflare-worker/      Cloudflare Worker (worker.js, wrangler.toml, README)
+├── community-repo/         Community UPC database (merge scripts, workflows, schema)
+└── docs/                   Word documents (dependency guide, security architecture, etc.)
 ```
 
 ---
@@ -100,7 +102,7 @@ to generate all mipmap densities in Android Studio (90 seconds).
 
 ### 6. Gradle sync
 
-`File → Sync Project with Gradle Files` — all 30 dependencies resolve from Maven Central automatically.
+`File → Sync Project with Gradle Files` — all dependencies resolve from Maven Central automatically.
 
 ### 7. Git + Cloudflare setup
 

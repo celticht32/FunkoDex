@@ -35,6 +35,8 @@ import com.funkodex.ui.help.HelpBanner
 import com.funkodex.ui.help.HelpContent
 import androidx.lifecycle.LifecycleOwner
 import coil.compose.AsyncImage
+import androidx.compose.ui.res.painterResource
+import com.funkodex.R
 import com.funkodex.data.model.FunkoItem
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState

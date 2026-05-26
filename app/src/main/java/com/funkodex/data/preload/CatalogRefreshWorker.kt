@@ -52,6 +52,19 @@ class CatalogRefreshWorker(
         private const val COMMUNITY_UPC_URL =
             "https://raw.githubusercontent.com/celtic-heart-steamworks/funko-upc-community/main/funko_upc_community.json"
 
+        /**
+         * Shared OkHttpClient for this worker — avoids creating a new client on every
+         * request within a single worker run (3 HTTP calls per run: Kenny Chan, community
+         * UPC, HobbyDB vaulted). Connection pooling is handled by OkHttp internally.
+         * Lazy so it is only created when the worker actually runs.
+         */
+        val sharedClient: okhttp3.OkHttpClient by lazy {
+            okhttp3.OkHttpClient.Builder()
+                .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                .build()
+        }
+
         fun schedule(context: Context, config: CatalogRefreshConfig) {
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(
@@ -106,7 +119,7 @@ class CatalogRefreshWorker(
 
             // Refresh vaulted status from HobbyDB if authenticated (silent token refresh)
             val localSecureKeyStore = SecureKeyStore(applicationContext)
-            val localTokenRefresh   = TokenRefreshManager(localSecureKeyStore, OkHttpClient())
+            val localTokenRefresh   = TokenRefreshManager(localSecureKeyStore, sharedClient)
             val hobbyToken = localTokenRefresh.getValidHobbyDbToken()
             val vaultedCount = if (hobbyToken != null) {
                 refreshVaultedStatus(hobbyToken)
@@ -121,8 +134,7 @@ class CatalogRefreshWorker(
     }
 
     private suspend fun refreshKennyChan(): Int = withContext(Dispatchers.IO) {
-        val client = OkHttpClient()
-        val response = client.newCall(
+        val response = sharedClient.newCall(
             Request.Builder()
                 .url(KENNY_CHAN_URL)
                 .header("User-Agent", "FunkoDex/1.0 Android")
@@ -191,8 +203,7 @@ class CatalogRefreshWorker(
      */
     private suspend fun refreshCommunityUpcFile(): Int = withContext(Dispatchers.IO) {
         try {
-            val client   = OkHttpClient()
-            val response = client.newCall(
+            val response = sharedClient.newCall(
                 Request.Builder()
                     .url(COMMUNITY_UPC_URL)
                     .header("User-Agent", "FunkoDex/1.0 Android")

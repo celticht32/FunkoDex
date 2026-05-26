@@ -6,7 +6,7 @@ FunkoDex is an Android Kotlin/Jetpack Compose app for managing a Funko Pop colle
 Built entirely in Claude across multiple sessions. This file gives Claude the full
 context needed to work on the codebase without re-explaining architecture.
 
-**65 Kotlin source files. 6 JUnit test files. 9 git commits. All features complete.**
+**65 Kotlin source files. 6 JUnit test files. 10+ git commits. All features complete.**
 
 ---
 
@@ -189,7 +189,13 @@ Test files:
 
 ---
 
-## Remaining limitations / future work
+## Future work
+
+See **`FUTURE.md`** for 25 detailed enhancement items with implementation instructions,
+all designed to be implementable in a single Claude session. Groups: Auth, Prices,
+Collection features, Platform, Data/Sync, QA, UI/UX, Security, Performance, i18n.
+
+## Remaining limitations
 
 - Couchbase Lite Community is unencrypted on disk (accepted — collector data, not financial)
 - eBay RSS URL blocked in some regions (falls back to UPCitemdb gracefully)

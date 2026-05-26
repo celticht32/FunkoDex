@@ -1,6 +1,7 @@
 package com.funkodex.data.repository
 
 import com.couchbase.lite.*
+import com.couchbase.lite.Function
 import android.content.Context
 import android.net.ConnectivityManager
 import com.funkodex.data.db.FunkoDexDatabase
@@ -10,6 +11,7 @@ import com.funkodex.data.repository.CategoryPreferenceRepository
 import com.couchbase.lite.MutableDocument
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
@@ -93,7 +95,7 @@ class FunkoRepository @Inject constructor(
         }
         query.execute()
         awaitClose { query.removeChangeListener(token) }
-    }
+    }.buffer(Channel.UNLIMITED)  // SAFE-5: prevents dropped updates on burst writes
 
     /** Live Flow of want-list (isOwned = false). */
     fun wantListFlow(): Flow<List<FunkoItem>> = callbackFlow {
@@ -119,7 +121,7 @@ class FunkoRepository @Inject constructor(
         }
         query.execute()
         awaitClose { query.removeChangeListener(token) }
-    }
+    }.buffer(Channel.UNLIMITED)  // SAFE-5: prevents dropped updates on burst writes
 
     // ─── Analytics ────────────────────────────────────────────────────────────
 
@@ -272,17 +274,63 @@ class FunkoRepository @Inject constructor(
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
 
     // ─── Widget update helper ────────────────────────────────────────────────────
-    /** Called after any collection write — keeps the home screen widget in sync. */
+    /**
+     * Called after any collection write — keeps the home screen widget in sync.
+     *
+     * SAFE-3 optimisation: Uses targeted Couchbase COUNT queries instead of
+     * loading all documents into memory. For a collection of 1000+ items this
+     * avoids deserialising every FunkoItem just to count them.
+     */
     private suspend fun updateWidget() = withContext(Dispatchers.IO) {
         try {
-            val allItems   = getAllItems()
-            val owned      = allItems.filter { it.isOwned }
-            val wanted     = allItems.filter { !it.isOwned }
-            val topWanted  = wanted.firstOrNull()?.name ?: ""
-            val marketVal  = owned.sumOf { it.marketAvg }
+            // COUNT owned items — far cheaper than getAllItems().filter { it.isOwned }
+            val ownedQuery = QueryBuilder
+                .select(SelectResult.expression(Function.count(Expression.string("*")).`as`("cnt")))
+                .from(DataSource.database(database))
+                .where(
+                    Expression.property(FunkoDexDatabase.FIELD_TYPE)
+                        .equalTo(Expression.string(FunkoDexDatabase.TYPE_FUNKO))
+                        .and(Expression.property(FunkoDexDatabase.FIELD_IS_OWNED)
+                            .equalTo(Expression.booleanValue(true)))
+                )
+            val ownedCount = ownedQuery.execute().use { rs ->
+                rs.allResults().firstOrNull()?.getInt("cnt") ?: 0
+            }
+
+            // Top wanted: just the first item from the want list (ordered by dateAdded)
+            val wantedQuery = QueryBuilder
+                .select(SelectResult.expression(Expression.property(FunkoDexDatabase.FIELD_NAME)))
+                .from(DataSource.database(database))
+                .where(
+                    Expression.property(FunkoDexDatabase.FIELD_TYPE)
+                        .equalTo(Expression.string(FunkoDexDatabase.TYPE_FUNKO))
+                        .and(Expression.property(FunkoDexDatabase.FIELD_IS_OWNED)
+                            .equalTo(Expression.booleanValue(false)))
+                )
+                .orderBy(Ordering.property(FunkoDexDatabase.FIELD_DATE_ADDED).descending())
+                .limit(Expression.intValue(1))
+            val topWanted = wantedQuery.execute().use { rs ->
+                rs.allResults().firstOrNull()?.getString(FunkoDexDatabase.FIELD_NAME) ?: ""
+            }
+
+            // Market value still requires loading owned items (no SUM in Couchbase Community)
+            // Kept as a targeted query rather than loading all items
+            val marketVal = QueryBuilder
+                .select(SelectResult.expression(Expression.property(FunkoDexDatabase.FIELD_MARKET_AVG)))
+                .from(DataSource.database(database))
+                .where(
+                    Expression.property(FunkoDexDatabase.FIELD_TYPE)
+                        .equalTo(Expression.string(FunkoDexDatabase.TYPE_FUNKO))
+                        .and(Expression.property(FunkoDexDatabase.FIELD_IS_OWNED)
+                            .equalTo(Expression.booleanValue(true)))
+                )
+                .execute().use { rs ->
+                    rs.allResults().sumOf { it.getDouble(FunkoDexDatabase.FIELD_MARKET_AVG) }
+                }
+
             com.funkodex.ui.widget.CollectionWidget.update(
                 context     = context,
-                ownedCount  = owned.size,
+                ownedCount  = ownedCount,
                 marketValue = marketVal,
                 topWanted   = topWanted,
             )

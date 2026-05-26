@@ -36,6 +36,40 @@ fun SettingsScreen(
         ActivityResultContracts.StartActivityForResult()
     ) { dbTransferViewModel.reset() }
 
+    // File picker for database import
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { dbTransferViewModel.importDatabase(it) }
+    }
+
+    // Google Sign-In for Drive backup
+    val googleSignInClient = remember {
+        com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(
+            context,
+            com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
+                com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
+            )
+                .requestEmail()
+                .requestScopes(com.google.android.gms.common.api.Scope(
+                    com.google.api.services.drive.DriveScopes.DRIVE_FILE))
+                .build()
+        )
+    }
+    var driveAccount by remember {
+        mutableStateOf(
+            com.google.android.gms.auth.api.signin.GoogleSignIn
+                .getLastSignedInAccount(context)
+        )
+    }
+    val driveSignInLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        com.google.android.gms.auth.api.signin.GoogleSignIn
+            .getSignedInAccountFromIntent(result.data)
+            .addOnSuccessListener { account -> driveAccount = account }
+    }
+
     LaunchedEffect(transferState) {
         if (transferState is DatabaseTransferState.ReadyToShare) {
             val s = transferState as DatabaseTransferState.ReadyToShare
@@ -47,6 +81,14 @@ fun SettingsScreen(
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }.let { Intent.createChooser(it, "Send database via…") }
             )
+        }
+    }
+
+    // Import success / error snackbar feedback
+    if (transferState is DatabaseTransferState.ImportSuccess) {
+        LaunchedEffect(Unit) {
+            kotlinx.coroutines.delay(2000)
+            dbTransferViewModel.reset()
         }
     }
 
@@ -112,14 +154,31 @@ fun SettingsScreen(
                     )
 
                     // E2: Google Drive backup
-                    SettingRow(
-                        title    = "Back up to Google Drive",
-                        subtitle = "Daily automatic backup on WiFi. Tap to back up now.",
-                        icon     = Icons.Default.CloudUpload,
-                        onClick  = {
-                            com.funkodex.data.backup.DriveBackupWorker.runNow(context)
-                        }
-                    )
+                    if (driveAccount == null) {
+                        SettingsRow(
+                            icon     = Icons.Default.CloudUpload,
+                            title    = "Connect Google Drive",
+                            subtitle = "Sign in to enable automatic daily backups",
+                            onClick  = { driveSignInLauncher.launch(googleSignInClient.signInIntent) }
+                        )
+                    } else {
+                        SettingsRow(
+                            icon     = Icons.Default.CloudDone,
+                            title    = "Back up to Google Drive",
+                            subtitle = "Signed in as ${driveAccount!!.email}  ·  Tap to back up now",
+                            onClick  = { com.funkodex.data.backup.DriveBackupWorker.runNow(context) }
+                        )
+                        SettingsRow(
+                            icon     = Icons.Default.Logout,
+                            title    = "Disconnect Google Drive",
+                            subtitle = "Stop automatic backups",
+                            onClick  = {
+                                googleSignInClient.signOut().addOnCompleteListener {
+                                    driveAccount = null
+                                }
+                            }
+                        )
+                    }
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
@@ -158,27 +217,24 @@ fun SettingsScreen(
                     HorizontalDivider()
                     // Receive from another phone
                     SettingsRow(
-                        icon     = Icons.Default.Download,
-                        title    = "Receive from another phone",
-                        subtitle = "Import a .cblite2 backup file sent from another FunkoDex device",
-                        onClick  = { dbTransferViewModel.showImportInstructions() }
-                    )
-                    if (transferState is DatabaseTransferState.ImportInstructions) {
-                        Surface(
-                            color    = MaterialTheme.colorScheme.secondaryContainer,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                "On the sending phone: Settings → Send to another phone.\n" +
-                                "On this phone: open the received .zip file → tap 'Import'.\n\n" +
-                                "Or use Android Files app to copy the .zip to Downloads, " +
-                                "then tap it to open in FunkoDex.",
-                                modifier = Modifier.padding(16.dp),
-                                style    = MaterialTheme.typography.bodySmall,
-                                color    = MaterialTheme.colorScheme.onSecondaryContainer,
-                            )
+                        icon      = Icons.Default.Download,
+                        title     = "Import from backup",
+                        subtitle  = when (transferState) {
+                            is DatabaseTransferState.Importing    -> "Importing…"
+                            is DatabaseTransferState.ImportSuccess -> "Import successful!"
+                            else -> "Restore from a FunkoDex .zip backup file"
+                        },
+                        isLoading = transferState is DatabaseTransferState.Importing,
+                        onClick   = {
+                            if (transferState !is DatabaseTransferState.Importing) {
+                                importLauncher.launch(arrayOf(
+                                    "application/zip",
+                                    "application/octet-stream",
+                                    "*/*"
+                                ))
+                            }
                         }
-                    }
+                    )
                     HorizontalDivider()
                     // Export backup
                     SettingsRow(

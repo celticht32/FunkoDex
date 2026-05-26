@@ -32,13 +32,16 @@ class FunkoRepository @Inject constructor(
             val id = if (item.id.isEmpty()) "funko::${UUID.randomUUID()}" else item.id
             val doc = FunkoMapper.toDocument(item.copy(id = id))
             database.save(doc)
-            item.copy(id = id)
+            val saved = item.copy(id = id)
+            updateWidget()
+            saved
         }
     }
 
     suspend fun deleteItem(id: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             database.getDocument(id)?.let { database.delete(it) }
+            updateWidget()
         }
     }
 
@@ -268,6 +271,26 @@ class FunkoRepository @Inject constructor(
     fun getConnectivityManager(): ConnectivityManager? =
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
 
+    // ─── Widget update helper ────────────────────────────────────────────────────
+    /** Called after any collection write — keeps the home screen widget in sync. */
+    private suspend fun updateWidget() = withContext(Dispatchers.IO) {
+        try {
+            val allItems   = getAllItems()
+            val owned      = allItems.filter { it.isOwned }
+            val wanted     = allItems.filter { !it.isOwned }
+            val topWanted  = wanted.firstOrNull()?.name ?: ""
+            val marketVal  = owned.sumOf { it.marketAvg }
+            com.funkodex.ui.widget.CollectionWidget.update(
+                context     = context,
+                ownedCount  = owned.size,
+                marketValue = marketVal,
+                topWanted   = topWanted,
+            )
+        } catch (_: Exception) {
+            // Widget may not be pinned — silently ignore
+        }
+    }
+
     private suspend fun getAllItems(): List<FunkoItem> = withContext(Dispatchers.IO) {
         val query = QueryBuilder
             .select(SelectResult.expression(Meta.id))
@@ -281,6 +304,23 @@ class FunkoRepository @Inject constructor(
                 val id = result.getString("id") ?: return@mapNotNull null
                 database.getDocument(id)?.let { FunkoMapper.fromDocument(it) }
             }
+        }
+    }
+
+    // ─── Category-filtered catalog search (A6) ────────────────────────────────
+
+    /**
+     * Returns collection items filtered to enabled categories only.
+     * Called from CollectionViewModel to apply the user's category preferences.
+     */
+    suspend fun getOwnedFiltered(): List<FunkoItem> = withContext(Dispatchers.IO) {
+        val enabled = categoryPrefs.getEnabledCategories()
+        getAllItems().filter { item ->
+            // Keep item if: its category is enabled, OR there are no preferences yet,
+            // OR the item's category is blank (graceful fallback)
+            enabled.isEmpty() ||
+            item.category.isEmpty() ||
+            enabled.any { key -> item.category.contains(key, ignoreCase = true) }
         }
     }
 }

@@ -209,6 +209,7 @@ class DetailViewModel @Inject constructor(
             val alert = PriceAlert(
                 itemId      = itemId,
                 itemName    = item.name,
+                upc         = item.upc,
                 targetPrice = targetPrice,
                 isEnabled   = true,
             )

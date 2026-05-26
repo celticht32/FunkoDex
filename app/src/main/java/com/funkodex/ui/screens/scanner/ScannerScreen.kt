@@ -43,6 +43,7 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
+import androidx.compose.material3.CircularProgressIndicator
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -131,6 +132,27 @@ fun ScannerScreen(
             }
             is ScanState.Saved -> {
                 SavedConfirmation(item = s.item, onNext = viewModel::startScanning, onDone = viewModel::reset)
+            }
+            is ScanState.AlreadyOwned -> {
+                AlreadyOwnedSheet(
+                    item      = s.item,
+                    onUpdate  = { viewModel.confirmUpdate(s.item) },
+                    onDismiss = viewModel::dismissPreview,
+                )
+            }
+            is ScanState.NotFound -> {
+                NotFoundSheet(
+                    state            = s,
+                    onQueryChange    = viewModel::onNotFoundQueryChanged,
+                    onSelectMatch    = { item -> viewModel.selectNotFoundMatch(item, s.upc) },
+                    onDismiss        = viewModel::startScanning,
+                )
+            }
+            is ScanState.Pending -> {
+                PendingSheet(
+                    upc       = s.upc,
+                    onDismiss = viewModel::startScanning,
+                )
             }
             is ScanState.Error -> {
                 ErrorSheet(message = s.message, onRetry = viewModel::startScanning, onManual = viewModel::openManualSearch)
@@ -528,3 +550,214 @@ private fun startCamera(
 // ─── ML Kit barcode analyzer ───────────────────────────────────────────────────
 
 @OptIn(ExperimentalGetImage::class)
+
+// ─── AlreadyOwned sheet ────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AlreadyOwnedSheet(
+    item:      FunkoItem,
+    onUpdate:  () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier              = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 8.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement   = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint     = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp))
+                Text("Already in your collection",
+                    style      = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold)
+            }
+            Text(item.name,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface)
+            if (item.franchise.isNotEmpty()) {
+                Text(item.franchise,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(HelpContent.SCANNER_ALREADY_OWNED,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            HorizontalDivider()
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                    Text("Done")
+                }
+                Button(onClick = { onUpdate(); onDismiss() }, modifier = Modifier.weight(1f)) {
+                    Text("Update item")
+                }
+            }
+        }
+    }
+}
+
+// ─── NotFound sheet ────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NotFoundSheet(
+    state:         ScanState.NotFound,
+    onQueryChange: (String) -> Unit,
+    onSelectMatch: (FunkoItem) -> Unit,
+    onDismiss:     () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState       = rememberModalBottomSheetState(skipPartialExpansion = false),
+    ) {
+        Column(
+            modifier              = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.80f)
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement   = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Default.SearchOff, null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp))
+                Text(HelpContent.SCANNER_NOT_FOUND_TITLE,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold)
+            }
+            // Manual UPC entry — for when the camera couldn't resolve the barcode
+            var manualUpc by remember { mutableStateOf(state.upc) }
+            OutlinedTextField(
+                value         = manualUpc,
+                onValueChange = { manualUpc = it },
+                label         = { Text("UPC (edit if scanned incorrectly)") },
+                singleLine    = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier      = Modifier.fillMaxWidth(),
+                trailingIcon  = {
+                    if (manualUpc != state.upc && manualUpc.length >= 8) {
+                        TextButton(onClick = { onQueryChange(""); /* trigger re-lookup via upc */ }) {
+                            Text("Retry", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            )
+            Text(HelpContent.SCANNER_NOT_FOUND_BODY,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedTextField(
+                value         = state.query,
+                onValueChange = onQueryChange,
+                label         = { Text("Search by name (e.g. Batman)") },
+                leadingIcon   = {
+                    if (state.isSearching)
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    else
+                        Icon(Icons.Default.Search, null)
+                },
+                singleLine    = true,
+                modifier      = Modifier.fillMaxWidth(),
+            )
+            if (state.results.isNotEmpty()) {
+                HorizontalDivider()
+                Text("Tap to match this UPC to an item:",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    items(state.results) { item ->
+                        Card(
+                            onClick   = { onSelectMatch(item) },
+                            modifier  = Modifier.fillMaxWidth(),
+                            colors    = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        ) {
+                            Row(
+                                modifier          = Modifier.padding(10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (item.imageUrl.isNotEmpty()) {
+                                    AsyncImage(
+                                        model              = item.imageUrl,
+                                        contentDescription = null,
+                                        modifier           = Modifier
+                                            .size(44.dp)
+                                            .clip(RoundedCornerShape(6.dp)),
+                                        contentScale = ContentScale.Fit,
+                                    )
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(item.name,
+                                        style      = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines   = 1)
+                                    if (item.franchise.isNotEmpty())
+                                        Text(item.franchise,
+                                            style   = MaterialTheme.typography.labelSmall,
+                                            color   = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1)
+                                }
+                                Icon(Icons.Default.ChevronRight, null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─── Pending sheet ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun PendingSheet(
+    upc:       String,
+    onDismiss: () -> Unit,
+) {
+    Box(
+        modifier         = Modifier.fillMaxSize().padding(24.dp),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier              = Modifier.padding(16.dp),
+                verticalArrangement   = Arrangement.spacedBy(8.dp),
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment     = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Default.CloudOff, null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Scan queued — no network",
+                        fontWeight = FontWeight.Medium)
+                }
+                Text(HelpContent.SCANNER_PENDING,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("UPC: $upc",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                    TextButton(onClick = onDismiss) { Text("Scan another") }
+                }
+            }
+        }
+    }
+}

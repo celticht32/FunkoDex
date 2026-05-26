@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.funkodex.data.model.FunkoItem
 import com.funkodex.data.repository.FunkoRepository
+import com.funkodex.data.repository.CategoryPreferenceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -26,7 +27,8 @@ enum class SortOption(val label: String) {
 
 @HiltViewModel
 class CollectionViewModel @Inject constructor(
-    private val repository: FunkoRepository
+    private val repository: FunkoRepository,
+    private val categoryPrefs: CategoryPreferenceRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CollectionUiState())
@@ -57,10 +59,22 @@ class CollectionViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
+        // Combine live collection with live category preferences
+        // so the list reacts immediately when the user toggles categories
         viewModelScope.launch {
-            repository.collectionFlow().collect { items ->
-                _uiState.update { it.copy(items = items, isLoading = false) }
-            }
+            repository.collectionFlow()
+                .combine(categoryPrefs.enabledCategoryKeysFlow()) { items, enabledKeys ->
+                    if (enabledKeys.isEmpty()) items  // no prefs yet → show all
+                    else items.filter { item ->
+                        item.category.isEmpty() ||
+                        enabledKeys.any { key ->
+                            item.category.contains(key, ignoreCase = true)
+                        }
+                    }
+                }
+                .collect { filtered ->
+                    _uiState.update { it.copy(items = filtered, isLoading = false) }
+                }
         }
     }
 

@@ -19,6 +19,9 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import java.util.zip.ZipInputStream
+import com.funkodex.data.db.FunkoDexDatabase
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
 sealed class DatabaseTransferState {
@@ -26,6 +29,8 @@ sealed class DatabaseTransferState {
     object Exporting : DatabaseTransferState()
     data class ReadyToShare(val uri: Uri) : DatabaseTransferState()
     object ImportInstructions : DatabaseTransferState()
+    object Importing : DatabaseTransferState()
+    object ImportSuccess : DatabaseTransferState()
     data class Error(val message: String) : DatabaseTransferState()
 }
 
@@ -73,6 +78,50 @@ class DatabaseTransferViewModel @Inject constructor(
 
     fun showImportInstructions() {
         _state.value = DatabaseTransferState.ImportInstructions
+    }
+
+    /**
+     * Import a database from a user-picked ZIP file (content:// URI).
+     *
+     * The ZIP must contain a funkodex.cblite2/ directory (created by exportDatabase).
+     * We close the current database, extract the ZIP into the app files directory
+     * (replacing the existing database), then reopen it.
+     *
+     * CAUTION: This replaces ALL current data. The UI should warn the user.
+     */
+    fun importDatabase(uri: Uri) {
+        viewModelScope.launch {
+            _state.value = DatabaseTransferState.Importing
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val dbTargetDir = File(context.filesDir, "funkodex.cblite2")
+
+                    // Extract ZIP
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        ZipInputStream(input.buffered()).use { zis ->
+                            var entry = zis.nextEntry
+                            while (entry != null) {
+                                val name = entry.name
+                                // Only extract files inside funkodex.cblite2/
+                                if (name.startsWith("funkodex.cblite2/") && !entry.isDirectory) {
+                                    val relative = name.removePrefix("funkodex.cblite2/")
+                                    val outFile  = File(dbTargetDir, relative)
+                                    outFile.parentFile?.mkdirs()
+                                    outFile.outputStream().use { out -> zis.copyTo(out) }
+                                }
+                                zis.closeEntry()
+                                entry = zis.nextEntry
+                            }
+                        }
+                    } ?: error("Could not open the backup file")
+                }
+            }.fold(
+                onSuccess = { _state.value = DatabaseTransferState.ImportSuccess },
+                onFailure = { _state.value = DatabaseTransferState.Error(
+                    "Import failed: ${it.message ?: "Unknown error"}"
+                )}
+            )
+        }
     }
 
     fun reset() {

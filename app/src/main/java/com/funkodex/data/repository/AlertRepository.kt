@@ -34,6 +34,7 @@ class AlertRepository @Inject constructor(
             setString(FunkoDexDatabase.FIELD_TYPE,             FunkoDexDatabase.TYPE_PRICE_ALERT)
             setString(FunkoDexDatabase.FIELD_ALERT_ITEM_ID,    alert.itemId)
             setString(FunkoDexDatabase.FIELD_ALERT_ITEM_NAME,  alert.itemName)
+            setString(FunkoDexDatabase.FIELD_ALERT_UPC,        alert.upc)
             setDouble(FunkoDexDatabase.FIELD_ALERT_TARGET,     alert.targetPrice)
             setBoolean(FunkoDexDatabase.FIELD_ALERT_ENABLED,   alert.isEnabled)
             alert.lastTriggeredAt?.let {
@@ -113,6 +114,7 @@ class AlertRepository @Inject constructor(
     private fun docToAlert(doc: Document): PriceAlert = PriceAlert(
         itemId          = doc.getString(FunkoDexDatabase.FIELD_ALERT_ITEM_ID)   ?: "",
         itemName        = doc.getString(FunkoDexDatabase.FIELD_ALERT_ITEM_NAME) ?: "",
+        upc             = doc.getString(FunkoDexDatabase.FIELD_ALERT_UPC)       ?: "",
         targetPrice     = doc.getDouble(FunkoDexDatabase.FIELD_ALERT_TARGET),
         isEnabled       = doc.getBoolean(FunkoDexDatabase.FIELD_ALERT_ENABLED),
         lastTriggeredAt = runCatching {
@@ -123,6 +125,7 @@ class AlertRepository @Inject constructor(
     private fun alertFromDict(dict: Dictionary): PriceAlert = PriceAlert(
         itemId          = dict.getString(FunkoDexDatabase.FIELD_ALERT_ITEM_ID)   ?: "",
         itemName        = dict.getString(FunkoDexDatabase.FIELD_ALERT_ITEM_NAME) ?: "",
+        upc             = dict.getString(FunkoDexDatabase.FIELD_ALERT_UPC)       ?: "",
         targetPrice     = dict.getDouble(FunkoDexDatabase.FIELD_ALERT_TARGET),
         isEnabled       = dict.getBoolean(FunkoDexDatabase.FIELD_ALERT_ENABLED),
         lastTriggeredAt = runCatching {

@@ -23,6 +23,7 @@ import java.time.LocalDate
 data class PriceAlert(
     val itemId:          String,
     val itemName:        String,    // denormalised — needed for notification without a DB join
+    val upc:             String     = "",  // denormalised — enables UPC-based price lookup in worker
     val targetPrice:     Double,    // notify when marketLow drops at or below this
     val isEnabled:       Boolean    = true,
     val lastTriggeredAt: LocalDate? = null,

@@ -73,6 +73,7 @@ class FunkoDexDatabase(private val context: Context) {
         const val FIELD_ALERT_ENABLED     = "alertEnabled"
         const val FIELD_ALERT_TRIGGERED   = "lastTriggeredAt"
         const val FIELD_ALERT_ITEM_NAME   = "itemName"     // denormalised for notification
+        const val FIELD_ALERT_UPC       = "alertUpc"     // denormalised for price lookup
 
         // ── Community contribution fields (Phase F) ─────────────────────────
         const val FIELD_CONTRIB_HANDLE    = "contribHandle"

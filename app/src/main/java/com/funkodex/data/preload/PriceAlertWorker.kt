@@ -90,7 +90,7 @@ class PriceAlertWorker @AssistedInject constructor(
                 val pseudoItem = com.funkodex.data.model.FunkoItem(
                     id   = alert.itemId,
                     name = alert.itemName,
-                    upc  = "",
+                    upc  = alert.upc,         // enables UPC-based price tiers (2b UPCitemdb, 2c Channel3)
                 )
 
                 val snapshot = try {

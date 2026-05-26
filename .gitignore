@@ -11,7 +11,8 @@ build/
 *.iml
 *.iws
 *.ipr
-local.properties      # NEVER commit — contains workerUrl and any local keys
+# NEVER commit — contains sdk.dir, workerUrl, and any local keys
+local.properties
 
 # OS
 .DS_Store

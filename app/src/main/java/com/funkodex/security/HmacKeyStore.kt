@@ -1,6 +1,5 @@
 package com.funkodex.security
 
-import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -42,28 +41,19 @@ class HmacKeyStore @Inject constructor(
     companion object {
         private const val KEY_ALIAS    = "funkodex_community_hmac"
         private const val ANDROID_KS   = "AndroidKeyStore"
-        private const val PREF_INSTALL = "community_install_id"
     }
 
     // ── Install ID ────────────────────────────────────────────────────────────
 
     /**
      * Returns the stable install UUID used as X-Device-ID header.
-     * Generated once and stored in EncryptedSharedPreferences.
-     * Not linked to any user identity.
+     * Generated once and stored in EncryptedSharedPreferences (SecureKeyStore).
+     * Not linked to any user identity — used only for rate-limiting on the Worker.
+     *
+     * SEC-A fix: moved from plain SharedPreferences to EncryptedSharedPreferences
+     * for consistency with the rest of the security model.
      */
-    fun getInstallId(): String {
-        val existing = secureKeyStore.getChannel3Key()   // reuse storage slot check
-        // Use a dedicated key in EncryptedSharedPreferences via SecureKeyStore
-        // We'll store in the "worker url" slot since it's already available
-        val stored = context.getSharedPreferences("funkodex_meta", Context.MODE_PRIVATE)
-            .getString(PREF_INSTALL, null)
-        if (stored != null) return stored
-        val new = UUID.randomUUID().toString()
-        context.getSharedPreferences("funkodex_meta", Context.MODE_PRIVATE)
-            .edit().putString(PREF_INSTALL, new).apply()
-        return new
-    }
+    fun getInstallId(): String = secureKeyStore.getInstallId()
 
     // ── HMAC signing ─────────────────────────────────────────────────────────
 

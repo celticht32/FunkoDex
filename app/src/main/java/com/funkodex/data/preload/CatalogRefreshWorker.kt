@@ -6,6 +6,8 @@ import com.funkodex.util.FunkoDexLogger
 import androidx.work.*
 import com.couchbase.lite.MutableDocument
 import com.funkodex.data.db.FunkoDexDatabase
+import com.funkodex.security.SecureKeyStore
+import com.funkodex.auth.OAuthConfig
 import com.funkodex.data.preload.CatalogMapper
 import com.funkodex.data.model.CatalogRefreshConfig
 import com.google.gson.Gson
@@ -100,7 +102,13 @@ class CatalogRefreshWorker(
             val upcsMerged = refreshCommunityUpcFile()
             FunkoDexLogger.i("CatalogRefresh", "Community UPC file: $upcsMerged UPCs merged into catalog")
 
-            Result.success(workDataOf("new_items" to newCount, "upcs_merged" to upcsMerged))
+            // Refresh vaulted status from HobbyDB if authenticated
+            val vaultedCount = if (secureKeyStore.isHobbyDbTokenValid()) {
+                refreshVaultedStatus()
+            } else 0
+            if (vaultedCount > 0) FunkoDexLogger.i(TAG, "Vaulted status updated: $vaultedCount items")
+
+            Result.success(workDataOf("new_items" to newCount, "upcs_merged" to upcsMerged, "vaulted_updated" to vaultedCount))
         } catch (e: Exception) {
             FunkoDexLogger.e("CatalogRefresh", "Refresh failed: ${e.message}", e)
             Result.retry()
@@ -256,6 +264,70 @@ class CatalogRefreshWorker(
         else                  -> 0
     }
 }
+
+    /**
+     * Fetch vaulted status from HobbyDB and update any catalog docs where isVaulted changed.
+     * Only called when a valid HobbyDB OAuth token is available.
+     * Returns the count of catalog docs updated.
+     */
+    private suspend fun refreshVaultedStatus(): Int = withContext(Dispatchers.IO) {
+        var updatedCount = 0
+        try {
+            val token    = secureKeyStore.getHobbyDbAccessToken()
+            if (token.isEmpty()) return@withContext 0
+
+            val database = db.getDatabase()
+            var page     = 1
+            var hasMore  = true
+
+            while (hasMore) {
+                val url = "${com.funkodex.auth.OAuthConfig.HobbyDb.VAULTED_URL}$page&per_page=100"
+                val response = okHttpClient.newCall(
+                    okhttp3.Request.Builder()
+                        .url(url)
+                        .header("Authorization", "Bearer $token")
+                        .header("User-Agent", "FunkoDex/1.0 Android")
+                        .build()
+                ).execute()
+
+                if (!response.isSuccessful) {
+                    FunkoDexLogger.w(TAG, "HobbyDB vaulted endpoint: HTTP ${response.code}")
+                    break
+                }
+
+                val body = response.body?.string() ?: break
+                val json = com.google.gson.JsonParser.parseString(body).asJsonObject
+                val items = json.getAsJsonArray("items") ?: break
+
+                if (items.size() == 0) { hasMore = false; break }
+
+                database.inBatch {
+                    items.forEach { el ->
+                        val obj    = el.asJsonObject
+                        val handle = obj.optString("handle") ?: return@forEach
+                        val docId  = "${FunkoDexDatabase.TYPE_CATALOG}::$handle"
+                        val doc    = database.getDocument(docId) ?: return@forEach
+                        if (doc.getBoolean(FunkoDexDatabase.FIELD_IS_VAULTED) != true) {
+                            database.save(doc.toMutable().apply {
+                                setBoolean(FunkoDexDatabase.FIELD_IS_VAULTED, true)
+                            })
+                            updatedCount++
+                        }
+                    }
+                }
+
+                hasMore = items.size() == 100
+                page++
+            }
+        } catch (e: Exception) {
+            FunkoDexLogger.e(TAG, "Failed to refresh vaulted status", e)
+        }
+        updatedCount
+    }
+
+    // ─── helper ───────────────────────────────────────────────────────────────
+    private fun com.google.gson.JsonObject?.optString(key: String): String? =
+        try { this?.get(key)?.asString } catch (_: Exception) { null }
 
 /**
  * Convenience helper — called by CatalogSettingsViewModel when settings change.

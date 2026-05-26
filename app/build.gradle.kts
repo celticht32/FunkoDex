@@ -133,6 +133,9 @@ dependencies {
     implementation(libs.accompanist.flowlayout)
     implementation(libs.accompanist.permissions)
 
+    // Chrome Custom Tabs — OAuth flows for HobbyDB and eBay
+    implementation(libs.browser)
+
     // Camera & ML Kit
     implementation(libs.mlkit.barcode)
     implementation(libs.camerax.core)

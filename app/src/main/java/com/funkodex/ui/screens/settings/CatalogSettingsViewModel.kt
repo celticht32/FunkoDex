@@ -80,6 +80,21 @@ class CatalogSettingsViewModel @Inject constructor(
         CatalogRefreshWorker.runNow(context)
     }
 
+    // ─── OAuth helpers ───────────────────────────────────────────────────────────
+    fun isHobbyDbConnected(): Boolean = secureKeyStore.hasHobbyDbToken() && secureKeyStore.isHobbyDbTokenValid()
+    fun isEbayConnected(): Boolean    = secureKeyStore.hasEbayOAuthToken() && secureKeyStore.isEbayTokenValid()
+
+    fun disconnectHobbyDb() {
+        secureKeyStore.clearHobbyDbToken()
+        // Rebuild config flow to reflect change
+        viewModelScope.launch { context.catalogDataStore.edit { it[HOBBYDB_KEY] = false } }
+    }
+
+    fun disconnectEbay() {
+        secureKeyStore.clearEbayOAuthToken()
+    }
+
+    // ─── Internal ─────────────────────────────────────────────────────────────
     private fun update(transform: (MutablePreferences) -> Unit) {
         viewModelScope.launch {
             context.catalogDataStore.edit(transform)

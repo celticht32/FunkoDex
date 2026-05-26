@@ -34,6 +34,7 @@ class SecureKeyStore @Inject constructor(
         private const val KEY_CHANNEL3   = "channel3_api_key"
         private const val KEY_HOBBYDB    = "hobbydb_api_token"
         private const val KEY_EBAY_OAUTH = "ebay_oauth_token"
+        private const val KEY_INSTALL_ID = "community_install_id"
     }
 
     private val prefs: SharedPreferences by lazy { buildPrefs() }
@@ -57,13 +58,42 @@ class SecureKeyStore @Inject constructor(
     fun hasChannel3Key(): Boolean   = getChannel3Key().isNotEmpty()
     fun clearChannel3Key()          { prefs.edit().remove(KEY_CHANNEL3).apply() }
 
-    // ─── HobbyDB token (Phase D placeholder) ──────────────────────────────────
+    // ─── HobbyDB token ───────────────────────────────────────────────────────────
+    // Stored as "accessToken|expireAtMs|refreshToken"
     fun getHobbyDbToken(): String   = prefs.getString(KEY_HOBBYDB, "")   ?: ""
     fun setHobbyDbToken(t: String)  { prefs.edit().putString(KEY_HOBBYDB, t.trim()).apply() }
     fun clearHobbyDbToken()         { prefs.edit().remove(KEY_HOBBYDB).apply() }
+    fun hasHobbyDbToken(): Boolean  = getHobbyDbToken().isNotEmpty()
+    /** Extracts just the access token portion (before the first '|'). */
+    fun getHobbyDbAccessToken(): String = getHobbyDbToken().substringBefore("|")
+    /** True if the stored token has not yet passed its expiry timestamp. */
+    fun isHobbyDbTokenValid(): Boolean {
+        val parts = getHobbyDbToken().split("|")
+        if (parts.size < 2) return false
+        val expireAt = parts[1].toLongOrNull() ?: return false
+        return System.currentTimeMillis() < expireAt - 60_000L  // 60s grace
+    }
 
-    // ─── eBay OAuth token (Phase D placeholder) ────────────────────────────────
+    // ─── eBay OAuth token ─────────────────────────────────────────────────────
+    // Stored as "accessToken|expireAtMs|refreshToken"
     fun getEbayOAuthToken(): String  = prefs.getString(KEY_EBAY_OAUTH, "") ?: ""
     fun setEbayOAuthToken(t: String) { prefs.edit().putString(KEY_EBAY_OAUTH, t.trim()).apply() }
     fun clearEbayOAuthToken()        { prefs.edit().remove(KEY_EBAY_OAUTH).apply() }
+    fun hasEbayOAuthToken(): Boolean = getEbayOAuthToken().isNotEmpty()
+    fun getEbayAccessToken(): String = getEbayOAuthToken().substringBefore("|")
+    // ─── Community install ID (anon UUID for rate-limiting) ─────────────────────
+    fun getInstallId(): String {
+        val stored = prefs.getString(KEY_INSTALL_ID, null)
+        if (!stored.isNullOrEmpty()) return stored
+        val new = java.util.UUID.randomUUID().toString()
+        prefs.edit().putString(KEY_INSTALL_ID, new).apply()
+        return new
+    }
+
+    fun isEbayTokenValid(): Boolean {
+        val parts = getEbayOAuthToken().split("|")
+        if (parts.size < 2) return false
+        val expireAt = parts[1].toLongOrNull() ?: return false
+        return System.currentTimeMillis() < expireAt - 60_000L
+    }
 }

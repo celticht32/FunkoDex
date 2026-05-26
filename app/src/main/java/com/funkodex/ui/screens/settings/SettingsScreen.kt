@@ -289,6 +289,31 @@ fun SettingsScreen(
                             )
                         }
                     }
+                    // SEC-C: warn when VERBOSE is selected — it logs search queries and item names
+                    if (logLevel == LogLevel.VERBOSE) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                                    .copy(alpha = 0.6f)),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(Icons.Default.Warning, null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onErrorContainer)
+                                Text(
+                                    "Verbose logs capture search queries and item names. " +
+                                    "Share log files only with trusted recipients.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                            }
+                        }
+                    }
 
                     HorizontalDivider()
 
@@ -426,9 +451,32 @@ private fun SettingsRow(
 fun CatalogDataSection(
     viewModel: CatalogSettingsViewModel = hiltViewModel()
 ) {
-    val config by viewModel.config.collectAsState()
-    var showChannel3Dialog by remember { mutableStateOf(false) }
-    var channel3KeyDraft   by remember { mutableStateOf(config.channel3ApiKey) }
+    val config              by viewModel.config.collectAsState()
+    var showChannel3Dialog  by remember { mutableStateOf(false) }
+    var channel3KeyDraft    by remember { mutableStateOf(config.channel3ApiKey) }
+    var hobbyDbConnected    by remember { mutableStateOf(viewModel.isHobbyDbConnected()) }
+    var ebayConnected       by remember { mutableStateOf(viewModel.isEbayConnected()) }
+    val context             = LocalContext.current
+
+    // Listen for OAuth success/failure broadcasts from OAuthCallbackActivity
+    DisposableEffect(Unit) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(ctx: android.content.Context?, intent: android.content.Intent?) {
+                val provider = intent?.getStringExtra(OAuthCallbackActivity.EXTRA_PROVIDER)
+                val success  = intent?.action == OAuthCallbackActivity.ACTION_SUCCESS
+                when (provider) {
+                    OAuthProvider.HOBBYDB.name -> hobbyDbConnected = success
+                    OAuthProvider.EBAY.name    -> ebayConnected    = success
+                }
+            }
+        }
+        val filter = android.content.IntentFilter().apply {
+            addAction(OAuthCallbackActivity.ACTION_SUCCESS)
+            addAction(OAuthCallbackActivity.ACTION_FAILURE)
+        }
+        context.registerReceiver(receiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
+        onDispose { context.unregisterReceiver(receiver) }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
 
@@ -542,13 +590,41 @@ fun CatalogDataSection(
                     onToggle = { showChannel3Dialog = true }
                 )
 
-                // HobbyDB
+                // HobbyDB OAuth
                 SourceRow(
                     name    = "HobbyDB / Pop Price Guide",
-                    detail  = "Market pricing · login required · coming soon",
-                    enabled = false,
-                    locked  = true,
-                    onToggle = {}
+                    detail  = if (hobbyDbConnected)
+                        "Connected · market pricing · vaulted status enabled"
+                    else
+                        "Not connected · tap to sign in with your HobbyDB account",
+                    enabled = hobbyDbConnected,
+                    locked  = false,
+                    onToggle = {
+                        if (hobbyDbConnected) {
+                            viewModel.disconnectHobbyDb()
+                            hobbyDbConnected = false
+                        } else {
+                            OAuthLauncher.launch(context, OAuthProvider.HOBBYDB)
+                        }
+                    }
+                )
+                // eBay OAuth
+                SourceRow(
+                    name    = "eBay sold listings",
+                    detail  = if (ebayConnected)
+                        "Connected · real sold prices (higher quality than RSS feed)"
+                    else
+                        "Not connected · optional · tap to sign in with eBay",
+                    enabled = ebayConnected,
+                    locked  = false,
+                    onToggle = {
+                        if (ebayConnected) {
+                            viewModel.disconnectEbay()
+                            ebayConnected = false
+                        } else {
+                            OAuthLauncher.launch(context, OAuthProvider.EBAY)
+                        }
+                    }
                 )
             }
         }

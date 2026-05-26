@@ -23,8 +23,13 @@ class MainActivity : ComponentActivity() {
             val settingsVm: SettingsViewModel = hiltViewModel()
             val currentTheme by settingsVm.currentTheme.collectAsState()
 
-            // Deep-link target from price-alert notifications (NAVIGATE_TO_ITEM extra)
-            val deepLinkItemId = intent?.getStringExtra("NAVIGATE_TO_ITEM")
+            // Deep-link target from price-alert notifications (NAVIGATE_TO_ITEM extra).
+            // SEC-B: validate the ID matches the expected funko:: prefix before navigating —
+            // prevents a malicious app from sending an arbitrary intent to navigate to
+            // unexpected routes.
+            val rawDeepLink    = intent?.getStringExtra("NAVIGATE_TO_ITEM")
+            val deepLinkItemId = rawDeepLink
+                ?.takeIf { it.startsWith("funko::") && it.length in 14..60 }
 
             FunkoDexTheme(appTheme = currentTheme) {
                 var splashDone by remember { mutableStateOf(false) }

@@ -147,4 +147,63 @@ Real Funko UPCs to test: 889698115810, 889698130653, 849803052188.
 
 ---
 
+
+---
+
+## Security (continued)
+
+### 19. PKCE OAuth for mobile — no client secret in the APK
+For OAuth on mobile, always use PKCE (RFC 7636). The standard OAuth flow requires a
+client_secret which would be embedded in the APK and extractable by JADX. PKCE replaces
+this with a one-time code_verifier generated on-device and a SHA-256 challenge. The
+provider verifies the challenge without needing a static secret. Implementation:
+`PkceHelper.generateVerifier()` → `PkceHelper.challenge(verifier)` → include challenge
+in auth URL → receive auth code → exchange code+verifier for token.
+
+### 20. Store the OAuth install ID in EncryptedSharedPreferences, not plain prefs
+The community contribution rate-limit uses an anonymous install UUID sent as X-Device-ID.
+Original implementation used `context.getSharedPreferences("funkodex_meta", MODE_PRIVATE)`
+which writes a plaintext XML file readable via `adb shell`. Even though the UUID is not
+a credential, consistency with the rest of the security model demands EncryptedSharedPreferences.
+The docstring said "EncryptedSharedPreferences" but the code used plain prefs — a comment
+mismatch that the security audit caught. Keep code and comments consistent.
+
+### 21. Validate deep-link extras before navigating
+`intent?.getStringExtra("NAVIGATE_TO_ITEM")` can be sent by any app. Without validation,
+a malicious app could cause FunkoDex to navigate to arbitrary routes. A simple prefix
+check (`it.startsWith("funko::") && it.length in 14..60`) eliminates the attack surface
+at zero cost. Apply this pattern to any Intent extra that drives UI state.
+
+### 22. Guard every nm.notify() on Android 13+ (POST_NOTIFICATIONS)
+Three separate places in the codebase called `nm.notify()` without first checking
+`POST_NOTIFICATIONS` permission. On Android 13+ the call silently fails — users never
+see price alerts or backup confirmations. Pattern to follow everywhere:
+```kotlin
+if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED) return
+}
+```
+
+---
+
+## Logging
+
+### 23. Replace all Log.x() calls with a central logger from day one
+`android.util.Log` has no level gating for file output — everything or nothing. By wrapping
+in `FunkoDexLogger` from day one you get: configurable verbosity persisted in DataStore,
+async rotating file output (`filesDir/logs/`), and a single share button in Settings for
+support. The refactor across 57 call sites late in the project was mechanical but
+preventable. Set up the logger in Phase 1.
+
+### 24. CrashHandler must be the absolute first thing in Application.onCreate()
+Exceptions thrown during Hilt injection, CouchbaseLite init, or DataStore reading crash
+the app silently in production with no log trail. `Thread.setDefaultUncaughtExceptionHandler`
+must be called before any of those subsystems are initialised. Call `CrashHandler.install(this)`
+as line 1 of `onCreate()` — before `super.onCreate()` if possible. The handler writes to
+`filesDir/logs/crash_TIMESTAMP.log` and then delegates to the previous handler so the
+system crash dialog still appears.
+
+---
+
 *Document maintained by Celtic Heart Steamworks. Update after each significant change.*

@@ -58,6 +58,9 @@ class PriceService @Inject constructor(
         private const val UPCITEMDB =
             "https://api.upcitemdb.com/prod/trial/lookup?upc="
 
+        // HobbyDB pricing
+        private const val HOBBYDB_BASE  = "https://hobby-db.com/api/v1"
+
         // Channel3
         private const val CHANNEL3_BASE   = "https://api.trychannel3.com/v1"
         private const val CHANNEL3_SEARCH = "$CHANNEL3_BASE/products/search"
@@ -110,10 +113,70 @@ class PriceService @Inject constructor(
             }
         }
 
-        // Tier 4: HobbyDB — stub until OAuth is built in Phase D
+        // Tier 4: HobbyDB — OAuth token from SecureKeyStore
+        if (secureKeyStore.isHobbyDbTokenValid()) {
+            fetchHobbyDb(item)?.let {
+                FunkoDexLogger.d(TAG, "Tier 4 (HobbyDB) hit for ${item.name}")
+                return@withContext it
+            }
+        }
+
         FunkoDexLogger.d(TAG, "All tiers exhausted for ${item.name}")
         null
     }
+
+    // ─── Tier 4: HobbyDB ─────────────────────────────────────────────────────
+
+    private fun fetchHobbyDb(item: FunkoItem): PriceSnapshot? = runCatching {
+        val token = secureKeyStore.getHobbyDbAccessToken()
+        if (token.isEmpty()) return@runCatching null
+
+        // HobbyDB search by name — returns an array of matching items with pricing
+        val nameEnc = java.net.URLEncoder.encode(item.name, "UTF-8")
+        val url     = "$HOBBYDB_BASE/items?q=$nameEnc&category=pop&per_page=5"
+
+        val response = client.newCall(
+            Request.Builder()
+                .url(url)
+                .header("Authorization", "Bearer $token")
+                .header("User-Agent", USER_AGENT)
+                .build()
+        ).execute()
+
+        if (!response.isSuccessful) {
+            FunkoDexLogger.w(TAG, "HobbyDB returned HTTP ${response.code}")
+            return@runCatching null
+        }
+
+        val body = response.body?.string() ?: return@runCatching null
+        val json = com.google.gson.JsonParser.parseString(body).asJsonObject
+
+        // Find the best matching item (highest name similarity)
+        val items = json.getAsJsonArray("items") ?: return@runCatching null
+        if (items.size() == 0) return@runCatching null
+
+        // Take the first result — HobbyDB returns by relevance
+        val hobbyItem = items[0].asJsonObject
+        val prices    = hobbyItem.getAsJsonObject("price_data")
+
+        val low  = prices?.get("low")?.asDouble  ?: 0.0
+        val high = prices?.get("high")?.asDouble ?: 0.0
+        val avg  = prices?.get("avg")?.asDouble  ?: ((low + high) / 2.0)
+        val cnt  = prices?.get("sales_count")?.asInt ?: 0
+
+        if (low == 0.0 && high == 0.0) return@runCatching null
+
+        PriceSnapshot(
+            itemId    = item.id,
+            source    = PriceSource.HOBBYDB,
+            retail    = item.retailPrice,
+            low       = low,
+            high      = high,
+            avg       = avg,
+            saleCount = cnt,
+            fetchedAt = LocalDate.now(),
+        )
+    }.getOrNull()
 
     // ─── Tier 2a: eBay completed-listings RSS ─────────────────────────────────
 

@@ -51,6 +51,37 @@
             </intent-filter>
         </activity>
 
+        <!--
+            OAuthCallbackActivity: receives redirect URIs from HobbyDB and eBay OAuth flows.
+            The Custom Tab redirects to funkodex://oauth/{provider}?code=AUTH_CODE.
+            launchMode=singleTask: prevents stacking multiple instances during auth.
+        -->
+        <activity
+            android:name=".auth.OAuthCallbackActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <!-- HobbyDB OAuth redirect -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="funkodex"
+                    android:host="oauth"
+                    android:path="/hobbydb" />
+            </intent-filter>
+            <!-- eBay OAuth redirect -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="funkodex"
+                    android:host="oauth"
+                    android:path="/ebay" />
+            </intent-filter>
+        </activity>
+
         <!-- E3: Home screen widget receiver -->
         <receiver
             android:name=".ui.widget.CollectionWidgetReceiver"

@@ -129,6 +129,24 @@ class FunkoDexDatabase(private val context: Context) {
         // Category prefs
         db.createIndex("idx_cat_pref",
             IndexBuilder.valueIndex(ValueIndexItem.property(FIELD_CAT_NAME)))
+
+        // Type index — speeds up all doc-type filters (alerts, contrib, pending, price cache)
+        db.createIndex("idx_type",
+            IndexBuilder.valueIndex(ValueIndexItem.property(FIELD_TYPE)))
+
+        // Price alert indexes
+        db.createIndex("idx_alert_enabled",
+            IndexBuilder.valueIndex(
+                ValueIndexItem.property(FIELD_TYPE),
+                ValueIndexItem.property(FIELD_ALERT_ENABLED)))
+        db.createIndex("idx_alert_item",
+            IndexBuilder.valueIndex(ValueIndexItem.property(FIELD_ALERT_ITEM_ID)))
+
+        // Contribution indexes
+        db.createIndex("idx_contrib_uploaded",
+            IndexBuilder.valueIndex(
+                ValueIndexItem.property(FIELD_TYPE),
+                ValueIndexItem.property(FIELD_CONTRIB_UPLOADED)))
     }
 
     fun close() {

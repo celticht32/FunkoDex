@@ -1,6 +1,9 @@
 package com.funkodex.data.preload
 
 import android.app.NotificationManager
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -124,6 +127,17 @@ class PriceAlertWorker @AssistedInject constructor(
         currentLow: Double,
         index:     Int,
     ) {
+        // Android 13+ requires POST_NOTIFICATIONS runtime permission
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                applicationContext, android.Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                Log.d(TAG, "POST_NOTIFICATIONS not granted — skipping alert notification")
+                return
+            }
+        }
+
         val nm = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE)
             as NotificationManager
 

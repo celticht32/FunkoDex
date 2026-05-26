@@ -39,8 +39,20 @@ private val bottomNavItems = listOf(
 )
 
 @Composable
-fun FunkoDexNavHost() {
+fun FunkoDexNavHost(
+    deepLinkItemId: String? = null,
+) {
     val navController = rememberNavController()
+
+    // Navigate to a specific item if the app was opened via a notification deep-link
+    LaunchedEffect(deepLinkItemId) {
+        if (!deepLinkItemId.isNullOrEmpty()) {
+            navController.navigate(Screen.Detail.routeFor(deepLinkItemId)) {
+                // Don't stack multiple detail screens if the user taps multiple notifications
+                launchSingleTop = true
+            }
+        }
+    }
 
     Scaffold(
         bottomBar = {

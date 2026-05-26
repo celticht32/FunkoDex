@@ -11,6 +11,9 @@ import com.funkodex.data.db.FunkoDexDatabase
 import com.funkodex.data.model.PendingUpcScan
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -172,7 +175,19 @@ class ConnectivityObserver @Inject constructor(
 
     private fun sendNotification(count: Int, names: List<String>) {
         try {
-            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE)
+            // Android 13+ (API 33) requires POST_NOTIFICATIONS runtime permission.
+            // Without it nm.notify() is a silent no-op; check first so we can log clearly.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val granted = ContextCompat.checkSelfPermission(
+                    context, android.Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+                if (!granted) {
+                    Log.d("ConnectivityObserver", "POST_NOTIFICATIONS not granted — skipping notification")
+                    return
+                }
+            }
+
+            val nm    = context.getSystemService(Context.NOTIFICATION_SERVICE)
                 as android.app.NotificationManager
             val title = if (count == 1) "Funko scan identified" else "$count Funko scans identified"
             val body  = if (names.size == 1) names[0]

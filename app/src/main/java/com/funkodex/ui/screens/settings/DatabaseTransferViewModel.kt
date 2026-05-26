@@ -28,7 +28,6 @@ sealed class DatabaseTransferState {
     object Idle : DatabaseTransferState()
     object Exporting : DatabaseTransferState()
     data class ReadyToShare(val uri: Uri) : DatabaseTransferState()
-    object ImportInstructions : DatabaseTransferState()
     object Importing : DatabaseTransferState()
     object ImportSuccess : DatabaseTransferState()
     data class Error(val message: String) : DatabaseTransferState()
@@ -74,10 +73,6 @@ class DatabaseTransferViewModel @Inject constructor(
                 onFailure = { _state.value = DatabaseTransferState.Error(it.message ?: "Export failed") }
             )
         }
-    }
-
-    fun showImportInstructions() {
-        _state.value = DatabaseTransferState.ImportInstructions
     }
 
     /**

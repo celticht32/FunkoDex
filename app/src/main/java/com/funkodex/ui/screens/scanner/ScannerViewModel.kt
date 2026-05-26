@@ -9,6 +9,7 @@ import com.funkodex.data.repository.ImageBlobRepository
 import com.funkodex.data.repository.ContributionRepository
 import com.funkodex.data.model.CatalogContribution
 import com.funkodex.network.FunkoLookupService
+import com.funkodex.network.ConnectivityObserver
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -77,6 +78,7 @@ class ScannerViewModel @Inject constructor(
     private val lookup: FunkoLookupService,
     private val imageBlobs: ImageBlobRepository,
     private val contribRepo: ContributionRepository,
+    private val connectivity: ConnectivityObserver,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ScanState>(ScanState.Idle)
@@ -251,9 +253,6 @@ class ScannerViewModel @Inject constructor(
 
     // ─── Helpers ───────────────────────────────────────────────────────────────
 
-    private fun isNetworkAvailable(): Boolean =
-        try {
-            val cm = repository.getConnectivityManager()
-            cm?.activeNetworkInfo?.isConnectedOrConnecting == true
-        } catch (e: Exception) { false }
+    /** Uses ConnectivityObserver which correctly uses NetworkCapabilities API (avoids deprecated activeNetworkInfo). */
+    private fun isNetworkAvailable(): Boolean = connectivity.isConnected()
 }

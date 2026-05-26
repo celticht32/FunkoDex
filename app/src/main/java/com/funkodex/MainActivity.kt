@@ -1,6 +1,7 @@
 package com.funkodex
 
 import android.os.Bundle
+import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -22,15 +23,24 @@ class MainActivity : ComponentActivity() {
             val settingsVm: SettingsViewModel = hiltViewModel()
             val currentTheme by settingsVm.currentTheme.collectAsState()
 
+            // Deep-link target from price-alert notifications (NAVIGATE_TO_ITEM extra)
+            val deepLinkItemId = intent?.getStringExtra("NAVIGATE_TO_ITEM")
+
             FunkoDexTheme(appTheme = currentTheme) {
                 var splashDone by remember { mutableStateOf(false) }
 
                 if (!splashDone) {
                     SplashScreen(onSplashComplete = { splashDone = true })
                 } else {
-                    FunkoDexNavHost()
+                    FunkoDexNavHost(deepLinkItemId = deepLinkItemId)
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Handle notification taps when the app is already running
+        setIntent(intent)
     }
 }

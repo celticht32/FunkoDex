@@ -2,6 +2,9 @@ package com.funkodex.data.backup
 
 import android.content.Context
 import android.util.Log
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import com.funkodex.data.db.FunkoDexDatabase
@@ -51,6 +54,16 @@ class DriveBackupWorker @AssistedInject constructor(
 
     private fun sendBackupNotification(fileName: String) {
         try {
+            // Android 13+ requires runtime POST_NOTIFICATIONS permission
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val granted = ContextCompat.checkSelfPermission(
+                    applicationContext, android.Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+                if (!granted) {
+                    Log.d(TAG, "POST_NOTIFICATIONS not granted — skipping backup notification")
+                    return
+                }
+            }
             val nm = applicationContext.getSystemService(android.content.Context.NOTIFICATION_SERVICE)
                 as android.app.NotificationManager
             val notification = androidx.core.app.NotificationCompat

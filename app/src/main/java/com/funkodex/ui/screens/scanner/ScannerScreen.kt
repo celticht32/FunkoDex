@@ -37,6 +37,8 @@ import androidx.lifecycle.LifecycleOwner
 import coil.compose.AsyncImage
 import com.funkodex.data.model.FunkoItem
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
+import android.os.Build
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.mlkit.vision.barcode.BarcodeScanning
@@ -51,13 +53,25 @@ fun ScannerScreen(
     viewModel: ScannerViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
-    val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
     var showBatchScan by remember { mutableStateOf(false) }
 
-    // When permission transitions to granted while we're in Idle, auto-start the scanner.
-    // This handles the race where startScanning() was called before the OS confirmed the grant.
-    LaunchedEffect(cameraPermission.status) {
-        if (cameraPermission.status.isGranted && state is ScanState.Idle) {
+    // Request CAMERA + POST_NOTIFICATIONS together on first scanner open.
+    // POST_NOTIFICATIONS is only needed on Android 13+ (API 33); on older devices
+    // the permission is auto-granted and does not appear in the system dialog.
+    val requiredPermissions = remember {
+        buildList {
+            add(Manifest.permission.CAMERA)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+    val permissionState = rememberMultiplePermissionsState(requiredPermissions)
+    val cameraGranted   = permissionState.permissions
+        .firstOrNull { it.permission == Manifest.permission.CAMERA }?.status?.isGranted == true
+
+    LaunchedEffect(cameraGranted) {
+        if (cameraGranted && state is ScanState.Idle) {
             viewModel.startScanning()
         }
     }
@@ -78,8 +92,8 @@ fun ScannerScreen(
                 }
                 ScannerStartPrompt(
                     onStartScan = {
-                        if (cameraPermission.status.isGranted) viewModel.startScanning()
-                        else cameraPermission.launchPermissionRequest()
+                        if (cameraGranted) viewModel.startScanning()
+                        else permissionState.launchMultiplePermissionRequest()
                     },
                     onManualSearch = viewModel::openManualSearch
                 )

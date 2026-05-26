@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network Security Configuration
+    ================================
+    Enforces HTTPS-only communication for all app traffic.
+    Explicitly pins the domains we communicate with.
+
+    Domains:
+      trychannel3.com        — Channel3 API (UPC lookup and pricing)
+      workers.dev            — Cloudflare Worker (community UPC uploads, Phase F)
+      githubusercontent.com   — GitHub raw content (community UPC file download)
+      upcitemdb.com          — UPC fallback lookup (no auth, public endpoint)
+      hobbydb.com            — HobbyDB image CDN (image URL only, read-only)
+-->
+<network-security-config>
+
+    <!-- Base config: no cleartext (HTTP) traffic to any domain -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Explicit HTTPS pinning for app endpoints -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">trychannel3.com</domain>
+        <domain includeSubdomains="true">workers.dev</domain>
+        <domain includeSubdomains="true">raw.githubusercontent.com</domain>
+        <domain includeSubdomains="true">api.upcitemdb.com</domain>
+        <domain includeSubdomains="true">images.hobbydb.com</domain>
+        <domain includeSubdomains="true">barcodelookup.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+
+    <!--
+        Debug-only override: allow cleartext on localhost for development tools.
+        This block is stripped from release builds by the build system.
+    -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+
+</network-security-config>

@@ -1,0 +1,110 @@
+[versions]
+agp                = "8.5.2"
+kotlin             = "2.0.0"
+ksp                = "2.0.0-1.0.22"
+hilt               = "2.51.1"
+hiltNav            = "1.2.0"
+hilt-work          = "1.2.0"    // androidx.hilt:hilt-work — Hilt + WorkManager integration
+glance             = "1.1.0"
+play-services-auth = "21.2.0"
+google-drive-api   = "v3-rev20240123-2.0.0"
+compose-bom        = "2024.09.00"
+couchbase-lite     = "3.2.0"
+okhttp             = "4.12.0"
+gson               = "2.11.0"
+mlkit-barcode      = "17.3.0"
+camerax            = "1.3.4"
+coil               = "2.7.0"
+navigation         = "2.8.0"
+coroutines         = "1.9.0"
+lifecycle          = "2.8.5"
+accompanist        = "0.34.0"
+poi                = "5.3.0"
+junit              = "4.13.2"
+kotlin-test        = "2.0.0"
+androidx-test-ext  = "1.2.1"
+espresso           = "3.6.1"
+
+datastore           = "1.1.1"
+security-crypto     = "1.1.0-alpha06"
+exifinterface       = "1.3.7"
+workmanager         = "2.9.1"
+
+[libraries]
+# DataStore — persisted user preferences (theme, settings)
+datastore-prefs     = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
+security-crypto     = { group = "androidx.security", name = "security-crypto", version.ref = "security-crypto" }
+exifinterface       = { group = "androidx.exifinterface", name = "exifinterface", version.ref = "exifinterface" }
+workmanager         = { group = "androidx.work",       name = "work-runtime-ktx",          version.ref = "workmanager" }
+# Core
+androidx-core-ktx          = { group = "androidx.core",      name = "core-ktx",              version = "1.13.1" }
+androidx-lifecycle-runtime  = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx",  version.ref = "lifecycle" }
+androidx-lifecycle-viewmodel= { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+
+# Compose BOM
+compose-bom            = { group = "androidx.compose",    name = "compose-bom",                   version.ref = "compose-bom" }
+compose-ui             = { group = "androidx.compose.ui", name = "ui" }
+compose-ui-graphics    = { group = "androidx.compose.ui", name = "ui-graphics" }
+compose-ui-tooling     = { group = "androidx.compose.ui", name = "ui-tooling" }
+compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+compose-ui-test        = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+compose-material3      = { group = "androidx.compose.material3", name = "material3" }
+compose-material-icons = { group = "androidx.compose.material", name = "material-icons-extended" }
+compose-activity       = { group = "androidx.activity",   name = "activity-compose",              version = "1.9.2" }
+
+# Navigation
+navigation-compose     = { group = "androidx.navigation", name = "navigation-compose",             version.ref = "navigation" }
+hilt-navigation-compose= { group = "androidx.hilt",      name = "hilt-navigation-compose",        version.ref = "hiltNav" }
+hilt-work              = { group = "androidx.hilt",      name = "hilt-work",                      version.ref = "hilt-work" }
+hilt-work-compiler     = { group = "androidx.hilt",      name = "hilt-compiler",                  version.ref = "hilt-work" }
+glance-appwidget       = { group = "androidx.glance",     name = "glance-appwidget",               version.ref = "glance" }
+play-services-auth     = { group = "com.google.android.gms", name = "play-services-auth",           version.ref = "play-services-auth" }
+google-api-drive       = { group = "com.google.apis",     name = "google-api-services-drive",       version.ref = "google-drive-api" }
+
+# Hilt
+hilt-android           = { group = "com.google.dagger",   name = "hilt-android",                  version.ref = "hilt" }
+hilt-compiler          = { group = "com.google.dagger",   name = "hilt-android-compiler",          version.ref = "hilt" }
+
+# Couchbase Lite
+couchbase-lite         = { group = "com.couchbase.lite",  name = "couchbase-lite-android-ktx",    version.ref = "couchbase-lite" }
+
+# Networking
+okhttp-core            = { group = "com.squareup.okhttp3", name = "okhttp",                       version.ref = "okhttp" }
+okhttp-logging         = { group = "com.squareup.okhttp3", name = "logging-interceptor",           version.ref = "okhttp" }
+gson                   = { group = "com.google.code.gson", name = "gson",                          version.ref = "gson" }
+
+# Accompanist
+accompanist-flowlayout = { group = "com.google.accompanist", name = "accompanist-flowlayout",     version.ref = "accompanist" }
+accompanist-permissions = { group = "com.google.accompanist", name = "accompanist-permissions",     version.ref = "accompanist" }
+
+# ML Kit Barcode
+mlkit-barcode          = { group = "com.google.mlkit",    name = "barcode-scanning",               version.ref = "mlkit-barcode" }
+
+# CameraX
+camerax-core           = { group = "androidx.camera",     name = "camera-core",                    version.ref = "camerax" }
+camerax-camera2        = { group = "androidx.camera",     name = "camera-camera2",                 version.ref = "camerax" }
+camerax-lifecycle      = { group = "androidx.camera",     name = "camera-lifecycle",               version.ref = "camerax" }
+camerax-view           = { group = "androidx.camera",     name = "camera-view",                    version.ref = "camerax" }
+
+# Image loading
+coil                   = { group = "io.coil-kt",          name = "coil-compose",                   version.ref = "coil" }
+
+# Excel export
+apache-poi             = { group = "org.apache.poi",      name = "poi-ooxml",                      version.ref = "poi" }
+
+# Coroutines
+coroutines-android     = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android",  version.ref = "coroutines" }
+coroutines-test        = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test",     version.ref = "coroutines" }
+
+# Testing
+junit                  = { group = "junit",               name = "junit",                          version.ref = "junit" }
+kotlin-test            = { group = "org.jetbrains.kotlin", name = "kotlin-test",                  version.ref = "kotlin-test" }
+androidx-test-ext      = { group = "androidx.test.ext",   name = "junit",                          version.ref = "androidx-test-ext" }
+androidx-test-espresso = { group = "androidx.test.espresso", name = "espresso-core",              version.ref = "espresso" }
+
+[plugins]
+android-application    = { id = "com.android.application",            version.ref = "agp" }
+kotlin-android         = { id = "org.jetbrains.kotlin.android",       version.ref = "kotlin" }
+kotlin-compose         = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+hilt                   = { id = "com.google.dagger.hilt.android",     version.ref = "hilt" }
+ksp                    = { id = "com.google.devtools.ksp",            version.ref = "ksp" }

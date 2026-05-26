@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FunkoDex</string>
+
+    <!-- Scanner screen -->
+    <string name="scan_point_camera">Point camera at a Funko UPC barcode</string>
+    <string name="scan_manual_search">Manual search</string>
+    <string name="scan_stop">Stop scanning</string>
+    <string name="scan_start">Start scanning</string>
+    <string name="scan_search_by_name">Search by name</string>
+    <string name="scan_looking_up">Looking up on Funko.com…</string>
+    <string name="scan_not_found">Not found in local database or Channel3.\nTry manual search.</string>
+    <string name="scan_offline">You\'re offline and this UPC isn\'t in the local database.\nTry manual search.</string>
+    <string name="scan_already_owned">Already in your collection</string>
+    <string name="scan_add_collection">Add to collection</string>
+    <string name="scan_add_want_list">+ Want list</string>
+    <string name="scan_price_hint">Price paid (optional)</string>
+    <string name="scan_retail_prefix">Retail: $%s</string>
+    <string name="scan_added">Added!</string>
+    <string name="scan_another">Scan another</string>
+    <string name="scan_done">Done</string>
+
+    <!-- Collection screen -->
+    <string name="collection_title">Collection</string>
+    <string name="collection_search_hint">Search collection…</string>
+    <string name="collection_empty_title">No Funkos yet</string>
+    <string name="collection_empty_body">Scan a barcode or search to add your first one</string>
+    <string name="collection_items_count">%d items</string>
+    <string name="collection_total_paid">Paid: $%s</string>
+    <string name="collection_exclusive_badge">EXCL</string>
+    <string name="collection_delete">Delete</string>
+    <string name="collection_move_want_list">Move to want list</string>
+    <string name="collection_edit">Edit</string>
+
+    <!-- Detail / edit screen -->
+    <string name="detail_title">Funko details</string>
+    <string name="detail_edit_title">Edit Funko</string>
+    <string name="detail_save">Save changes</string>
+    <string name="detail_cancel">Cancel</string>
+    <string name="detail_delete_confirm">Remove from collection?</string>
+    <string name="detail_delete_confirm_body">This will permanently delete %s from your collection.</string>
+    <string name="detail_field_name">Name</string>
+    <string name="detail_field_series">Series</string>
+    <string name="detail_field_number">Number</string>
+    <string name="detail_field_price_paid">Price paid</string>
+    <string name="detail_field_date_acquired">Date acquired</string>
+    <string name="detail_field_condition">Condition</string>
+    <string name="detail_field_notes">Notes</string>
+
+    <!-- Reports screen -->
+    <string name="reports_title">Reports</string>
+    <string name="reports_owned">Owned</string>
+    <string name="reports_series">Series</string>
+    <string name="reports_wanted">Wanted</string>
+    <string name="reports_cost_breakdown">Cost breakdown</string>
+    <string name="reports_total_paid">Total paid</string>
+    <string name="reports_retail_value">Retail value</string>
+    <string name="reports_vs_retail">vs retail</string>
+    <string name="reports_most_expensive">Most expensive</string>
+    <string name="reports_series_completion">Series completion</string>
+    <string name="reports_complete">Complete!</string>
+    <string name="reports_want_list">Want list</string>
+    <string name="reports_series_progress">%1$d of %2$d · %3$d missing</string>
+
+    <!-- Export -->
+    <string name="export_button">Export collection</string>
+    <string name="export_title">Export collection</string>
+    <string name="export_description">Choose a format. The file opens in your share sheet — send via Gmail, save to Files, or copy to your PC.</string>
+    <string name="export_xlsx_label">Excel workbook (.xlsx)</string>
+    <string name="export_xlsx_desc">4 sheets: Summary, Collection, Series Completion, Want List.</string>
+    <string name="export_csv_label">CSV spreadsheet (.csv)</string>
+    <string name="export_csv_desc">Simple comma-separated file. Works in any spreadsheet app.</string>
+    <string name="export_building">Building spreadsheet…</string>
+    <string name="export_opening">Opening share sheet…</string>
+    <string name="export_email_subject">My FunkoDex Collection Export</string>
+    <string name="export_email_body">FunkoDex collection export attached.</string>
+    <string name="export_cancel">Cancel</string>
+
+    <!-- Navigation -->
+    <string name="nav_collection">Collection</string>
+    <string name="nav_scan">Scan</string>
+    <string name="nav_reports">Reports</string>
+
+    <!-- Generic -->
+    <string name="retry">Try again</string>
+    <string name="error_generic">Something went wrong. Please try again.</string>
+    <string name="loading">Loading…</string>
+    <string name="widget_description">Shows your FunkoDex collection count and top wanted item.</string>
+</resources>

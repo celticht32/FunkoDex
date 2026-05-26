@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!--
+        Exposes app's cache directory so FileProvider can share .xlsx and .csv
+        files with Gmail, Files app, Google Drive, etc. via content:// URIs.
+    -->
+    <cache-path name="exports" path="." />
+</paths>

@@ -64,6 +64,20 @@ class TokenRefreshManager @Inject constructor(
     suspend fun getValidEbayToken(): String? =
         getValidToken(OAuthProvider.EBAY, ebayMutex)
 
+    // ─── Status helpers (for TokenKeeperWorker) ───────────────────────────────
+
+    /** True if there is a stored HobbyDB refresh token (connection was made at some point). */
+    fun hasHobbyDbRefreshToken(): Boolean {
+        val parts = secureKeyStore.getHobbyDbToken().split("|")
+        return parts.getOrNull(2)?.isNotEmpty() == true
+    }
+
+    /** True if there is a stored eBay refresh token. */
+    fun hasEbayRefreshToken(): Boolean {
+        val parts = secureKeyStore.getEbayOAuthToken().split("|")
+        return parts.getOrNull(2)?.isNotEmpty() == true
+    }
+
     // ─── Core ─────────────────────────────────────────────────────────────────
 
     private suspend fun getValidToken(

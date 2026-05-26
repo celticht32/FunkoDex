@@ -206,4 +206,15 @@ system crash dialog still appears.
 
 ---
 
+### 25. Refresh tokens need proactive keep-alive, not just on-demand refresh
+OAuth access tokens (2 hours for eBay) are handled fine by on-demand refresh before each API call.
+But refresh tokens have their own expiry — 18 months for eBay, similar for HobbyDB. If a user
+installs the app, signs in, then barely uses it for months, the refresh token itself expires.
+The next API call fails even though `TokenRefreshManager` works correctly, because there is nothing
+left to refresh with. Solution: a weekly `@HiltWorker` (`TokenKeeperWorker`) that proactively
+calls `getValidHobbyDbToken()` and `getValidEbayToken()`. It runs in the background whether or
+not the user opens the app, keeping both provider sessions alive indefinitely. Uses KEEP policy
+so the weekly interval is not reset on every app launch. This is a lesson in thinking beyond
+the happy path: the token refresh code is correct, but the system needs a heartbeat to stay alive.
+
 *Document maintained by Celtic Heart Steamworks. Update after each significant change.*

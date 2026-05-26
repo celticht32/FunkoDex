@@ -1,26 +1,27 @@
 # FunkoDex — Android Funko Pop Collection Manager
 
 A native Android app for cataloguing your Funko Pop collection.
-Scan UPC barcodes, track prices, manage your collection offline-first with Couchbase Lite,
+Scan UPC barcodes, track prices, manage your collection offline-first,
 and get notified when market prices drop.
 
 ---
 
 ## Features
 
-- **Barcode scanner** — ML Kit camera scanner with 5-tier lookup waterfall
+- **Barcode scanner** — ML Kit, 5-tier lookup (eBay, UPCitemdb, Channel3, HobbyDB)
 - **Batch scan** — scan multiple items without stopping
 - **Store check** — pre-purchase scanner: "do I already own this?"
 - **Collection grid** — searchable, filterable by category and franchise, sortable
-- **Price tracking** — eBay sold listings, UPCitemdb, Channel3, HobbyDB (with sign-in)
-- **Price drop alerts** — daily background checks, notification when target price is met
-- **Reports** — cost breakdown, series completion, want list, estimated market value
-- **Export** — Excel (.xlsx, 4 sheets) or CSV via email / Files / Drive
+- **Price tracking** — eBay sold listings, Channel3, HobbyDB (with sign-in)
+- **Price drop alerts** — daily background checks, notification at target price
+- **Reports** — cost breakdown, series completion, want list, market value
+- **Export** — Excel (4 sheets) or CSV via email / Files / Drive
 - **Home screen widget** — owned count + top market value
-- **Offline-first** — 23K+ Funko records bundled locally; no network needed for common items
+- **Offline-first** — 23 K+ Funko records bundled; no network needed for common items
 - **Google Drive backup** — automatic daily backup on Wi-Fi
-- **Community UPC database** — opt-in anonymous contribution of scanned UPC→product matches
-- **Configurable logging** — VERBOSE through ERROR, share log from Settings for support
+- **Community UPC database** — opt-in anonymous contribution of UPC→product matches
+- **OAuth token management** — silent refresh + weekly background keep-alive
+- **Configurable logging** — VERBOSE through ERROR, share log from Settings
 
 ---
 
@@ -29,19 +30,26 @@ and get notified when market prices drop.
 ```
 FunkoDex/
 ├── app/src/main/java/com/funkodex/
-│   ├── auth/           OAuth 2.0 PKCE flows (HobbyDB, eBay)
+│   ├── auth/           OAuth 2.0 PKCE flows, TokenRefreshManager, TokenKeeperWorker
 │   ├── data/           Models, database, repositories, workers, export
-│   ├── di/             Hilt dependency injection
-│   ├── network/        Lookup + price waterfall services
+│   ├── di/             Hilt dependency injection (12 providers)
+│   ├── network/        5-tier lookup + price waterfall services
 │   ├── security/       EncryptedSharedPreferences + Keystore HMAC
 │   ├── util/           FunkoDexLogger, CrashHandler, LogLevel
 │   └── ui/             Compose screens, NavHost, themes, widget
-├── app/src/main/assets/          funko_data.json (download separately — see Setup)
-├── app/src/main/res/font/        cinzel_decorative_bold.ttf (download separately)
-├── launcher-icon/                SVG source files + generation instructions
+├── app/src/test/java/com/funkodex/
+│   ├── auth/           PkceHelperTest (RFC 7636 compliance incl. test vector)
+│   ├── data/db/        FunkoMapperTest (Couchbase roundtrip)
+│   ├── data/repository/CollectionStatsTest (FunkoItem arithmetic)
+│   ├── network/        FunkoLookupServiceTest (record mapping)
+│   ├── security/       SecureKeyStoreTokenTest (token parsing/expiry)
+│   └── ui/screens/     ScannerViewModelStateTest (skeleton)
+├── app/src/main/assets/    funko_data.json (download separately — see Setup)
+├── app/src/main/res/font/  cinzel_decorative_bold.ttf (download separately)
+├── launcher-icon/          SVG source + generation instructions
 ├── gradle/libs.versions.toml
-├── CLAUDE.md                     Full architecture guide for Claude sessions
-└── LESSONS_LEARNED.md            Practical lessons from the build
+├── CLAUDE.md               Full architecture guide for future Claude sessions
+└── LESSONS_LEARNED.md      Practical lessons from the build
 ```
 
 ---
@@ -57,64 +65,69 @@ FunkoDex/
 
 ---
 
-## Setup (one-time)
+## Setup
 
-### 1. Open in Android Studio
-`File → Open → select the FunkoDex folder`
+### 1. Clone or extract
 
-### 2. Add the Funko dataset (offline lookup)
-Download from the Kenny Chan GitHub repo and save as:
-```
-app/src/main/assets/funko_data.json
-```
-Without this file the app still works — lookups just require network.
-
-### 3. Add the splash screen font
-Download **Cinzel Decorative Bold** from Google Fonts and save as:
-```
-app/src/main/res/font/cinzel_decorative_bold.ttf
+```bash
+git clone https://github.com/celtic-heart-steamworks/funkodex.git
+# or unzip FunkoDex.zip
+cd FunkoDex
 ```
 
-### 4. Generate launcher icons
+### 2. Open in Android Studio
+
+`File → Open → select the FunkoDex folder` — Android Studio auto-detects the Gradle project.
+
+### 3. Add the Funko dataset
+
+See `app/src/main/assets/DOWNLOAD_FUNKO_DATA.md` for the download link.
+Save the file as `app/src/main/assets/funko_data.json`.
+The app works without it — every scan just falls through to the network.
+
+### 4. Add the splash font
+
+Download **Cinzel Decorative Bold** from [fonts.google.com](https://fonts.google.com/specimen/Cinzel+Decorative).
+Save as `app/src/main/res/font/cinzel_decorative_bold.ttf`.
+
+### 5. Generate launcher icons
+
 SVG source files are in `launcher-icon/`. Follow `launcher-icon/ICON_INSTRUCTIONS.md`
-to generate all mipmap densities using Android Studio Image Asset Studio.
+to generate all mipmap densities in Android Studio (90 seconds).
 
-### 5. Gradle sync
-All 30 dependencies resolve automatically from Maven Central.
+### 6. Gradle sync
 
-### 6. (Optional) Cloudflare Worker for community contributions
-See `CLAUDE.md` for the full setup guide. Leave `workerUrl=` blank in `local.properties`
-to disable community uploads (the app works fine without it).
+`File → Sync Project with Gradle Files` — all 30 dependencies resolve from Maven Central automatically.
+
+### 7. Run
+
+Connect a device (USB debugging on) or start an emulator. Press **Run ▶**.
 
 ---
 
-## API keys and OAuth
+## API keys and OAuth (all configured inside the app)
 
-All external accounts are configured inside the running app — **nothing goes in local.properties**:
-
-| Service | Where to configure | Notes |
+| Service | Where | Notes |
 |---|---|---|
-| Channel3 API | Settings → Data Sources → Channel3 | Free at trychannel3.com |
-| HobbyDB | Settings → Data Sources → HobbyDB → Sign in | Free account; provides market pricing + vaulted status |
-| eBay | Settings → Data Sources → eBay → Sign in | Optional; higher-quality sold prices than RSS |
-| Google Drive backup | Settings → Database → Connect Google Drive | Uses standard Google Sign-In |
+| Channel3 | Settings → Data Sources | Free at trychannel3.com |
+| HobbyDB | Settings → Data Sources → Sign in | Free account; market pricing + vaulted status |
+| eBay | Settings → Data Sources → Sign in | Optional; higher-quality sold prices |
+| Google Drive | Settings → Database → Connect | Standard Google Sign-In |
 
----
+**Nothing goes in `local.properties` except the optional Cloudflare Worker URL.**
 
-## Installing on your phone
+### eBay developer registration
 
-**USB (fastest during development)**
-1. Phone: Settings → Developer Options → USB Debugging → On
-2. Connect USB → Android Studio: Run ▶ → select device
+Before users can sign in with eBay, replace the placeholder `CLIENT_ID` in
+`app/src/main/java/com/funkodex/auth/OAuthConfig.kt`:
 
-**Sideload APK**
-1. Android Studio: Build → Build APK(s)
-2. APK at `app/build/outputs/apk/debug/app-debug.apk`
-3. Transfer to phone and install (enable "Install unknown apps" first)
+```kotlin
+const val CLIENT_ID = "FunkoDex-FunkoDex-PRD-xxxxxxxx-xxxxxxxx"
+// ↑ Replace with your RuName from developer.ebay.com
+```
 
-**Play Store internal testing**
-1. Build → Generate Signed Bundle → AAB
-2. Upload to Google Play Console → Internal Testing track
+Also register `funkodex://oauth/ebay` as an accepted redirect URI in the eBay
+developer portal. The rest of the OAuth flow requires no code changes.
 
 ---
 
@@ -122,87 +135,88 @@ All external accounts are configured inside the running app — **nothing goes i
 
 Two document types per item:
 
-**`catalog::{handle}`** — global product facts (same for all users):
+**`catalog::{handle}`** — global product facts:
 ```json
 {
-  "type": "catalog",
-  "handle": "batman-1989",
-  "name": "Batman (1989)",
-  "franchise": "DC Comics",
-  "seriesNumber": "#01",
-  "upc": "889698123456",
-  "category": "Pop! Movies",
-  "imageUrl": "https://...",
-  "retailPrice": 11.99,
-  "isVaulted": false,
-  "isChase": false,
-  "isExclusive": true,
-  "exclusiveRetailer": "Target",
-  "source": "CHANNEL3"
+  "type": "catalog",  "handle": "batman-1989",
+  "name": "Batman (1989)",  "franchise": "DC Comics",
+  "upc": "889698123456",  "category": "Pop! Movies",
+  "retailPrice": 11.99,  "isVaulted": false,
+  "isChase": false,  "isExclusive": true,  "exclusiveRetailer": "Target"
 }
 ```
 
-**`funko::{upc|uuid}`** — personal data (per user):
+**`funko::{upc|uuid}`** — personal data:
 ```json
 {
-  "type": "funko",
-  "catalogRef": "batman-1989",
-  "name": "Batman (1989)",
-  "franchise": "DC Comics",
-  "pricePaid": 14.99,
-  "isOwned": true,
-  "condition": "NEAR_MINT",
-  "notes": "",
-  "dateAdded": "2025-09-01",
-  "dateAcquired": "2025-08-31"
+  "type": "funko",  "catalogRef": "batman-1989",
+  "name": "Batman (1989)",  "franchise": "DC Comics",
+  "pricePaid": 14.99,  "isOwned": true,
+  "condition": "NEAR_MINT",  "notes": "",
+  "dateAdded": "2025-09-01"
 }
 ```
 
-Indexes: `idx_owned`, `idx_upc`, `idx_franchise`, `idx_type`, `idx_category`, `idx_genre`,
-`idx_alert_enabled`, `idx_alert_item`, `idx_contrib_uploaded`
+Indexes: `idx_owned`, `idx_upc`, `idx_franchise`, `idx_type`,
+`idx_alert_enabled`, `idx_alert_item`, `idx_contrib_uploaded`, `idx_cat_pref`, `idx_date_added`
 
 ---
 
 ## Price lookup waterfall
 
-| Tier | Source | Auth | Speed |
+| Tier | Source | Auth | Notes |
 |------|--------|------|-------|
-| 1 | Retail price (catalog) | None | Instant |
-| 2a | eBay sold listings RSS | None | ~400ms |
-| 2b | UPCitemdb | None (100/day free) | ~500ms |
-| 2c | Channel3 free | None (100/day free) | ~300ms |
-| 3 | Channel3 premium | User's API key | ~300ms |
-| 4 | HobbyDB | OAuth sign-in | ~400ms |
+| 1 | Retail (catalog) | None | Instant |
+| 2a | eBay completed-listings RSS | None | Real sold prices |
+| 2b | UPCitemdb | None (100/day) | UPC required |
+| 2c | Channel3 free | None (100/day) | — |
+| 3 | Channel3 premium | User's API key | Higher limits |
+| 4 | HobbyDB | OAuth sign-in | Silent token refresh via TokenRefreshManager |
 
 ---
 
-## Logging and diagnostics
+## OAuth token lifecycle
 
-Settings → Diagnostics:
-- Select log level (VERBOSE / DEBUG / **INFO** / WARN / ERROR)
-- Share today's log file via email or any installed app
-- Log files: `<app-internal-storage>/logs/funkodex_YYYY-MM-DD.log`
-- Crash reports: `<app-internal-storage>/logs/crash_TIMESTAMP.log` (written before app init completes)
+```
+Sign in (Chrome Custom Tab + PKCE)
+    └─ OAuthCallbackActivity exchanges code → stores access|expireAt|refresh
+            │
+            ├─ TokenRefreshManager (on-demand, 5-min buffer)
+            │       Called before every HobbyDB API call
+            │       Refreshes silently if within 5 minutes of expiry
+            │
+            └─ TokenKeeperWorker (weekly, background @HiltWorker)
+                    Proactively refreshes refresh tokens
+                    Prevents 18-month eBay refresh token expiry
+                    Retries with exponential backoff on failure
+```
 
 ---
 
 ## Running tests
 
 ```bash
-# Unit tests (no device needed)
-./gradlew test
-
-# Instrumented tests (device/emulator required)
-./gradlew connectedAndroidTest
+./gradlew test                 # 56 unit tests, no device needed (~2 seconds)
+./gradlew connectedAndroidTest # instrumented tests (device/emulator required)
 ```
+
+---
+
+## Logging and diagnostics
+
+Settings → Diagnostics:
+- Log level: VERBOSE / DEBUG / **INFO** / WARN / ERROR
+- Share today's log file (text/plain via FileProvider)
+- Log files: `<private storage>/logs/funkodex_YYYY-MM-DD.log`
+- Crash reports: `<private storage>/logs/crash_TIMESTAMP.log`
 
 ---
 
 ## Future work
 
-- HobbyDB `client_id` requires a registered eBay developer account for production
-- eBay OAuth PKCE requires eBay developer program approval (sign up free at developer.ebay.com)
-- Play Integrity API verification in Cloudflare Worker (optional hardening)
+- eBay `CLIENT_ID` needs developer.ebay.com registration before users can sign in
+- Play Integrity API in Cloudflare Worker (optional additional hardening)
+- `ScannerViewModelStateTest` skeleton needs Mockk + real assertions
 - Wear OS companion app
 - Tablet two-pane layout
 - Collection value over time chart

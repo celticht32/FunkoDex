@@ -15,6 +15,7 @@ import com.funkodex.util.CrashHandler
 import com.funkodex.util.FunkoDexLogger
 import com.funkodex.util.LogLevel
 import com.funkodex.data.preload.CatalogRefreshWorker
+import com.funkodex.auth.TokenKeeperWorker
 import com.funkodex.data.model.CatalogRefreshConfig
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
@@ -69,6 +70,11 @@ class FunkoDexApp : Application(), Configuration.Provider {
         // 4b. Schedule daily Drive backup if user has connected Google Drive (E2)
         // Only schedules if a Google account is signed in — otherwise no-ops
         DriveBackupWorker.schedule(this)
+
+        // 4c. Schedule weekly OAuth token refresh (keeps HobbyDB + eBay sessions alive)
+        // Proactively refreshes refresh tokens before they expire (~18 months for eBay).
+        // Uses KEEP policy — does not reset the weekly interval on every launch.
+        TokenKeeperWorker.schedule(this)
 
         // 5a. Sync persisted log level from DataStore (updates FunkoDexLogger at runtime)
         appScope.launch {

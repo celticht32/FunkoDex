@@ -65,7 +65,7 @@ is never stored in this repository.
 **This repository must be public** so the FunkoDex app can download
 `funko_upc_community.json` without authentication.
 
-1. Create a new public GitHub repository: `celtic-heart-steamworks/funko-upc-community`
+1. Create a new public GitHub repository: `celticht32/funko-upc-community`
 2. Push the contents of this folder as the initial commit
 3. Deploy the Cloudflare Worker (see `../cloudflare-worker/README.md` in the app repo)
 4. Set `GITHUB_TOKEN` as a Cloudflare Worker Secret (PAT with `contents:write` on this repo)

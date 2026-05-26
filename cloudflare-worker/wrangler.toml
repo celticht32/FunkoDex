@@ -12,7 +12,7 @@ id = "REPLACE_WITH_KV_NAMESPACE_ID"
 # Required secrets (set via: wrangler secret put SECRET_NAME)
 # GITHUB_PAT    — GitHub PAT with repo write scope
 # WORKER_SECRET — 32-byte random hex string
-# GITHUB_REPO   — "celtic-heart-steamworks/funko-upc-community"
+# GITHUB_REPO   — "celticht32/funko-upc-community"
 
 [env.production]
 name = "funkodex-contrib"

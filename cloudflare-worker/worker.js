@@ -11,9 +11,9 @@
  *
  * REQUIRED SECRETS (set via `wrangler secret put`):
  *   GITHUB_PAT    — GitHub personal access token with `repo` scope
- *                   for celtic-heart-steamworks/funko-upc-community
+ *                   for celticht32/funko-upc-community
  *   WORKER_SECRET — 32-byte random hex string (for future use)
- *   GITHUB_REPO   — target repo, e.g. "celtic-heart-steamworks/funko-upc-community"
+ *   GITHUB_REPO   — target repo, e.g. "celticht32/funko-upc-community"
  *
  * SECURITY:
  *   - Request authenticity: X-Signature header (HMAC-SHA256 of body+timestamp,
@@ -157,7 +157,7 @@ function gs1CheckDigitValid(upc) {
 // ── GitHub write ──────────────────────────────────────────────────────────────
 
 async function writeToGitHub(path, content, env) {
-  const repo = env.GITHUB_REPO || 'celtic-heart-steamworks/funko-upc-community';
+  const repo = env.GITHUB_REPO || 'celticht32/funko-upc-community';
   const url  = `https://api.github.com/repos/${repo}/contents/${path}`;
 
   const body = {
@@ -190,7 +190,7 @@ async function upcExistsInMaster(upc, env) {
   // Fetch the master file from GitHub and check for existing UPC
   // This is a simple approach — for scale, use a KV cache of master UPCs
   try {
-    const repo = env.GITHUB_REPO || 'celtic-heart-steamworks/funko-upc-community';
+    const repo = env.GITHUB_REPO || 'celticht32/funko-upc-community';
     const url  = `https://raw.githubusercontent.com/${repo}/main/funko_upc_community.json`;
     const resp = await fetch(url, { cf: { cacheTtl: 300 } }); // 5-min CDN cache
     if (!resp.ok) return null;

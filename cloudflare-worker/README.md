@@ -2,7 +2,7 @@
 
 The proxy between the Android app and the community GitHub repository.
 Validates, rate-limits, and signs UPC contributions before writing them
-as delta files to `celtic-heart-steamworks/funko-upc-community`.
+as delta files to `celticht32/funko-upc-community`.
 
 ## Setup (one-time, ~10 minutes)
 
@@ -28,7 +28,7 @@ echo "YOUR_GITHUB_PAT" | wrangler secret put GITHUB_PAT
 openssl rand -hex 32 | wrangler secret put WORKER_SECRET
 
 # Target repo
-echo "celtic-heart-steamworks/funko-upc-community" | wrangler secret put GITHUB_REPO
+echo "celticht32/funko-upc-community" | wrangler secret put GITHUB_REPO
 ```
 
 ### 4. Deploy

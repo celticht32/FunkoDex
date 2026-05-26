@@ -50,7 +50,7 @@ class CatalogRefreshWorker(
             "https://raw.githubusercontent.com/kennymkchan/funko-pop-data/master/funko_pop.json"
 
         private const val COMMUNITY_UPC_URL =
-            "https://raw.githubusercontent.com/celtic-heart-steamworks/funko-upc-community/main/funko_upc_community.json"
+            "https://raw.githubusercontent.com/celticht32/funko-upc-community/main/funko_upc_community.json"
 
         /**
          * Shared OkHttpClient for this worker — avoids creating a new client on every

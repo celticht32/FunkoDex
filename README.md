@@ -73,7 +73,7 @@ FunkoDex/
 ### 1. Clone or extract
 
 ```bash
-git clone https://github.com/celtic-heart-steamworks/funkodex.git
+git clone https://github.com/celticht32/FunkoDex.git
 # or unzip FunkoDex.zip
 cd FunkoDex
 ```

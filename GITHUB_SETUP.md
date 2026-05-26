@@ -12,8 +12,8 @@ Two separate GitHub repositories:
 
 | Repo | Contents | Visibility |
 |---|---|---|
-| `celtic-heart-steamworks/funkodex` | Android app source code | Private (recommended) |
-| `celtic-heart-steamworks/funko-upc-community` | Community UPC database | Public |
+| `celticht32/FunkoDex` | Android app source code | Private (recommended) |
+| `celticht32/funko-upc-community` | Community UPC database | Public |
 
 The app repo must be private — it contains your OAuth client IDs and app
 architecture. The community repo must be public so the app can download the
@@ -41,7 +41,7 @@ ssh -T git@github.com  # should say "Hi username!"
 
 **Option A — GitHub CLI:**
 ```bash
-gh repo create celtic-heart-steamworks/funkodex \
+gh repo create celticht32/FunkoDex \
     --private \
     --description "FunkoDex — Android Funko Pop collection manager" \
     --confirm
@@ -49,7 +49,7 @@ gh repo create celtic-heart-steamworks/funkodex \
 
 **Option B — GitHub website:**
 1. Go to github.com → "+" → New repository
-2. Owner: `celtic-heart-steamworks`
+2. Owner: `celticht32`
 3. Name: `funkodex`
 4. Visibility: **Private**
 5. **Do NOT** initialize with README, .gitignore, or licence — the repo is already initialised locally
@@ -60,9 +60,9 @@ gh repo create celtic-heart-steamworks/funkodex \
 ```bash
 cd /path/to/FunkoDex        # wherever you extracted FunkoDex.zip
 
-git remote add origin https://github.com/celtic-heart-steamworks/funkodex.git
+git remote add origin https://github.com/celticht32/FunkoDex.git
 # or with SSH:
-git remote add origin git@github.com:celtic-heart-steamworks/funkodex.git
+git remote add origin git@github.com:celticht32/FunkoDex.git
 
 git push -u origin master
 ```
@@ -97,14 +97,14 @@ If you add GitHub Actions CI later, add these as repository secrets
 
 **Option A — GitHub CLI:**
 ```bash
-gh repo create celtic-heart-steamworks/funko-upc-community \
+gh repo create celticht32/funko-upc-community \
     --public \
     --description "Community UPC database for FunkoDex — open source Funko Pop barcode data" \
     --confirm
 ```
 
 **Option B — GitHub website:**
-1. Owner: `celtic-heart-steamworks`
+1. Owner: `celticht32`
 2. Name: `funko-upc-community`
 3. Visibility: **Public**
 4. **Do NOT** initialise with README — the repo already has one
@@ -118,7 +118,7 @@ git init
 git add -A
 git commit -m "Initial commit — FunkoDex community UPC database v1.0"
 
-git remote add origin https://github.com/celtic-heart-steamworks/funko-upc-community.git
+git remote add origin https://github.com/celticht32/funko-upc-community.git
 git push -u origin main
 ```
 
@@ -139,7 +139,7 @@ The quarterly rebase workflow opens pull requests — also automatic.
 
 ### 2d. Verify workflows
 
-1. Go to `github.com/celtic-heart-steamworks/funko-upc-community/actions`
+1. Go to `github.com/celticht32/funko-upc-community/actions`
 2. You should see two workflows: "Weekly delta merge" and "Quarterly rebase"
 3. Trigger "Weekly delta merge" manually to test (it will do nothing — no delta files yet)
 
@@ -188,7 +188,7 @@ echo "YOUR_GITHUB_PAT" | wrangler secret put GITHUB_PAT
 openssl rand -hex 32 | wrangler secret put WORKER_SECRET
 
 # The GitHub repo to write delta files to
-echo "celtic-heart-steamworks/funko-upc-community" | wrangler secret put GITHUB_REPO
+echo "celticht32/funko-upc-community" | wrangler secret put GITHUB_REPO
 ```
 
 ### 3d. Update local.properties in the Android project
@@ -233,7 +233,7 @@ Before users can sign in with eBay, you need a free eBay developer account.
 
 After all repos are pushed and Cloudflare is deployed:
 
-- [ ] `git clone https://github.com/celtic-heart-steamworks/funkodex.git`
+- [ ] `git clone https://github.com/celticht32/FunkoDex.git`
 - [ ] Download `funko_data.json` — see `app/src/main/assets/DOWNLOAD_FUNKO_DATA.md`
 - [ ] Download Cinzel Decorative Bold — `app/src/main/res/font/cinzel_decorative_bold.ttf`
 - [ ] Generate launcher icons — see `launcher-icon/ICON_INSTRUCTIONS.md`
@@ -250,12 +250,12 @@ After all repos are pushed and Cloudflare is deployed:
 
 ```
 funkodex (private)
-  https://github.com/celtic-heart-steamworks/funkodex
+  https://github.com/celticht32/FunkoDex
   Local path: FunkoDex/
   Push: git push origin master
 
 funko-upc-community (public)
-  https://github.com/celtic-heart-steamworks/funko-upc-community
+  https://github.com/celticht32/funko-upc-community
   Local path: FunkoDex-Community/
   Push: git push origin main
   Workflows: Sunday 02:00 UTC (merge), quarterly (rebase)

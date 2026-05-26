@@ -12,12 +12,12 @@ is in `GITHUB_SETUP.md` inside the FunkoDex app package.
 ### 1. Create the public GitHub repo
 
 ```bash
-gh repo create celtic-heart-steamworks/funko-upc-community \
+gh repo create celticht32/funko-upc-community \
     --public \
     --description "Community UPC database for FunkoDex — open source Funko Pop barcode data"
 ```
 
-Or on the GitHub website: Owner `celtic-heart-steamworks`, name `funko-upc-community`,
+Or on the GitHub website: Owner `celticht32`, name `funko-upc-community`,
 visibility **Public**, do **not** initialise with a README.
 
 ### 2. Push
@@ -27,13 +27,13 @@ git init
 git add -A
 git commit -m "Initial commit — FunkoDex community UPC database v1.0"
 git branch -M main          # workflows reference 'main', not 'master'
-git remote add origin https://github.com/celtic-heart-steamworks/funko-upc-community.git
+git remote add origin https://github.com/celticht32/funko-upc-community.git
 git push -u origin main
 ```
 
 ### 3. Verify workflows
 
-Go to: `github.com/celtic-heart-steamworks/funko-upc-community/actions`
+Go to: `github.com/celticht32/funko-upc-community/actions`
 
 You should see two workflows:
 - **Weekly delta merge** — runs every Sunday 02:00 UTC automatically

@@ -11,6 +11,9 @@ import com.funkodex.data.preload.PreloadResult
 import com.funkodex.network.ConnectivityObserver
 import androidx.hilt.work.HiltWorkerFactory
 import com.funkodex.data.backup.DriveBackupWorker
+import com.funkodex.util.CrashHandler
+import com.funkodex.util.FunkoDexLogger
+import com.funkodex.util.LogLevel
 import com.funkodex.data.preload.CatalogRefreshWorker
 import com.funkodex.data.model.CatalogRefreshConfig
 import androidx.work.Configuration
@@ -25,6 +28,7 @@ import javax.inject.Inject
 class FunkoDexApp : Application(), Configuration.Provider {
 
     @Inject lateinit var catalogPreloader:      CatalogPreloader
+    @Inject lateinit var userPrefs:             com.funkodex.ui.screens.settings.UserPreferencesRepository
     @Inject lateinit var connectivityObserver:  ConnectivityObserver
     @Inject lateinit var workerFactory:         HiltWorkerFactory
 
@@ -38,6 +42,13 @@ class FunkoDexApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+
+        // 0. Install crash handler — must be absolute first so pre-init crashes are captured
+        CrashHandler.install(this)
+
+        // 0b. Init logger with default level — updated from DataStore once prefs are ready
+        FunkoDexLogger.init(this, LogLevel.DEFAULT)
+        FunkoDexLogger.i("FunkoDexApp", "App starting")
 
         // 1. Initialise Couchbase Lite — must be first
         CouchbaseLite.init(this)
@@ -59,20 +70,26 @@ class FunkoDexApp : Application(), Configuration.Provider {
         // Only schedules if a Google account is signed in — otherwise no-ops
         DriveBackupWorker.schedule(this)
 
-        // 5. Preload the Funko catalog in the background.
+        // 5a. Sync persisted log level from DataStore (updates FunkoDexLogger at runtime)
+        appScope.launch {
+            userPrefs.logLevel.collect { level ->
+                FunkoDexLogger.setLevel(level)
+            }
+        }
+
+        // 5b. Preload the Funko catalog in the background.
         //    Runs during the splash screen — typically completes within 1.8s on
         //    first install; subsequent launches skip immediately (marker doc check).
         appScope.launch {
             when (val result = catalogPreloader.preloadIfNeeded()) {
                 is PreloadResult.Loaded        ->
-                    Log.i("FunkoDex", "Catalog loaded: ${result.count} items")
+                    FunkoDexLogger.i("FunkoDexApp", "Catalog loaded: ${result.count} items")
                 is PreloadResult.AlreadyLoaded ->
-                    Log.d("FunkoDex", "Catalog already present: ${result.count} items")
+                    FunkoDexLogger.d("FunkoDexApp", "Catalog already present: ${result.count} items")
                 is PreloadResult.AssetMissing  ->
-                    Log.w("FunkoDex",
-                        "funko_data.json not found — catalog lookup will use network only")
+                    FunkoDexLogger.w("FunkoDexApp", "funko_data.json not found — catalog lookup will use network only")
                 is PreloadResult.ParseError    ->
-                    Log.e("FunkoDex", "Catalog parse error: ${result.message}")
+                    FunkoDexLogger.e("FunkoDexApp", "Catalog parse error: ${result.message}")
             }
         }
     }
@@ -122,6 +139,6 @@ class FunkoDexApp : Application(), Configuration.Provider {
             }
         )
 
-        Log.d("FunkoDex", "Notification channels created")
+        FunkoDexLogger.d("FunkoDexApp", "Notification channels created")
     }
 }

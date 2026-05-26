@@ -3,6 +3,8 @@ package com.funkodex.ui.screens.settings
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.funkodex.util.FunkoDexLogger
+import com.funkodex.util.LogLevel
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -21,7 +23,8 @@ private val Context.dataStore by preferencesDataStore(name = "user_prefs")
 class UserPreferencesRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private val THEME_KEY = stringPreferencesKey("app_theme")
+    private val THEME_KEY     = stringPreferencesKey("app_theme")
+    private val LOG_LEVEL_KEY = stringPreferencesKey("log_level")
 
     val appTheme: Flow<AppTheme> = context.dataStore.data
         .map { prefs ->
@@ -29,8 +32,16 @@ class UserPreferencesRepository @Inject constructor(
             runCatching { AppTheme.valueOf(raw) }.getOrDefault(AppTheme.SYSTEM)
         }
 
+    val logLevel: Flow<LogLevel> = context.dataStore.data
+        .map { prefs -> LogLevel.fromName(prefs[LOG_LEVEL_KEY] ?: LogLevel.DEFAULT.name) }
+
     suspend fun setTheme(theme: AppTheme) {
         context.dataStore.edit { it[THEME_KEY] = theme.name }
+    }
+
+    suspend fun setLogLevel(level: LogLevel) {
+        context.dataStore.edit { it[LOG_LEVEL_KEY] = level.name }
+        FunkoDexLogger.setLevel(level)
     }
 }
 
@@ -42,7 +53,14 @@ class SettingsViewModel @Inject constructor(
     val currentTheme: StateFlow<AppTheme> = prefs.appTheme
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppTheme.SYSTEM)
 
+    val logLevel: StateFlow<LogLevel> = prefs.logLevel
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LogLevel.DEFAULT)
+
     fun setTheme(theme: AppTheme) {
         viewModelScope.launch { prefs.setTheme(theme) }
+    }
+
+    fun setLogLevel(level: LogLevel) {
+        viewModelScope.launch { prefs.setLogLevel(level) }
     }
 }

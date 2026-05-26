@@ -6,6 +6,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.util.Log
+import com.funkodex.util.FunkoDexLogger
 import com.couchbase.lite.MutableDocument
 import com.funkodex.data.db.FunkoDexDatabase
 import com.funkodex.data.model.PendingUpcScan
@@ -46,7 +47,7 @@ class ConnectivityObserver @Inject constructor(
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
-            Log.d("ConnectivityObserver", "Network available — processing pending UPC queue")
+            FunkoDexLogger.d("ConnectivityObserver", "Network available — processing pending UPC queue")
             processPendingQueue()
         }
     }
@@ -58,7 +59,7 @@ class ConnectivityObserver @Inject constructor(
             .build()
         connectivityManager.registerNetworkCallback(request, networkCallback)
         isRegistered = true
-        Log.d("ConnectivityObserver", "Registered")
+        FunkoDexLogger.d("ConnectivityObserver", "Registered")
     }
 
     fun unregister() {
@@ -88,7 +89,7 @@ class ConnectivityObserver @Inject constructor(
                     return@launch
                 }
 
-                Log.i("ConnectivityObserver", "Processing ${pending.size} pending UPC scan(s)")
+                FunkoDexLogger.i("ConnectivityObserver", "Processing ${pending.size} pending UPC scan(s)")
                 var resolved = 0
                 val resolvedItems = mutableListOf<String>()
 
@@ -96,7 +97,7 @@ class ConnectivityObserver @Inject constructor(
                     val item = try {
                         lookup.lookupByUpc(scan.upc)
                     } catch (e: Exception) {
-                        Log.w("ConnectivityObserver", "Lookup failed for ${scan.upc}: ${e.message}")
+                        FunkoDexLogger.w("ConnectivityObserver", "Lookup failed for ${scan.upc}: ${e.message}")
                         null
                     }
 
@@ -140,7 +141,7 @@ class ConnectivityObserver @Inject constructor(
                     sendNotification(resolved, resolvedItems)
                 }
 
-                Log.i("ConnectivityObserver", "Queue processed: $resolved/${pending.size} resolved")
+                FunkoDexLogger.i("ConnectivityObserver", "Queue processed: $resolved/${pending.size} resolved")
             } finally {
                 isProcessing = false
             }
@@ -182,7 +183,7 @@ class ConnectivityObserver @Inject constructor(
                     context, android.Manifest.permission.POST_NOTIFICATIONS
                 ) == PackageManager.PERMISSION_GRANTED
                 if (!granted) {
-                    Log.d("ConnectivityObserver", "POST_NOTIFICATIONS not granted — skipping notification")
+                    FunkoDexLogger.d("ConnectivityObserver", "POST_NOTIFICATIONS not granted — skipping notification")
                     return
                 }
             }
@@ -202,7 +203,7 @@ class ConnectivityObserver @Inject constructor(
 
             nm.notify(NOTIFICATION_ID, notification)
         } catch (e: Exception) {
-            Log.w("ConnectivityObserver", "Could not send notification: ${e.message}")
+            FunkoDexLogger.w("ConnectivityObserver", "Could not send notification: ${e.message}")
         }
     }
 

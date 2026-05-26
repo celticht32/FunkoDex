@@ -18,6 +18,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.funkodex.ui.help.HelpCard
+import com.funkodex.util.FunkoDexLogger
+import com.funkodex.util.LogLevel
 import com.funkodex.ui.help.HelpContent
 import com.funkodex.ui.theme.AppTheme
 
@@ -29,6 +31,7 @@ fun SettingsScreen(
     dbTransferViewModel: DatabaseTransferViewModel = hiltViewModel(),
 ) {
     val currentTheme  by viewModel.currentTheme.collectAsState()
+    val logLevel      by viewModel.logLevel.collectAsState()
     val transferState by dbTransferViewModel.state.collectAsState()
     val context = LocalContext.current
 
@@ -262,6 +265,62 @@ fun SettingsScreen(
             Spacer(Modifier.height(8.dp))
 
             // ── About ────────────────────────────────────────────────────────
+            SectionHeader("Diagnostics")
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
+                    // Log level picker
+                    Text("Log level", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                    Text(
+                        logLevel.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        LogLevel.entries.forEach { level ->
+                            FilterChip(
+                                selected  = logLevel == level,
+                                onClick   = { viewModel.setLogLevel(level) },
+                                label     = { Text(level.displayName, fontSize = 11.sp) },
+                                modifier  = Modifier.weight(1f),
+                            )
+                        }
+                    }
+
+                    HorizontalDivider()
+
+                    // Share log file
+                    SettingsRow(
+                        icon     = Icons.Default.BugReport,
+                        title    = "Share log file",
+                        subtitle = FunkoDexLogger.currentLogFile()?.let {
+                            "Today: ${it.name}  (${it.length() / 1024}KB)"
+                        } ?: "No log file yet for today",
+                        onClick  = {
+                            val logFile = FunkoDexLogger.currentLogFile()
+                            if (logFile != null) {
+                                val uri = androidx.core.content.FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    logFile
+                                )
+                                shareLauncher.launch(
+                                    android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                        putExtra(android.content.Intent.EXTRA_SUBJECT, "FunkoDex log — ${logFile.name}")
+                                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }.let { android.content.Intent.createChooser(it, "Share log via…") }
+                                )
+                            }
+                        }
+                    )
+                }
+            }
+
             SectionHeader("About")
 
             Card(modifier = Modifier.fillMaxWidth()) {

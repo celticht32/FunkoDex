@@ -1,6 +1,7 @@
 package com.funkodex.data.repository
 
 import android.util.Log
+import com.funkodex.util.FunkoDexLogger
 import com.couchbase.lite.Blob
 import com.funkodex.data.db.FunkoDexDatabase
 import com.funkodex.data.model.FunkoItem
@@ -62,13 +63,13 @@ class ImageBlobRepository @Inject constructor(
 
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) {
-                Log.w(TAG, "Image fetch failed ${response.code} for ${item.name}")
+                FunkoDexLogger.w(TAG, "Image fetch failed ${response.code} for ${item.name}")
                 return@runCatching false
             }
 
             val bytes = response.body?.bytes() ?: return@runCatching false
             if (bytes.size > MAX_BYTES) {
-                Log.w(TAG, "Image too large (${bytes.size}B) for ${item.name} — skipping")
+                FunkoDexLogger.w(TAG, "Image too large (${bytes.size}B) for ${item.name} — skipping")
                 return@runCatching false
             }
 
@@ -90,10 +91,10 @@ class ImageBlobRepository @Inject constructor(
             doc.setBlob(FunkoDexDatabase.FIELD_THUMBNAIL_BLOB, Blob(mimeType, bytes))
             database.save(doc)
 
-            Log.d(TAG, "Stored ${bytes.size}B image for ${item.name}")
+            FunkoDexLogger.d(TAG, "Stored ${bytes.size}B image for ${item.name}")
             true
         }.getOrElse { e ->
-            Log.e(TAG, "Image download failed for ${item.name}: ${e.message}")
+            FunkoDexLogger.e(TAG, "Image download failed for ${item.name}: ${e.message}")
             false
         }
     }

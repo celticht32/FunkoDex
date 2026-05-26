@@ -2,6 +2,7 @@ package com.funkodex.data.backup
 
 import android.content.Context
 import android.util.Log
+import com.funkodex.util.FunkoDexLogger
 import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import com.funkodex.BuildConfig
@@ -68,7 +69,7 @@ class GitHubUploadWorker @AssistedInject constructor(
                     .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.HOURS)
                     .build()
             )
-            Log.i(TAG, "Scheduled (daily)")
+            FunkoDexLogger.i(TAG, "Scheduled (daily)")
         }
 
         fun cancel(context: Context) =
@@ -78,18 +79,18 @@ class GitHubUploadWorker @AssistedInject constructor(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val workerUrl = BuildConfig.WORKER_URL
         if (workerUrl.isBlank()) {
-            Log.i(TAG, "WORKER_URL not configured — skipping upload")
+            FunkoDexLogger.i(TAG, "WORKER_URL not configured — skipping upload")
             return@withContext Result.success(workDataOf("skipped" to "no_url"))
         }
 
         try {
             val pending = contribRepo.getPendingContributions()
             if (pending.isEmpty()) {
-                Log.d(TAG, "No pending contributions")
+                FunkoDexLogger.d(TAG, "No pending contributions")
                 return@withContext Result.success(workDataOf("uploaded" to 0))
             }
 
-            Log.d(TAG, "Uploading ${pending.size} contribution(s)")
+            FunkoDexLogger.d(TAG, "Uploading ${pending.size} contribution(s)")
 
             // Build payload — global meta only, no personal data
             val payload = mapOf(
@@ -115,11 +116,11 @@ class GitHubUploadWorker @AssistedInject constructor(
             return@withContext if (response.isSuccessful) {
                 // Mark all as uploaded
                 pending.forEach { contribRepo.markUploaded(it.upc) }
-                Log.i(TAG, "Upload success: ${pending.size} contributions accepted")
+                FunkoDexLogger.i(TAG, "Upload success: ${pending.size} contributions accepted")
                 Result.success(workDataOf("uploaded" to pending.size))
             } else {
                 val body = response.body?.string() ?: ""
-                Log.w(TAG, "Upload failed ${response.code}: $body")
+                FunkoDexLogger.w(TAG, "Upload failed ${response.code}: $body")
                 when (response.code) {
                     429  -> Result.retry()  // rate limited — retry with backoff
                     400  -> {               // schema error — mark all uploaded to avoid loop
@@ -130,7 +131,7 @@ class GitHubUploadWorker @AssistedInject constructor(
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Upload exception: ${e.message}", e)
+            FunkoDexLogger.e(TAG, "Upload exception: ${e.message}", e)
             Result.retry()
         }
     }

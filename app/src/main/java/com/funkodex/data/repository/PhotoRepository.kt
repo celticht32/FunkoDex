@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
 import android.util.Log
+import com.funkodex.util.FunkoDexLogger
 import androidx.exifinterface.media.ExifInterface
 import com.couchbase.lite.Blob
 import com.funkodex.data.db.FunkoDexDatabase
@@ -75,7 +76,7 @@ class PhotoRepository @Inject constructor(
      */
     suspend fun savePhoto(uri: Uri, itemId: String): Boolean = withContext(Dispatchers.IO) {
         if (itemId.isEmpty()) {
-            Log.w(TAG, "savePhoto called with empty itemId")
+            FunkoDexLogger.w(TAG, "savePhoto called with empty itemId")
             return@withContext false
         }
 
@@ -84,7 +85,7 @@ class PhotoRepository @Inject constructor(
             val original = context.contentResolver.openInputStream(uri)?.use { stream ->
                 BitmapFactory.decodeStream(stream)
             } ?: run {
-                Log.w(TAG, "Could not open input stream for $uri")
+                FunkoDexLogger.w(TAG, "Could not open input stream for $uri")
                 return@runCatching false
             }
 
@@ -100,10 +101,10 @@ class PhotoRepository @Inject constructor(
             }.toByteArray()
 
             if (bytes.size > MAX_BLOB_BYTES) {
-                Log.w(TAG, "Photo too large after compression (${bytes.size}B) — re-compressing")
+                FunkoDexLogger.w(TAG, "Photo too large after compression (${bytes.size}B) — re-compressing")
                 val recompressed = recompressAggressively(scaled)
                 if (recompressed.size > MAX_BLOB_BYTES) {
-                    Log.e(TAG, "Photo still too large after re-compress — skipping")
+                    FunkoDexLogger.e(TAG, "Photo still too large after re-compress — skipping")
                     return@runCatching false
                 }
                 storeBlob(itemId, recompressed)
@@ -111,10 +112,10 @@ class PhotoRepository @Inject constructor(
                 storeBlob(itemId, bytes)
             }
 
-            Log.d(TAG, "Photo saved for item $itemId (${bytes.size}B)")
+            FunkoDexLogger.d(TAG, "Photo saved for item $itemId (${bytes.size}B)")
             true
         }.getOrElse { e ->
-            Log.e(TAG, "Photo save failed: ${e.message}", e)
+            FunkoDexLogger.e(TAG, "Photo save failed: ${e.message}", e)
             false
         }
     }

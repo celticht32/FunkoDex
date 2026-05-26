@@ -2,6 +2,7 @@ package com.funkodex.data.preload
 
 import android.content.Context
 import android.util.Log
+import com.funkodex.util.FunkoDexLogger
 import androidx.work.*
 import com.couchbase.lite.MutableDocument
 import com.funkodex.data.db.FunkoDexDatabase
@@ -70,7 +71,7 @@ class CatalogRefreshWorker(
                 ExistingPeriodicWorkPolicy.UPDATE,
                 request
             )
-            Log.i("CatalogRefresh", "Scheduled: every ${config.intervalDays}d wifi=${config.wifiOnly}")
+            FunkoDexLogger.i("CatalogRefresh", "Scheduled: every ${config.intervalDays}d wifi=${config.wifiOnly}")
         }
 
         fun cancel(context: Context) {
@@ -91,17 +92,17 @@ class CatalogRefreshWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
-            Log.i("CatalogRefresh", "Starting catalog refresh…")
+            FunkoDexLogger.i("CatalogRefresh", "Starting catalog refresh…")
             val newCount = refreshKennyChan()
-            Log.i("CatalogRefresh", "Refresh complete: $newCount new catalog records added")
+            FunkoDexLogger.i("CatalogRefresh", "Refresh complete: $newCount new catalog records added")
 
             // F3: Also refresh the community UPC file
             val upcsMerged = refreshCommunityUpcFile()
-            Log.i("CatalogRefresh", "Community UPC file: $upcsMerged UPCs merged into catalog")
+            FunkoDexLogger.i("CatalogRefresh", "Community UPC file: $upcsMerged UPCs merged into catalog")
 
             Result.success(workDataOf("new_items" to newCount, "upcs_merged" to upcsMerged))
         } catch (e: Exception) {
-            Log.e("CatalogRefresh", "Refresh failed: ${e.message}", e)
+            FunkoDexLogger.e("CatalogRefresh", "Refresh failed: ${e.message}", e)
             Result.retry()
         }
     }
@@ -116,7 +117,7 @@ class CatalogRefreshWorker(
         ).execute()
 
         if (!response.isSuccessful) {
-            Log.w("CatalogRefresh", "Kenny Chan fetch failed: ${response.code}")
+            FunkoDexLogger.w("CatalogRefresh", "Kenny Chan fetch failed: ${response.code}")
             return@withContext 0
         }
 
@@ -186,7 +187,7 @@ class CatalogRefreshWorker(
             ).execute()
 
             if (!response.isSuccessful) {
-                Log.w("CatalogRefresh", "Community UPC fetch failed: ${response.code}")
+                FunkoDexLogger.w("CatalogRefresh", "Community UPC fetch failed: ${response.code}")
                 return@withContext 0
             }
 
@@ -243,7 +244,7 @@ class CatalogRefreshWorker(
             }
             merged
         } catch (e: Exception) {
-            Log.e("CatalogRefresh", "Community UPC refresh failed: ${e.message}", e)
+            FunkoDexLogger.e("CatalogRefresh", "Community UPC refresh failed: ${e.message}", e)
             0
         }
     }

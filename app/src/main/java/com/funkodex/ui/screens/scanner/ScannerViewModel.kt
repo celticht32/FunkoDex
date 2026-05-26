@@ -253,6 +253,6 @@ class ScannerViewModel @Inject constructor(
 
     // ─── Helpers ───────────────────────────────────────────────────────────────
 
-    /** Uses ConnectivityObserver which correctly uses NetworkCapabilities API (avoids deprecated activeNetworkInfo). */
+    /** Uses ConnectivityObserver which correctly uses NetworkCapabilities API (API 29+ compliant). */
     private fun isNetworkAvailable(): Boolean = connectivity.isConnected()
 }

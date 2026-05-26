@@ -1,6 +1,7 @@
 package com.funkodex.network
 
 import android.util.Log
+import com.funkodex.util.FunkoDexLogger
 import android.util.Xml
 import com.funkodex.data.model.FunkoItem
 import com.funkodex.data.model.PriceSnapshot
@@ -72,7 +73,7 @@ class PriceService @Inject constructor(
     suspend fun fetchPrice(item: FunkoItem): PriceSnapshot? = withContext(Dispatchers.IO) {
         // Tier 1: retail price from catalog — always instant
         if (item.retailPrice > 0) {
-            Log.d(TAG, "Tier 1 hit for ${item.name}: retail=${item.retailPrice}")
+            FunkoDexLogger.d(TAG, "Tier 1 hit for ${item.name}: retail=${item.retailPrice}")
             return@withContext PriceSnapshot(
                 itemId      = item.id,
                 source      = PriceSource.RETAIL_CATALOG,
@@ -83,34 +84,34 @@ class PriceService @Inject constructor(
 
         // Tier 2a: eBay RSS — most valuable (real sold prices)
         fetchEbayRss(item)?.let {
-            Log.d(TAG, "Tier 2a (eBay RSS) hit for ${item.name}")
+            FunkoDexLogger.d(TAG, "Tier 2a (eBay RSS) hit for ${item.name}")
             return@withContext it
         }
 
         // Tier 2b: UPCitemdb
         if (item.upc.isNotEmpty()) {
             fetchUpcItemDb(item)?.let {
-                Log.d(TAG, "Tier 2b (UPCitemdb) hit for ${item.name}")
+                FunkoDexLogger.d(TAG, "Tier 2b (UPCitemdb) hit for ${item.name}")
                 return@withContext it
             }
         }
 
         // Tier 2c: Channel3 free (uses upc if available, else name search)
         fetchChannel3(item, premium = false)?.let {
-            Log.d(TAG, "Tier 2c (Channel3 free) hit for ${item.name}")
+            FunkoDexLogger.d(TAG, "Tier 2c (Channel3 free) hit for ${item.name}")
             return@withContext it
         }
 
         // Tier 3: Channel3 premium
         if (secureKeyStore.hasChannel3Key()) {
             fetchChannel3(item, premium = true)?.let {
-                Log.d(TAG, "Tier 3 (Channel3 premium) hit for ${item.name}")
+                FunkoDexLogger.d(TAG, "Tier 3 (Channel3 premium) hit for ${item.name}")
                 return@withContext it
             }
         }
 
         // Tier 4: HobbyDB — stub until OAuth is built in Phase D
-        Log.d(TAG, "All tiers exhausted for ${item.name}")
+        FunkoDexLogger.d(TAG, "All tiers exhausted for ${item.name}")
         null
     }
 
@@ -199,7 +200,7 @@ class PriceService @Inject constructor(
                 eventType = parser.next()
             }
         } catch (e: Exception) {
-            Log.w(TAG, "eBay RSS parse error: ${e.message}")
+            FunkoDexLogger.w(TAG, "eBay RSS parse error: ${e.message}")
         }
 
         if (prices.isEmpty()) return null

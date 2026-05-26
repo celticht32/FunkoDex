@@ -2,6 +2,7 @@ package com.funkodex.data.backup
 
 import android.content.Context
 import android.util.Log
+import com.funkodex.util.FunkoDexLogger
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
@@ -60,7 +61,7 @@ class DriveBackupWorker @AssistedInject constructor(
                     applicationContext, android.Manifest.permission.POST_NOTIFICATIONS
                 ) == PackageManager.PERMISSION_GRANTED
                 if (!granted) {
-                    Log.d(TAG, "POST_NOTIFICATIONS not granted — skipping backup notification")
+                    FunkoDexLogger.d(TAG, "POST_NOTIFICATIONS not granted — skipping backup notification")
                     return
                 }
             }
@@ -145,11 +146,11 @@ class DriveBackupWorker @AssistedInject constructor(
             secureKeyStore.setWorkerUrl("$PREF_LAST_BACKUP:${LocalDateTime.now()}")
             zipFile.delete()
 
-            Log.i(TAG, "Backup complete: ${zipFile.name}")
+            FunkoDexLogger.i(TAG, "Backup complete: ${zipFile.name}")
             sendBackupNotification(zipFile.name)
             Result.success(workDataOf("file" to zipFile.name))
         } catch (e: Exception) {
-            Log.e(TAG, "Backup failed: ${e.message}", e)
+            FunkoDexLogger.e(TAG, "Backup failed: ${e.message}", e)
             Result.retry()
         }
     }

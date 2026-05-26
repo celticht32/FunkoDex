@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.funkodex.util.FunkoDexLogger
 import androidx.core.app.NotificationCompat
 import androidx.work.*
 import com.funkodex.MainActivity
@@ -68,7 +69,7 @@ class PriceAlertWorker @AssistedInject constructor(
                 ExistingPeriodicWorkPolicy.KEEP,   // don't reset interval if already scheduled
                 request
             )
-            Log.i(TAG, "Price alert worker scheduled (daily)")
+            FunkoDexLogger.i(TAG, "Price alert worker scheduled (daily)")
         }
 
         fun cancel(context: Context) {
@@ -77,15 +78,15 @@ class PriceAlertWorker @AssistedInject constructor(
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        Log.d(TAG, "Price alert check started")
+        FunkoDexLogger.d(TAG, "Price alert check started")
         try {
             val alerts = alertRepository.getActiveAlerts()
-            Log.d(TAG, "Checking ${alerts.size} active alert(s)")
+            FunkoDexLogger.d(TAG, "Checking ${alerts.size} active alert(s)")
 
             var notifiedCount = 0
             for (alert in alerts) {
                 if (alert.notifiedToday) {
-                    Log.d(TAG, "Already notified today for ${alert.itemName} — skipping")
+                    FunkoDexLogger.d(TAG, "Already notified today for ${alert.itemName} — skipping")
                     continue
                 }
 
@@ -99,7 +100,7 @@ class PriceAlertWorker @AssistedInject constructor(
                 val snapshot = try {
                     priceService.fetchPrice(pseudoItem)
                 } catch (e: Exception) {
-                    Log.w(TAG, "Price fetch failed for ${alert.itemName}: ${e.message}")
+                    FunkoDexLogger.w(TAG, "Price fetch failed for ${alert.itemName}: ${e.message}")
                     null
                 }
 
@@ -108,16 +109,16 @@ class PriceAlertWorker @AssistedInject constructor(
                     sendNotification(alert, marketLow, notifiedCount)
                     alertRepository.markTriggered(alert.itemId)
                     notifiedCount++
-                    Log.i(TAG, "Alert fired: ${alert.itemName} @ $${"%.2f".format(marketLow)}")
+                    FunkoDexLogger.i(TAG, "Alert fired: ${alert.itemName} @ $${"%.2f".format(marketLow)}")
                 } else {
-                    Log.d(TAG, "${alert.itemName}: low=$${"%.2f".format(marketLow)} vs target=$${"%.2f".format(alert.targetPrice)}")
+                    FunkoDexLogger.d(TAG, "${alert.itemName}: low=$${"%.2f".format(marketLow)} vs target=$${"%.2f".format(alert.targetPrice)}")
                 }
             }
 
-            Log.d(TAG, "Price alert check complete: $notifiedCount notification(s) sent")
+            FunkoDexLogger.d(TAG, "Price alert check complete: $notifiedCount notification(s) sent")
             Result.success(workDataOf("notified" to notifiedCount))
         } catch (e: Exception) {
-            Log.e(TAG, "Price alert worker failed: ${e.message}", e)
+            FunkoDexLogger.e(TAG, "Price alert worker failed: ${e.message}", e)
             Result.retry()
         }
     }
@@ -133,7 +134,7 @@ class PriceAlertWorker @AssistedInject constructor(
                 applicationContext, android.Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED
             if (!granted) {
-                Log.d(TAG, "POST_NOTIFICATIONS not granted — skipping alert notification")
+                FunkoDexLogger.d(TAG, "POST_NOTIFICATIONS not granted — skipping alert notification")
                 return
             }
         }

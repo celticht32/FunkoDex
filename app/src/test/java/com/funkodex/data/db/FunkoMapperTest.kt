@@ -17,9 +17,8 @@ class FunkoMapperTest {
         upc               = "012345678901",
         funkoId           = "batman-1989",
         name              = "Batman (1989)",
-        series            = "DC Comics",
+        franchise         = "DC Comics",
         seriesNumber      = "#01",
-        licensor          = "Warner Bros",
         category          = "Pop! Movies",
         imageUrl          = "https://example.com/batman.png",
         pricePaid         = 14.99,
@@ -39,16 +38,16 @@ class FunkoMapperTest {
         val item = sampleItem()
         val doc  = FunkoMapper.toDocument(item)
 
-        assertEquals("funko",           doc.getString(FunkoDexDatabase.FIELD_TYPE))
-        assertEquals(item.upc,          doc.getString(FunkoDexDatabase.FIELD_UPC))
-        assertEquals(item.funkoId,      doc.getString(FunkoDexDatabase.FIELD_FUNKO_ID))
-        assertEquals(item.name,         doc.getString(FunkoDexDatabase.FIELD_NAME))
-        assertEquals(item.series,       doc.getString(FunkoDexDatabase.FIELD_SERIES))
-        assertEquals(item.seriesNumber, doc.getString(FunkoDexDatabase.FIELD_SERIES_NUM))
-        assertEquals(item.category,     doc.getString(FunkoDexDatabase.FIELD_CATEGORY))
-        assertEquals(item.imageUrl,     doc.getString(FunkoDexDatabase.FIELD_IMAGE_URL))
-        assertEquals("NEAR_MINT",       doc.getString(FunkoDexDatabase.FIELD_CONDITION))
-        assertEquals(item.notes,        doc.getString(FunkoDexDatabase.FIELD_NOTES))
+        assertEquals("funko",            doc.getString(FunkoDexDatabase.FIELD_TYPE))
+        assertEquals(item.upc,           doc.getString(FunkoDexDatabase.FIELD_UPC))
+        assertEquals(item.funkoId,       doc.getString(FunkoDexDatabase.FIELD_FUNKO_ID))
+        assertEquals(item.name,          doc.getString(FunkoDexDatabase.FIELD_NAME))
+        assertEquals(item.franchise,     doc.getString(FunkoDexDatabase.FIELD_FRANCHISE))
+        assertEquals(item.seriesNumber,  doc.getString(FunkoDexDatabase.FIELD_SERIES_NUM))
+        assertEquals(item.category,      doc.getString(FunkoDexDatabase.FIELD_CATEGORY))
+        assertEquals(item.imageUrl,      doc.getString(FunkoDexDatabase.FIELD_IMAGE_URL))
+        assertEquals("NEAR_MINT",        doc.getString(FunkoDexDatabase.FIELD_CONDITION))
+        assertEquals(item.notes,         doc.getString(FunkoDexDatabase.FIELD_NOTES))
     }
 
     @Test
@@ -56,7 +55,7 @@ class FunkoMapperTest {
         val item = sampleItem()
         val doc  = FunkoMapper.toDocument(item)
 
-        assertEquals(14.99, doc.getDouble(FunkoDexDatabase.FIELD_PRICE_PAID), 0.001)
+        assertEquals(14.99, doc.getDouble(FunkoDexDatabase.FIELD_PRICE_PAID),   0.001)
         assertEquals(11.99, doc.getDouble(FunkoDexDatabase.FIELD_RETAIL_PRICE), 0.001)
         assertTrue(doc.getBoolean(FunkoDexDatabase.FIELD_IS_EXCLUSIVE))
         assertTrue(doc.getBoolean(FunkoDexDatabase.FIELD_IS_OWNED))
@@ -88,7 +87,6 @@ class FunkoMapperTest {
 
     @Test
     fun `fromDocument handles missing optional fields gracefully`() {
-        // Minimal document — only required fields set
         val doc = MutableDocument("funko::minimal")
         doc.setString(FunkoDexDatabase.FIELD_TYPE, FunkoDexDatabase.TYPE_FUNKO)
         doc.setString(FunkoDexDatabase.FIELD_NAME, "Mystery Funko")
@@ -96,12 +94,12 @@ class FunkoMapperTest {
 
         val item = FunkoMapper.fromDocument(doc)
 
-        assertEquals("funko::minimal",   item.id)
-        assertEquals("Mystery Funko",    item.name)
-        assertEquals("",                 item.series)
-        assertEquals("",                 item.upc)
-        assertEquals(0.0,                item.pricePaid, 0.001)
-        assertEquals(Condition.MINT,     item.condition)  // default
+        assertEquals("funko::minimal", item.id)
+        assertEquals("Mystery Funko",  item.name)
+        assertEquals("",               item.franchise)
+        assertEquals("",               item.upc)
+        assertEquals(0.0,              item.pricePaid, 0.001)
+        assertEquals(Condition.MINT,   item.condition)
         assertFalse(item.isExclusive)
         assertNull(item.dateAcquired)
     }
@@ -110,11 +108,11 @@ class FunkoMapperTest {
     fun `fromDocument handles unknown condition string gracefully`() {
         val doc = MutableDocument("funko::test")
         doc.setString(FunkoDexDatabase.FIELD_NAME, "Test")
-        doc.setString(FunkoDexDatabase.FIELD_CONDITION, "DESTROYED")  // invalid value
+        doc.setString(FunkoDexDatabase.FIELD_CONDITION, "DESTROYED")
         doc.setBoolean(FunkoDexDatabase.FIELD_IS_OWNED, true)
 
         val item = FunkoMapper.fromDocument(doc)
-        assertEquals(Condition.MINT, item.condition)  // should default to MINT
+        assertEquals(Condition.MINT, item.condition)
     }
 
     @Test
@@ -122,5 +120,26 @@ class FunkoMapperTest {
         val item = sampleItem(isOwned = false)
         val doc  = FunkoMapper.toDocument(item)
         assertFalse(doc.getBoolean(FunkoDexDatabase.FIELD_IS_OWNED))
+    }
+
+    @Test
+    fun `roundtrip preserves all core fields`() {
+        val original = sampleItem()
+        val doc      = FunkoMapper.toDocument(original)
+        val restored = FunkoMapper.fromDocument(doc)
+
+        assertEquals(original.name,             restored.name)
+        assertEquals(original.franchise,        restored.franchise)
+        assertEquals(original.seriesNumber,     restored.seriesNumber)
+        assertEquals(original.upc,              restored.upc)
+        assertEquals(original.pricePaid,        restored.pricePaid,  0.001)
+        assertEquals(original.retailPrice,      restored.retailPrice, 0.001)
+        assertEquals(original.condition,        restored.condition)
+        assertEquals(original.isOwned,          restored.isOwned)
+        assertEquals(original.isVaulted,        restored.isVaulted)
+        assertEquals(original.isExclusive,      restored.isExclusive)
+        assertEquals(original.exclusiveRetailer,restored.exclusiveRetailer)
+        assertEquals(original.dateAdded,        restored.dateAdded)
+        assertEquals(original.dateAcquired,     restored.dateAcquired)
     }
 }

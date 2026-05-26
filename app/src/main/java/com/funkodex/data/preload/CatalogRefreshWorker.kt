@@ -7,6 +7,8 @@ import androidx.work.*
 import com.couchbase.lite.MutableDocument
 import com.funkodex.data.db.FunkoDexDatabase
 import com.funkodex.security.SecureKeyStore
+import com.funkodex.auth.TokenRefreshManager
+import com.funkodex.auth.OAuthProvider
 import com.funkodex.auth.OAuthConfig
 import com.funkodex.data.preload.CatalogMapper
 import com.funkodex.data.model.CatalogRefreshConfig
@@ -102,9 +104,12 @@ class CatalogRefreshWorker(
             val upcsMerged = refreshCommunityUpcFile()
             FunkoDexLogger.i("CatalogRefresh", "Community UPC file: $upcsMerged UPCs merged into catalog")
 
-            // Refresh vaulted status from HobbyDB if authenticated
-            val vaultedCount = if (secureKeyStore.isHobbyDbTokenValid()) {
-                refreshVaultedStatus()
+            // Refresh vaulted status from HobbyDB if authenticated (silent token refresh)
+            val localSecureKeyStore = SecureKeyStore(applicationContext)
+            val localTokenRefresh   = TokenRefreshManager(localSecureKeyStore, OkHttpClient())
+            val hobbyToken = localTokenRefresh.getValidHobbyDbToken()
+            val vaultedCount = if (hobbyToken != null) {
+                refreshVaultedStatus(hobbyToken)
             } else 0
             if (vaultedCount > 0) FunkoDexLogger.i(TAG, "Vaulted status updated: $vaultedCount items")
 
@@ -270,10 +275,10 @@ class CatalogRefreshWorker(
      * Only called when a valid HobbyDB OAuth token is available.
      * Returns the count of catalog docs updated.
      */
-    private suspend fun refreshVaultedStatus(): Int = withContext(Dispatchers.IO) {
+    private suspend fun refreshVaultedStatus(hobbyToken: String): Int = withContext(Dispatchers.IO) {
         var updatedCount = 0
         try {
-            val token    = secureKeyStore.getHobbyDbAccessToken()
+            val token    = hobbyToken
             if (token.isEmpty()) return@withContext 0
 
             val database = db.getDatabase()

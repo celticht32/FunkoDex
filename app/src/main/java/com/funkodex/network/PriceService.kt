@@ -7,6 +7,7 @@ import com.funkodex.data.model.FunkoItem
 import com.funkodex.data.model.PriceSnapshot
 import com.funkodex.data.model.PriceSource
 import com.funkodex.security.SecureKeyStore
+import com.funkodex.auth.TokenRefreshManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -35,8 +36,9 @@ import javax.inject.Singleton
  * Tier 3 — API key required:
  *   3a. Channel3 premium (user's key from SecureKeyStore, higher limits)
  *
- * Tier 4 — Stub (auth not yet built):
- *   4a. HobbyDB — returns null; implement in Phase D when OAuth is wired.
+ * Tier 4 — HobbyDB (OAuth required):
+ *   4a. HobbyDB price API — uses TokenRefreshManager for silent token refresh.
+ *       Token is valid for 2h (eBay) or provider-specific. Refreshed automatically.
  *
  * SECURITY: Channel3 key read from SecureKeyStore (EncryptedSharedPreferences).
  *           Never from BuildConfig or local.properties.
@@ -45,6 +47,7 @@ import javax.inject.Singleton
 class PriceService @Inject constructor(
     private val client: OkHttpClient,
     private val secureKeyStore: SecureKeyStore,
+    private val tokenRefresh: TokenRefreshManager,
 ) {
     companion object {
         private const val TAG = "PriceService"
@@ -113,9 +116,9 @@ class PriceService @Inject constructor(
             }
         }
 
-        // Tier 4: HobbyDB — OAuth token from SecureKeyStore
-        if (secureKeyStore.isHobbyDbTokenValid()) {
-            fetchHobbyDb(item)?.let {
+        // Tier 4: HobbyDB — silently refresh token if needed, then fetch
+        tokenRefresh.getValidHobbyDbToken()?.let { token ->
+            fetchHobbyDb(item, token)?.let {
                 FunkoDexLogger.d(TAG, "Tier 4 (HobbyDB) hit for ${item.name}")
                 return@withContext it
             }
@@ -127,10 +130,7 @@ class PriceService @Inject constructor(
 
     // ─── Tier 4: HobbyDB ─────────────────────────────────────────────────────
 
-    private fun fetchHobbyDb(item: FunkoItem): PriceSnapshot? = runCatching {
-        val token = secureKeyStore.getHobbyDbAccessToken()
-        if (token.isEmpty()) return@runCatching null
-
+    private fun fetchHobbyDb(item: FunkoItem, token: String): PriceSnapshot? = runCatching {
         // HobbyDB search by name — returns an array of matching items with pricing
         val nameEnc = java.net.URLEncoder.encode(item.name, "UTF-8")
         val url     = "$HOBBYDB_BASE/items?q=$nameEnc&category=pop&per_page=5"

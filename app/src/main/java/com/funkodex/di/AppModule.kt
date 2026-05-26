@@ -11,6 +11,7 @@ import com.funkodex.data.repository.PhotoRepository
 import com.funkodex.data.repository.AlertRepository
 import com.funkodex.data.repository.ContributionRepository
 import com.funkodex.security.HmacKeyStore
+import com.funkodex.auth.TokenRefreshManager
 import com.funkodex.ui.screens.settings.UserPreferencesRepository
 import dagger.Module
 import dagger.Provides
@@ -88,4 +89,10 @@ object AppModule {
     fun provideHmacKeyStore(
         secureKeyStore: SecureKeyStore,
     ): HmacKeyStore = HmacKeyStore(secureKeyStore)
+
+    @Provides @Singleton
+    fun provideTokenRefreshManager(
+        secureKeyStore: SecureKeyStore,
+        httpClient: OkHttpClient,
+    ): TokenRefreshManager = TokenRefreshManager(secureKeyStore, httpClient)
 }

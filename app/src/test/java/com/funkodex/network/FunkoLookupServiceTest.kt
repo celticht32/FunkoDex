@@ -5,13 +5,13 @@ import org.junit.Test
 
 class FunkoLookupServiceTest {
 
-    // ─── LocalFunkoRecord.toFunkoItem() tests ─────────────────────────────────
+    // ─── LocalFunkoRecord.toFunkoItem() ────────────────────────────────────────
 
     @Test
     fun `LocalFunkoRecord toFunkoItem maps all fields`() {
         val record = FunkoLookupService.LocalFunkoRecord(
             name      = "Batman (1989)",
-            series    = "DC Comics",
+            franchise = "DC Comics",
             number    = "#01",
             upc       = "012345678901",
             image     = "https://example.com/batman.png",
@@ -22,22 +22,22 @@ class FunkoLookupServiceTest {
         )
         val item = record.toFunkoItem()
 
-        assertEquals("Batman (1989)",                item.name)
-        assertEquals("DC Comics",                    item.series)
-        assertEquals("#01",                          item.seriesNumber)
-        assertEquals("012345678901",                 item.upc)
+        assertEquals("Batman (1989)",                   item.name)
+        assertEquals("DC Comics",                       item.franchise)
+        assertEquals("#01",                             item.seriesNumber)
+        assertEquals("012345678901",                    item.upc)
         assertEquals("https://example.com/batman.png", item.imageUrl)
-        assertEquals("Pop! Movies",                  item.category)
+        assertEquals("Pop! Movies",                     item.category)
         assertTrue(item.isExclusive)
-        assertEquals("Target",                       item.exclusiveRetailer)
+        assertEquals("Target",                          item.exclusiveRetailer)
         assertFalse(item.isVaulted)
-        assertEquals(11.99,                          item.retailPrice, 0.001)
+        assertEquals(11.99, item.retailPrice, 0.001)
     }
 
     @Test
     fun `LocalFunkoRecord toFunkoItem handles null exclusive`() {
         val record = FunkoLookupService.LocalFunkoRecord(
-            name = "Test Pop", series = "Test", exclusive = null
+            name = "Test Pop", franchise = "Test", exclusive = null
         )
         val item = record.toFunkoItem()
         assertFalse(item.isExclusive)
@@ -62,15 +62,23 @@ class FunkoLookupServiceTest {
 
     @Test
     fun `LocalFunkoRecord toFunkoItem handles null fields gracefully`() {
-        val record = FunkoLookupService.LocalFunkoRecord()  // all nulls
+        val record = FunkoLookupService.LocalFunkoRecord()
         val item   = record.toFunkoItem()
         assertEquals("Unknown", item.name)
-        assertEquals("",        item.series)
+        assertEquals("",        item.franchise)
         assertEquals("",        item.upc)
         assertEquals(0.0,       item.retailPrice, 0.001)
     }
 
-    // ─── Channel3Product.toFunkoItem() tests ──────────────────────────────────
+    @Test
+    fun `LocalFunkoRecord toFunkoItem vaulted flag propagated`() {
+        val vaultedRecord  = FunkoLookupService.LocalFunkoRecord(name = "Vaulted Pop", vaulted = true)
+        val standardRecord = FunkoLookupService.LocalFunkoRecord(name = "Current Pop",  vaulted = false)
+        assertTrue(vaultedRecord.toFunkoItem().isVaulted)
+        assertFalse(standardRecord.toFunkoItem().isVaulted)
+    }
+
+    // ─── Channel3Product.toFunkoItem() ────────────────────────────────────────
 
     @Test
     fun `Channel3Product toFunkoItem maps attributes`() {
@@ -82,27 +90,27 @@ class FunkoLookupServiceTest {
             price      = 11.99,
             category   = "Pop! Heroes",
             attributes = mapOf(
-                "series"    to "DC Comics",
+                "franchise" to "DC Comics",
                 "number"    to "#196",
                 "exclusive" to "Target",
             )
         )
         val item = product.toFunkoItem()
 
-        assertEquals("The Flash #196",                 item.name)
-        assertEquals("889698123456",                   item.upc)
-        assertEquals("DC Comics",                      item.series)
-        assertEquals("#196",                           item.seriesNumber)
-        assertEquals("Target",                         item.exclusiveRetailer)
+        assertEquals("The Flash #196",              item.name)
+        assertEquals("889698123456",                item.upc)
+        assertEquals("DC Comics",                   item.franchise)
+        assertEquals("#196",                        item.seriesNumber)
+        assertEquals("Target",                      item.exclusiveRetailer)
         assertTrue(item.isExclusive)
-        assertEquals(11.99,                            item.retailPrice, 0.001)
+        assertEquals(11.99, item.retailPrice, 0.001)
     }
 
     @Test
     fun `Channel3Product toFunkoItem handles missing attributes`() {
         val product = FunkoLookupService.Channel3Product(name = "Test", brand = "Funko")
         val item    = product.toFunkoItem()
-        assertEquals("Funko", item.series)   // falls back to brand when no series attribute
+        assertEquals("Funko", item.franchise)
         assertEquals("",      item.seriesNumber)
         assertFalse(item.isExclusive)
     }

@@ -7,9 +7,10 @@ import androidx.activity.ComponentActivity
 import com.funkodex.security.SecureKeyStore
 import com.funkodex.util.FunkoDexLogger
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.CoroutineScope
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -93,7 +94,7 @@ class OAuthCallbackActivity : ComponentActivity() {
             return
         }
 
-        CoroutineScope(Dispatchers.IO).launch {
+        lifecycleScope.launch(Dispatchers.IO) {
             runCatching {
                 val (tokenUrl, clientId, redirectUri) = when (provider) {
                     OAuthProvider.HOBBYDB -> Triple(
@@ -150,13 +151,13 @@ class OAuthCallbackActivity : ComponentActivity() {
                 onSuccess = {
                     broadcast(ACTION_SUCCESS, provider, null)
                     OAuthSession.clear()
-                    finish()
+                    withContext(Dispatchers.Main) { finish() }
                 },
                 onFailure = { t ->
                     FunkoDexLogger.e(TAG, "Token exchange failed", t)
                     broadcast(ACTION_FAILURE, provider, t.message ?: "Unknown error")
                     OAuthSession.clear()
-                    finish()
+                    withContext(Dispatchers.Main) { finish() }
                 }
             )
         }

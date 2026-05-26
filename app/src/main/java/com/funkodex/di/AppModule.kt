@@ -86,7 +86,6 @@ object AppModule {
 
     @Provides @Singleton
     fun provideHmacKeyStore(
-        @ApplicationContext context: Context,
         secureKeyStore: SecureKeyStore,
-    ): HmacKeyStore = HmacKeyStore(context, secureKeyStore)
+    ): HmacKeyStore = HmacKeyStore(secureKeyStore)
 }

@@ -3,7 +3,6 @@ package com.funkodex.security
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.security.KeyStore
 import java.util.UUID
 import javax.crypto.KeyGenerator
@@ -35,7 +34,6 @@ import javax.inject.Singleton
  */
 @Singleton
 class HmacKeyStore @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val secureKeyStore: SecureKeyStore,
 ) {
     companion object {

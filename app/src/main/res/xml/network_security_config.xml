@@ -29,6 +29,12 @@
         <domain includeSubdomains="true">api.upcitemdb.com</domain>
         <domain includeSubdomains="true">images.hobbydb.com</domain>
         <domain includeSubdomains="true">barcodelookup.com</domain>
+        <!-- HobbyDB OAuth + price API -->
+        <domain includeSubdomains="true">hobby-db.com</domain>
+        <!-- eBay OAuth + Browse API + RSS feed -->
+        <domain includeSubdomains="true">auth.ebay.com</domain>
+        <domain includeSubdomains="true">api.ebay.com</domain>
+        <domain includeSubdomains="true">www.ebay.com</domain>
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

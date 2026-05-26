@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FunkoDex Launcher Icon — Foreground Layer
+  ==========================================
+  Design: Concept D — brass double ring with FunkoDex text, no heart.
+  
+  HOW TO USE IN ANDROID STUDIO:
+  1. Right-click app/src/main/res → New → Image Asset
+  2. Icon Type: Launcher Icons (Adaptive and Legacy)
+  3. Foreground Layer tab:
+       Asset Type: Image
+       Path: browse to this file (ic_launcher_foreground.svg)
+       Resize: 66% (or adjust until ring sits within the safe zone)
+       Trim: No
+  4. Background Layer tab:
+       Asset Type: Color
+       Color: #0D1B2A  (FunkoDex navy)
+  5. Legacy tab: ensure "Generate" is checked for all densities
+  6. Click Next → Finish
+  
+  The adaptive icon system crops foreground to a circle on Pixel launchers,
+  a rounded square on Samsung, etc. The double ring is designed to sit
+  comfortably inside the 66% safe zone on all shapes.
+
+  COLOUR PALETTE:
+    Navy background : #0D1B2A
+    Brass ring/text : #B8943F
+    Steel blue tag  : #5DADE2
+
+  VIEWBOX: 108×108 dp (Android adaptive icon foreground canvas standard).
+  Safe zone for content: inner 72×72 dp circle (centred at 54,54).
+-->
+<svg
+  version="1.1"
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 108 108"
+  width="108"
+  height="108">
+
+  <!--
+    Transparent background — the Background Layer in Image Asset Studio
+    supplies the #0D1B2A navy fill. Do not add a background rect here.
+  -->
+
+  <!-- ── Outer brass ring ─────────────────────────────────────── -->
+  <circle
+    cx="54" cy="54" r="42"
+    fill="none"
+    stroke="#B8943F"
+    stroke-width="3.5"/>
+
+  <!-- ── Inner brass ring (subtle double-ring effect) ─────────── -->
+  <circle
+    cx="54" cy="54" r="34"
+    fill="none"
+    stroke="#B8943F"
+    stroke-width="1.1"
+    stroke-opacity="0.55"/>
+
+  <!-- ── "FunkoDex" — primary text ────────────────────────────── -->
+  <text
+    x="54" y="50"
+    text-anchor="middle"
+    dominant-baseline="auto"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="13"
+    font-weight="700"
+    letter-spacing="0.8"
+    fill="#B8943F">FunkoDex</text>
+
+  <!-- ── Thin brass rule below primary text ───────────────────── -->
+  <line
+    x1="33" y1="54.5"
+    x2="75" y2="54.5"
+    stroke="#B8943F"
+    stroke-width="0.9"
+    stroke-opacity="0.65"/>
+
+  <!-- ── "COLLECTOR" — tagline in steel blue ──────────────────── -->
+  <text
+    x="54" y="64"
+    text-anchor="middle"
+    dominant-baseline="auto"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="6.5"
+    font-weight="400"
+    letter-spacing="2"
+    fill="#5DADE2">COLLECTOR</text>
+
+</svg>

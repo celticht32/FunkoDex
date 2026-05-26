@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FunkoDex Launcher Icon — Legacy (non-adaptive)
+  ================================================
+  For Android < 8.0 (API 26). Includes the navy background rect.
+  In Android Studio Image Asset Studio this is generated automatically
+  from the foreground + background layers — you normally do not need
+  this file separately. It is provided here as a reference / fallback.
+
+  To use: if you need a single-file icon for non-adaptive contexts
+  (notification icons, web clips, etc.) use this file directly.
+-->
+<svg
+  version="1.1"
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 108 108"
+  width="108"
+  height="108">
+
+  <!-- Navy background -->
+  <rect width="108" height="108" rx="22" fill="#0D1B2A"/>
+
+  <!-- Outer brass ring -->
+  <circle cx="54" cy="54" r="42" fill="none" stroke="#B8943F" stroke-width="3.5"/>
+
+  <!-- Inner brass ring -->
+  <circle cx="54" cy="54" r="34" fill="none" stroke="#B8943F" stroke-width="1.1" stroke-opacity="0.55"/>
+
+  <!-- FunkoDex text -->
+  <text x="54" y="50"
+    text-anchor="middle"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="13" font-weight="700" letter-spacing="0.8"
+    fill="#B8943F">FunkoDex</text>
+
+  <!-- Brass rule -->
+  <line x1="33" y1="54.5" x2="75" y2="54.5"
+    stroke="#B8943F" stroke-width="0.9" stroke-opacity="0.65"/>
+
+  <!-- COLLECTOR tagline -->
+  <text x="54" y="64"
+    text-anchor="middle"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="6.5" font-weight="400" letter-spacing="2"
+    fill="#5DADE2">COLLECTOR</text>
+
+</svg>

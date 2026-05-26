@@ -6,7 +6,7 @@ FunkoDex is an Android Kotlin/Jetpack Compose app for managing a Funko Pop colle
 Built entirely in Claude across multiple sessions. This file gives Claude the full
 context needed to work on the codebase without re-explaining architecture.
 
-**65 Kotlin source files. 6 JUnit test files. 10+ git commits. All features complete.**
+**65 Kotlin source files. 6 test files (72 tests). All features complete.**
 
 ---
 
@@ -204,7 +204,7 @@ Collection features, Platform, Data/Sync, QA, UI/UX, Security, Performance, i18n
 - Play Integrity API in Cloudflare Worker not yet implemented (optional hardening)
 - eBay `CLIENT_ID` requires developer.ebay.com registration
 - Wear OS companion, tablet two-pane layout, value-over-time chart not built
-- `ScannerViewModelStateTest` is a skeleton — needs Mockk + real assertions
+- `ScannerViewModelStateTest` is fully wired with Mockk (20 tests covering all 10 ScanState branches)
 
 ---
 

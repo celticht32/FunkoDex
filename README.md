@@ -43,7 +43,7 @@ FunkoDex/
 │   ├── data/repository/CollectionStatsTest (FunkoItem arithmetic)
 │   ├── network/        FunkoLookupServiceTest (record mapping)
 │   ├── security/       SecureKeyStoreTokenTest (token parsing/expiry)
-│   └── ui/screens/     ScannerViewModelStateTest (skeleton)
+│   └── ui/screens/     ScannerViewModelStateTest (20 Mockk tests)
 ├── app/src/main/assets/    funko_data.json (download separately — see Setup)
 ├── app/src/main/res/font/  cinzel_decorative_bold.ttf (download separately)
 ├── launcher-icon/          SVG source + generation instructions
@@ -204,7 +204,7 @@ Sign in (Chrome Custom Tab + PKCE)
 ## Running tests
 
 ```bash
-./gradlew test                 # 56 unit tests, no device needed (~2 seconds)
+./gradlew test                 # 72 unit tests, no device needed (~2 seconds)
 ./gradlew connectedAndroidTest # instrumented tests (device/emulator required)
 ```
 
@@ -224,7 +224,6 @@ Settings → Diagnostics:
 
 - eBay `CLIENT_ID` needs developer.ebay.com registration before users can sign in
 - Play Integrity API in Cloudflare Worker (optional additional hardening)
-- `ScannerViewModelStateTest` skeleton needs Mockk + real assertions
 - Wear OS companion app
 - Tablet two-pane layout
 - Collection value over time chart

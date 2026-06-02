@@ -41,6 +41,7 @@ class CatalogRefreshWorker(
 ) : CoroutineWorker(context, params) {
 
     companion object {
+        private const val TAG = "CatalogRefreshWorker"
         const val WORK_NAME         = "catalog_refresh"
         const val KEY_WIFI_ONLY     = "wifi_only"
         const val KEY_INTERVAL_DAYS = "interval_days"

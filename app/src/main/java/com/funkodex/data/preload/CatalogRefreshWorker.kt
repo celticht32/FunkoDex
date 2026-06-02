@@ -3,6 +3,7 @@ package com.funkodex.data.preload
 import android.content.Context
 import com.funkodex.util.FunkoDexLogger
 import androidx.work.*
+import com.couchbase.lite.UnitOfWork
 import com.couchbase.lite.MutableDocument
 import com.funkodex.data.db.FunkoDexDatabase
 import com.funkodex.security.SecureKeyStore
@@ -155,7 +156,7 @@ class CatalogRefreshWorker(
 
         var newCount = 0
 
-        database.inBatch {
+        database.inBatch(UnitOfWork {
             records.forEach { record ->
                 val handle = record.handle?.trim() ?: return@forEach
                 val docId  = "catalog::$handle"
@@ -175,7 +176,7 @@ class CatalogRefreshWorker(
                 database.save(MutableDocument(docId, mapped))
                 newCount++
             }
-        }
+        })
 
         // Update marker
         val marker = database.getDocument(CatalogPreloader.MARKER_DOC)?.toMutable()
@@ -223,7 +224,7 @@ class CatalogRefreshWorker(
             val database = db.getDatabase()
             var merged  = 0
 
-            database.inBatch {
+            database.inBatch(UnitOfWork {
                 for (record in records) {
                     val upc    = record["upc"] as? String ?: continue
                     val handle = record["handle"] as? String ?: continue
@@ -263,7 +264,7 @@ class CatalogRefreshWorker(
                         merged++
                     }
                 }
-            }
+            })
             merged
         } catch (e: Exception) {
             FunkoDexLogger.e("CatalogRefresh", "Community UPC refresh failed: ${e.message}", e)
@@ -315,7 +316,7 @@ class CatalogRefreshWorker(
 
                 if (items.size() == 0) { hasMore = false; break }
 
-                database.inBatch {
+                database.inBatch(UnitOfWork {
                     items.forEach { el ->
                         val obj    = el.asJsonObject
                         val handle = obj.optString("handle") ?: return@forEach
@@ -328,7 +329,7 @@ class CatalogRefreshWorker(
                             updatedCount++
                         }
                     }
-                }
+                })
 
                 hasMore = items.size() == 100
                 page++

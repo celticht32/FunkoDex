@@ -82,7 +82,7 @@ class CatalogPreloader @Inject constructor(
         var imported = 0
         val batch    = 500
 
-        database.inBatch {
+        database.inBatch(UnitOfWork {
             records.chunked(batch).forEach { chunk ->
                 chunk.forEach { record ->
                     val mapped = mapRecord(record) ?: return@forEach
@@ -91,7 +91,7 @@ class CatalogPreloader @Inject constructor(
                     imported++
                 }
             }
-        }
+        })
 
         // Write version marker
         val markerDoc = MutableDocument(MARKER_DOC).apply {

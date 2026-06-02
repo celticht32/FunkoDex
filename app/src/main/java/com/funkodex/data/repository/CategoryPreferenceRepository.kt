@@ -82,7 +82,7 @@ class CategoryPreferenceRepository @Inject constructor(
     /** Enable or disable every category in a genre at once */
     suspend fun setGenreEnabled(genre: FunkoGenre, enabled: Boolean) = withContext(Dispatchers.IO) {
         val defs = FunkoCategories.ALL.filter { it.genre == genre }
-        database.inBatch {
+        database.inBatch(UnitOfWork {
             defs.forEach { def ->
                 val docId = "cat_pref::${def.key}"
                 val doc   = database.getDocument(docId)?.toMutable()
@@ -90,26 +90,26 @@ class CategoryPreferenceRepository @Inject constructor(
                 doc.setBoolean(FunkoDexDatabase.FIELD_CAT_ENABLED, enabled)
                 database.save(doc)
             }
-        }
+        })
     }
 
     suspend fun resetToDefaults() = withContext(Dispatchers.IO) {
-        database.inBatch {
+        database.inBatch(UnitOfWork {
             FunkoCategories.defaultPreferences().forEach { pref ->
                 savePreference(pref)
             }
-        }
+        })
     }
 
     private fun ensureDefaults() {
         val marker = database.getDocument("system::cat_prefs_seeded")
         if (marker != null) return
-        database.inBatch {
+        database.inBatch(UnitOfWork {
             FunkoCategories.defaultPreferences().forEach { savePreference(it) }
             val m = MutableDocument("system::cat_prefs_seeded")
             m.setString("seededAt", java.time.LocalDate.now().toString())
             database.save(m)
-        }
+        })
     }
 
     private fun savePreference(pref: CategoryPreference) {

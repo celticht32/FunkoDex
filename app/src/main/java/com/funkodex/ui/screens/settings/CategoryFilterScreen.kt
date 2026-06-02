@@ -44,8 +44,13 @@ fun CategoryFilterScreen(
             )
         }
     ) { padding ->
-        LazyColumn(
-            modifier        = Modifier.padding(padding).fillMaxSize(),
+        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            HelpBanner(
+                text     = HelpContent.CATEGORY_FILTER,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+            LazyColumn(
+            modifier        = Modifier.fillMaxSize().weight(1f),
             contentPadding  = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -177,6 +182,7 @@ private fun GenreHeader(
                 tint     = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
+        }
         }
     }
 }

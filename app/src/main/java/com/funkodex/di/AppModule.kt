@@ -69,7 +69,8 @@ object AppModule {
     fun providePriceService(
         client: OkHttpClient,
         secureKeyStore: SecureKeyStore,
-    ): PriceService = PriceService(client, secureKeyStore)
+        tokenRefresh: TokenRefreshManager,
+    ): PriceService = PriceService(client, secureKeyStore, tokenRefresh)
 
     @Provides @Singleton
     fun providePhotoRepository(

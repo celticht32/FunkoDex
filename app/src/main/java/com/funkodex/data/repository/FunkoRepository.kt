@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
 import java.util.UUID
@@ -29,7 +30,7 @@ class FunkoRepository @Inject constructor(
 
     // ─── Write operations ─────────────────────────────────────────────────────
 
-    suspend fun saveItem(item: FunkoItem): Result<FunkoItem> = withContext(Dispatchers.IO) {
+    suspend fun saveItem(item: FunkoItem): kotlin.Result<FunkoItem> = withContext(Dispatchers.IO) {
         runCatching {
             val id = if (item.id.isEmpty()) "funko::${UUID.randomUUID()}" else item.id
             val doc = FunkoMapper.toDocument(item.copy(id = id))
@@ -40,7 +41,7 @@ class FunkoRepository @Inject constructor(
         }
     }
 
-    suspend fun deleteItem(id: String): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun deleteItem(id: String): kotlin.Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             database.getDocument(id)?.let { database.delete(it) }
             updateWidget()

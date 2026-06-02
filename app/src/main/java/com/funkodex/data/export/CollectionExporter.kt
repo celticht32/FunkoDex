@@ -246,7 +246,7 @@ class CollectionExporter @Inject constructor(
 
     private fun buildStyles(wb: XSSFWorkbook): SheetStyles {
         val headerFill = wb.createCellStyle() as XSSFCellStyle
-        headerFill.fillForegroundColor = XSSFColor(byteArrayOf(0xE8.toByte(), 0x40.toByte(), 0x1A.toByte()), null)
+        headerFill.setFillForegroundColor(XSSFColor(byteArrayOf(0xE8.toByte(), 0x40.toByte(), 0x1A.toByte()), null))
         headerFill.fillPattern = FillPatternType.SOLID_FOREGROUND
         val headerFont = wb.createFont()
         headerFont.bold = true

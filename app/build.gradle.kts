@@ -30,6 +30,15 @@ android {
 
         // Channel3 API key: user-entered in Settings > Data Sources
         // Stored in EncryptedSharedPreferences via SecureKeyStore (never in BuildConfig)
+
+        // Phase F: Cloudflare Worker URL — not secret, safe in BuildConfig.
+        // Set in local.properties: workerUrl=https://funkodex-contrib.YOUR_ACCOUNT.workers.dev
+        // Defaults to empty string — upload silently skipped if not set.
+        buildConfigField(
+            "String",
+            "WORKER_URL",
+            "\"${localProps.getProperty("workerUrl", "")}\""
+        )
     }
 
     buildTypes {
@@ -54,16 +63,7 @@ android {
 
     buildFeatures {
         compose = true
-        buildConfig = true   // retained for Phase F: BuildConfig.WORKER_URL (Cloudflare Worker endpoint, not secret)
-
-        // Phase F: Cloudflare Worker URL — not secret, safe in BuildConfig.
-        // Set in local.properties: workerUrl=https://funkodex-contrib.YOUR_ACCOUNT.workers.dev
-        // Defaults to empty string — upload silently skipped if not set.
-        buildConfigField(
-            "String",
-            "WORKER_URL",
-            "\"${localProps.getProperty("workerUrl", "")}\""
-        )
+        buildConfig = true   // retained for Phase F: BuildConfig.WORKER_URL
     }
 
     // ── Apache POI packaging fix ──────────────────────────────────────────────

@@ -8,7 +8,6 @@ import android.graphics.drawable.Icon
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
-import android.util.Log
 import coil.Coil
 import coil.ImageLoader
 import coil.disk.DiskCache

@@ -1,6 +1,5 @@
 package com.funkodex.network
 
-import android.util.Log
 import com.funkodex.util.FunkoDexLogger
 import android.util.Xml
 import com.funkodex.data.model.FunkoItem

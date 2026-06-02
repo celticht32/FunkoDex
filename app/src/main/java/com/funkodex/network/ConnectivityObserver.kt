@@ -5,7 +5,6 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
-import android.util.Log
 import com.funkodex.util.FunkoDexLogger
 import com.couchbase.lite.MutableDocument
 import com.funkodex.data.db.FunkoDexDatabase

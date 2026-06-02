@@ -18,8 +18,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.funkodex.ui.help.HelpContent
 import com.funkodex.ui.help.HelpEmptyState
 import coil.compose.AsyncImage
-import androidx.compose.ui.res.painterResource
-import com.funkodex.R
 import com.funkodex.data.model.FunkoItem
 
 @OptIn(ExperimentalMaterial3Api::class)

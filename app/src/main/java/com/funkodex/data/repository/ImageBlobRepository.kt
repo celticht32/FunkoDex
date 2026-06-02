@@ -1,6 +1,5 @@
 package com.funkodex.data.repository
 
-import android.util.Log
 import com.funkodex.util.FunkoDexLogger
 import com.couchbase.lite.Blob
 import com.funkodex.data.db.FunkoDexDatabase

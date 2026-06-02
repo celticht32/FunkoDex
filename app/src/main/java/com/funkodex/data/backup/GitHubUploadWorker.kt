@@ -1,7 +1,6 @@
 package com.funkodex.data.backup
 
 import android.content.Context
-import android.util.Log
 import com.funkodex.util.FunkoDexLogger
 import androidx.hilt.work.HiltWorker
 import androidx.work.*

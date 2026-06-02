@@ -1,7 +1,6 @@
 package com.funkodex.data.preload
 
 import android.content.Context
-import android.util.Log
 import com.funkodex.util.FunkoDexLogger
 import androidx.work.*
 import com.couchbase.lite.MutableDocument

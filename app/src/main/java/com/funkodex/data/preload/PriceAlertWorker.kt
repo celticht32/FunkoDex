@@ -7,7 +7,6 @@ import androidx.core.content.ContextCompat
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import com.funkodex.util.FunkoDexLogger
 import androidx.core.app.NotificationCompat
 import androidx.work.*

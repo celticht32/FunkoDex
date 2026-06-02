@@ -60,7 +60,7 @@ fun BatchScanSheet(
             viewModel.clearQueue()
             onDismiss()
         },
-        sheetState = rememberModalBottomSheetState(skipPartialExpansion = true),
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
         Column(
             modifier = Modifier

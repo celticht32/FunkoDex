@@ -33,7 +33,7 @@ class CatalogPreloader @Inject constructor(
     private val db: FunkoDexDatabase,
 ) {
     companion object {
-        private const val MARKER_DOC    = "system::catalog_loaded"
+        internal const val MARKER_DOC    = "system::catalog_loaded"
         private const val CATALOG_VER   = "1"            // bump to force a reload on update
         const val TYPE_CATALOG          = "catalog"
 

@@ -651,7 +651,7 @@ private fun NotFoundSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState       = rememberModalBottomSheetState(skipPartialExpansion = false),
+        sheetState       = rememberModalBottomSheetState(skipPartiallyExpanded = false),
     ) {
         Column(
             modifier              = Modifier

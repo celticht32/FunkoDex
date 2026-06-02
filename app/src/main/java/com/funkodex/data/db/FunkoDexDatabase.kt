@@ -150,6 +150,6 @@ class FunkoDexDatabase(private val context: Context) {
     }
 
     fun close() {
-        if (database.isOpen) database.close()
+        try { database.close() } catch (_: Exception) { /* already closed */ }
     }
 }

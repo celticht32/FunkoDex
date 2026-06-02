@@ -11,7 +11,6 @@ import android.os.Build
 import android.util.Log
 import coil.Coil
 import coil.ImageLoader
-import coil.decode.SvgDecoder
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy

@@ -17,13 +17,13 @@ val localProps = Properties().also { props ->
 
 android {
     namespace = "com.funkodex"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.funkodex"
         minSdk = 26
         multiDexEnabled = true  // Phase E: Drive API transitive deps may exceed DEX limit
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

@@ -121,7 +121,6 @@ fun ScannerScreen(
                     },
                     onManualSearch = viewModel::openManualSearch
                 )
-                }   // end Column for idle help
             }
             is ScanState.Scanning -> {
                 CameraPreview(

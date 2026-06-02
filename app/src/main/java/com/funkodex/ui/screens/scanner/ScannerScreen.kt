@@ -3,7 +3,7 @@ package com.funkodex.ui.screens.scanner
 import android.Manifest
 import android.content.Context
 import android.util.Size
-import androidx.annotation.OptIn
+import kotlin.OptIn
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView

@@ -22,7 +22,6 @@ import coil.compose.AsyncImage
 import androidx.compose.ui.res.painterResource
 import com.funkodex.R
 import coil.compose.AsyncImage
-import androidx.compose.ui.res.painterResource
 import com.funkodex.R
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -41,7 +40,6 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsNone
 import com.funkodex.data.model.Condition
 import com.funkodex.data.model.FunkoItem
-import com.funkodex.data.model.ResolvedPrice
 import com.funkodex.ui.screens.detail.PriceUiState
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -1,7 +1,5 @@
 package com.funkodex.data.export
 
-import com.funkodex.ui.help.HelpCard
-import com.funkodex.ui.help.HelpContent
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts

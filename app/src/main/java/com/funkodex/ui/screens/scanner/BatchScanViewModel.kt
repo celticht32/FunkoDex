@@ -3,7 +3,6 @@ package com.funkodex.ui.screens.scanner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.funkodex.data.model.FunkoItem
-import com.funkodex.data.model.PendingUpcScan
 import com.funkodex.data.repository.FunkoRepository
 import com.funkodex.data.repository.ImageBlobRepository
 import com.funkodex.network.FunkoLookupService

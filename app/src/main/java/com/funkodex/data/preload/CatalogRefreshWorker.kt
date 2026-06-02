@@ -8,7 +8,6 @@ import com.couchbase.lite.MutableDocument
 import com.funkodex.data.db.FunkoDexDatabase
 import com.funkodex.security.SecureKeyStore
 import com.funkodex.auth.TokenRefreshManager
-import com.funkodex.auth.OAuthProvider
 import com.funkodex.auth.OAuthConfig
 import com.funkodex.data.preload.CatalogMapper
 import com.funkodex.data.model.CatalogRefreshConfig

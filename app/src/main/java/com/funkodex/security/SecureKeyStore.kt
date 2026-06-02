@@ -35,6 +35,7 @@ class SecureKeyStore @Inject constructor(
         private const val KEY_HOBBYDB    = "hobbydb_api_token"
         private const val KEY_EBAY_OAUTH = "ebay_oauth_token"
         private const val KEY_INSTALL_ID = "community_install_id"
+        private const val KEY_LAST_BACKUP = "drive_last_backup"
     }
 
     private val prefs: SharedPreferences by lazy { buildPrefs() }
@@ -89,6 +90,10 @@ class SecureKeyStore @Inject constructor(
         prefs.edit().putString(KEY_INSTALL_ID, new).apply()
         return new
     }
+
+    // ─── Drive backup timestamp ──────────────────────────────────────────────
+    fun getLastBackup(): String  = prefs.getString(KEY_LAST_BACKUP, "") ?: ""
+    fun setLastBackup(ts: String) { prefs.edit().putString(KEY_LAST_BACKUP, ts.trim()).apply() }
 
     fun isEbayTokenValid(): Boolean {
         val parts = getEbayOAuthToken().split("|")

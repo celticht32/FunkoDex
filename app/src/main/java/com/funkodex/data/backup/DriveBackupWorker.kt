@@ -142,7 +142,7 @@ class DriveBackupWorker @AssistedInject constructor(
             ).setFields("id,name").execute()
 
             pruneOldBackups(drive, folderId)
-            secureKeyStore.setWorkerUrl("$PREF_LAST_BACKUP:${LocalDateTime.now()}")
+            secureKeyStore.setLastBackup(LocalDateTime.now().toString())
             zipFile.delete()
 
             FunkoDexLogger.i(TAG, "Backup complete: ${zipFile.name}")

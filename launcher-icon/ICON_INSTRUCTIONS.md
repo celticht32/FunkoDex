@@ -4,8 +4,10 @@
 
 | File | Purpose |
 |---|---|
-| `ic_launcher_foreground.svg` | Adaptive icon foreground layer — transparent background, 108×108 dp |
-| `ic_launcher_legacy.svg` | Legacy all-in-one with navy background — for reference |
+| `ic_launcher_foreground.png` | Adaptive icon foreground layer — 1024×1024 px, transparent background |
+| `ic_launcher_foreground.svg` | Source SVG (kept for reference — Studio cannot render SVG text) |
+| `ic_launcher_legacy.png` | Legacy all-in-one with navy background — 512×512 px |
+| `ic_launcher_legacy.svg` | Source SVG (kept for reference) |
 
 ---
 
@@ -36,7 +38,7 @@ If "Image Asset" does not appear in the right-click menu, try right-clicking the
 
 ## Foreground layer tab
 - Asset Type: `Image`
-- Path: browse to `ic_launcher_foreground.svg` in this folder
+- Path: browse to `ic_launcher_foreground.png` in this folder
 - Resize slider: `66%` (adjust until the outer ring sits comfortably inside the white circle preview — the ring should not touch the edge)
 - Trim: `No`
 

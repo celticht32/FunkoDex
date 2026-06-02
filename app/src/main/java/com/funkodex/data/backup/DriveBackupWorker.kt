@@ -1,7 +1,6 @@
 package com.funkodex.data.backup
 
 import android.content.Context
-import android.util.Log
 import com.funkodex.util.FunkoDexLogger
 import android.content.pm.PackageManager
 import android.os.Build
@@ -79,7 +78,7 @@ class DriveBackupWorker @AssistedInject constructor(
         } catch (_: Exception) { /* notification failed — non-critical */ }
     }
 
-        companion object {
+    companion object {
         const val WORK_NAME        = "drive_backup"
         const val KEY_MANUAL       = "manual_trigger"
         const val PREF_LAST_BACKUP = "drive_last_backup"

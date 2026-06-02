@@ -111,6 +111,7 @@ dependencies {
     implementation(libs.glance.appwidget)        // Jetpack Glance home screen widget
     implementation(libs.play.services.auth)      // Google Sign-In for Drive backup
     implementation(libs.google.api.drive)        // Google Drive API client
+    implementation(libs.google.api.client.android) // GoogleAccountCredential for Drive auth
 
     // Hilt
     implementation(libs.hilt.android)

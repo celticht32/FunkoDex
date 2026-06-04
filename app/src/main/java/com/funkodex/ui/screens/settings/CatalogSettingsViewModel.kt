@@ -36,7 +36,7 @@ class CatalogSettingsViewModel @Inject constructor(
         .map { prefs ->
             CatalogRefreshConfig(
                 enabled          = prefs[ENABLED_KEY]       ?: true,
-                contributeEnabled = prefs[CONTRIBUTE_KEY]   ?: false,
+                contributeEnabled = prefs[CONTRIBUTE_KEY]   ?: true,
                 intervalDays     = prefs[INTERVAL_KEY]      ?: 7,
                 wifiOnly         = prefs[WIFI_KEY]          ?: true,
                 channel3ApiKey   = secureKeyStore.getChannel3Key(),

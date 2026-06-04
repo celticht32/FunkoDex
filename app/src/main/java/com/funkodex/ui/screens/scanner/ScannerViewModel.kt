@@ -61,6 +61,7 @@ sealed class ScanState {
         val query: String = "",
         val results: List<FunkoItem> = emptyList(),
         val isSearching: Boolean = false,
+        val selected: Set<String> = emptySet(),  // item IDs
     ) : ScanState()
 
     /** Item saved to collection */
@@ -216,6 +217,50 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
+    /** User scanned an item they already own — add it as a variant on the existing record. */
+    fun addAsVariant(existing: FunkoItem) {
+        viewModelScope.launch {
+            val newVariant = com.funkodex.data.model.FunkoVariant(
+                note = "Variant copy"
+            )
+            repository.saveItem(existing.copy(variants = existing.variants + newVariant))
+                .fold(
+                    onSuccess = { saved ->
+                        _state.value = ScanState.Saved(saved.copy(
+                            name = "${saved.name} (variant added)"
+                        ))
+                    },
+                    onFailure = { _state.value = ScanState.Error("Failed to add variant: ${it.message}") }
+                )
+        }
+    }
+
+    /** User scanned a variant but doesn't own the original — mark it. */
+    fun addAsVariantMissingOriginal(existing: FunkoItem) {
+        viewModelScope.launch {
+            val newVariant = com.funkodex.data.model.FunkoVariant(
+                note = "Variant copy — original not owned"
+            )
+            repository.saveItem(
+                existing.copy(
+                    variants          = existing.variants + newVariant,
+                    isMissingOriginal = true,
+                )
+            ).fold(
+                onSuccess = { saved -> _state.value = ScanState.Saved(saved) },
+                onFailure = { _state.value = ScanState.Error("Failed: ${it.message}") }
+            )
+        }
+    }
+
+    fun markVariantMissingOriginal() {
+        val saved = (_state.value as? ScanState.Saved)?.item ?: return
+        viewModelScope.launch {
+            repository.saveItem(saved.copy(isMissingOriginal = true))
+            _state.value = ScanState.Idle
+        }
+    }
+
     fun dismissPreview() {
         lastScannedUpc = ""
         _state.value = ScanState.Scanning
@@ -242,8 +287,49 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    fun selectManualResult(item: FunkoItem) {
-        _state.value = ScanState.Preview(item, alreadyOwned = false)
+    fun toggleManualSelection(item: FunkoItem) {
+        val current = _state.value as? ScanState.ManualSearch ?: return
+        val newSelected = if (item.id in current.selected)
+            current.selected - item.id
+        else
+            current.selected + item.id
+        _state.value = current.copy(selected = newSelected)
+    }
+
+    fun confirmBulkAdd() {
+        val current = _state.value as? ScanState.ManualSearch ?: return
+        val toAdd = current.results.filter { it.id in current.selected }
+        if (toAdd.isEmpty()) return
+        viewModelScope.launch {
+            var addedCount = 0
+            var lastSaved: FunkoItem? = null
+            for (item in toAdd) {
+                // Check if an owned item with the same name+franchise already exists
+                val existing = repository.findOwnedByNameAndFranchise(item.name, item.franchise)
+                if (existing != null) {
+                    _state.value = ScanState.AlreadyOwned(existing)
+                    return@launch
+                }
+                val collectionItem = item.copy(
+                    id      = "funko::${java.util.UUID.randomUUID()}",
+                    isOwned = true,
+                )
+                repository.saveItem(collectionItem).fold(
+                    onSuccess = { saved ->
+                        addedCount++
+                        lastSaved = saved
+                        if (saved.isOwned) launch { imageBlobs.downloadAndStore(saved) }
+                    },
+                    onFailure = {}
+                )
+            }
+            if (addedCount > 0 && lastSaved != null) {
+                _state.value = ScanState.Saved(lastSaved!!.copy(
+                    name = if (addedCount == 1) lastSaved!!.name
+                           else "$addedCount items added to your collection"
+                ))
+            }
+        }
     }
 
     // ─── General ───────────────────────────────────────────────────────────────

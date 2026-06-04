@@ -38,8 +38,8 @@ object FunkoDexLogger {
 
     private const val TAG         = "FunkoDexLogger"
     private const val LOG_DIR     = "logs"
-    private const val MAX_FILES   = 7
-    private const val MAX_FILE_MB = 5          // rotate within-day if file exceeds this
+    private const val MAX_FILE_MB   = 5          // rotate within-day if file exceeds this
+    private const val MAX_LOG_DAYS  = 3          // delete log files older than this
 
     private val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
     private val dateStamp = SimpleDateFormat("yyyy-MM-dd", Locale.US)
@@ -145,10 +145,10 @@ object FunkoDexLogger {
     private fun pruneOldLogs() {
         val dir = File(filesDir ?: return, LOG_DIR)
         if (!dir.exists()) return
-        val files = dir.listFiles { f -> f.name.endsWith(".log") }
-            ?.sortedByDescending { it.lastModified() }
-            ?: return
-        files.drop(MAX_FILES).forEach { it.delete() }
+        val cutoff = System.currentTimeMillis() - MAX_LOG_DAYS * 24 * 60 * 60 * 1000L
+        dir.listFiles { f -> f.name.endsWith(".log") }
+            ?.filter { it.lastModified() < cutoff }
+            ?.forEach { it.delete() }
     }
 
     // ── Log file access ───────────────────────────────────────────────────────

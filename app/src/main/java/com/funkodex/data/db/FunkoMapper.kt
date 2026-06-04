@@ -10,8 +10,9 @@ import java.time.LocalDate
 
 object FunkoMapper {
 
-    fun toDocument(item: FunkoItem): MutableDocument {
-        val doc = MutableDocument(item.id)
+    fun toDocument(item: FunkoItem, existing: com.couchbase.lite.Document? = null): MutableDocument {
+        // Use existing document to preserve blobs (userPhoto, thumbnailBlob) not in FunkoItem model
+        val doc = existing?.toMutable() ?: MutableDocument(item.id)
         doc.setString(FunkoDexDatabase.FIELD_TYPE,           FunkoDexDatabase.TYPE_FUNKO)
         doc.setString(FunkoDexDatabase.FIELD_UPC,            item.upc)
         doc.setString(FunkoDexDatabase.FIELD_CATALOG_REF,    item.catalogRef)
@@ -38,6 +39,30 @@ object FunkoMapper {
         doc.setBoolean(FunkoDexDatabase.FIELD_IS_OWNED,      item.isOwned)
         doc.setBoolean(FunkoDexDatabase.FIELD_IS_VAULTED,    item.isVaulted)
         doc.setBoolean(FunkoDexDatabase.FIELD_IS_CHASE,      item.isChase)
+        doc.remove(FunkoDexDatabase.FIELD_IS_MISSING_ORIGINAL)
+        if (item.isMissingOriginal) {
+            doc.setBoolean(FunkoDexDatabase.FIELD_IS_MISSING_ORIGINAL, true)
+        }
+        // Serialize variants as JSON string — explicitly remove field when empty
+        if (item.variants.isNotEmpty()) {
+            val arr = org.json.JSONArray()
+            item.variants.forEach { v ->
+                val obj = org.json.JSONObject()
+                obj.put("id", v.id)
+                obj.put("note", v.note)
+                obj.put("pricePaid", v.pricePaid)
+                obj.put("condition", v.condition.name)
+                obj.put("dateAdded", v.dateAdded.toString())
+                v.photo?.let { bytes ->
+                    obj.put("photo", android.util.Base64.encodeToString(
+                        bytes, android.util.Base64.NO_WRAP))
+                }
+                arr.put(obj)
+            }
+            doc.setString(FunkoDexDatabase.FIELD_VARIANTS, arr.toString())
+        } else {
+            doc.remove(FunkoDexDatabase.FIELD_VARIANTS)
+        }
         doc.setBoolean(FunkoDexDatabase.FIELD_IS_EXCLUSIVE,  item.isExclusive)
         doc.setString(FunkoDexDatabase.FIELD_EXCL_RETAILER,  item.exclusiveRetailer)
         // Collection details
@@ -65,6 +90,7 @@ object FunkoMapper {
         },
         imageUrl         = doc.getString(FunkoDexDatabase.FIELD_IMAGE_URL)      ?: "",
         thumbnailBlob    = doc.getBlob(FunkoDexDatabase.FIELD_THUMBNAIL_BLOB)?.content,
+        userPhoto        = doc.getBlob(com.funkodex.data.repository.PhotoRepository.FIELD_USER_PHOTO)?.content,
         // Pricing
         pricePaid        = doc.getDouble(FunkoDexDatabase.FIELD_PRICE_PAID),
         retailPrice      = doc.getDouble(FunkoDexDatabase.FIELD_RETAIL_PRICE),
@@ -78,6 +104,29 @@ object FunkoMapper {
         isOwned          = doc.getBoolean(FunkoDexDatabase.FIELD_IS_OWNED),
         isVaulted        = doc.getBoolean(FunkoDexDatabase.FIELD_IS_VAULTED),
         isChase          = doc.getBoolean(FunkoDexDatabase.FIELD_IS_CHASE),
+        isMissingOriginal = doc.getBoolean(FunkoDexDatabase.FIELD_IS_MISSING_ORIGINAL) == true,
+        variants         = doc.getString(FunkoDexDatabase.FIELD_VARIANTS)?.let { json ->
+            runCatching {
+                val arr = org.json.JSONArray(json)
+                (0 until arr.length()).map { i ->
+                    val obj = arr.getJSONObject(i)
+                    com.funkodex.data.model.FunkoVariant(
+                        id        = obj.optString("id", java.util.UUID.randomUUID().toString()),
+                        note      = obj.optString("note", ""),
+                        pricePaid = obj.optDouble("pricePaid", 0.0),
+                        condition = runCatching {
+                            com.funkodex.data.model.Condition.valueOf(obj.optString("condition", "MINT"))
+                        }.getOrElse { com.funkodex.data.model.Condition.MINT },
+                        dateAdded = runCatching {
+                            java.time.LocalDate.parse(obj.optString("dateAdded"))
+                        }.getOrElse { java.time.LocalDate.now() },
+                        photo     = obj.optString("photo", "").takeIf { it.isNotEmpty() }?.let {
+                            android.util.Base64.decode(it, android.util.Base64.NO_WRAP)
+                        },
+                    )
+                }
+            }.getOrElse { emptyList() }
+        } ?: emptyList(),
         isExclusive      = doc.getBoolean(FunkoDexDatabase.FIELD_IS_EXCLUSIVE),
         exclusiveRetailer= doc.getString(FunkoDexDatabase.FIELD_EXCL_RETAILER)  ?: "",
         // Collection details

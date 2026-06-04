@@ -5,6 +5,7 @@ import com.funkodex.util.FunkoDexLogger
 import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import com.funkodex.BuildConfig
+import com.couchbase.lite.CouchbaseLite
 import com.funkodex.data.repository.ContributionRepository
 import com.funkodex.security.HmacKeyStore
 import com.google.gson.Gson
@@ -76,6 +77,7 @@ class GitHubUploadWorker @AssistedInject constructor(
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        CouchbaseLite.init(applicationContext)
         val workerUrl = BuildConfig.WORKER_URL
         if (workerUrl.isBlank()) {
             FunkoDexLogger.i(TAG, "WORKER_URL not configured — skipping upload")
@@ -110,9 +112,8 @@ class GitHubUploadWorker @AssistedInject constructor(
                 .header("User-Agent",   "FunkoDex/1.0 Android (community contrib)")
                 .build()
 
-            val response = client.newCall(request).execute()
-
-            return@withContext if (response.isSuccessful) {
+            return@withContext client.newCall(request).execute().use { response ->
+            if (response.isSuccessful) {
                 // Mark all as uploaded
                 pending.forEach { contribRepo.markUploaded(it.upc) }
                 FunkoDexLogger.i(TAG, "Upload success: ${pending.size} contributions accepted")
@@ -128,6 +129,7 @@ class GitHubUploadWorker @AssistedInject constructor(
                     }
                     else -> Result.retry()
                 }
+            }
             }
         } catch (e: Exception) {
             FunkoDexLogger.e(TAG, "Upload exception: ${e.message}", e)

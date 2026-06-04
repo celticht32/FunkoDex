@@ -7,6 +7,7 @@ import com.funkodex.data.model.FunkoCategories
 import com.funkodex.data.model.FunkoGenre
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -25,7 +26,7 @@ class CategoryPreferenceRepository @Inject constructor(
     fun preferencesFlow(): Flow<List<CategoryPreference>> = callbackFlow {
         ensureDefaults()
         val query = QueryBuilder
-            .select(SelectResult.expression(Meta.id), SelectResult.all())
+            .select(SelectResult.expression(Meta.id).`as`("id"), SelectResult.all())
             .from(DataSource.database(database))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)
@@ -45,7 +46,7 @@ class CategoryPreferenceRepository @Inject constructor(
         }
         query.execute()
         awaitClose { query.removeChangeListener(token) }
-    }
+    }.flowOn(Dispatchers.IO)
 
     /** Set of enabled category KEYS — used for fast filtering in queries */
     fun enabledCategoryKeysFlow(): Flow<Set<String>> = preferencesFlow()
@@ -54,7 +55,7 @@ class CategoryPreferenceRepository @Inject constructor(
     /** Quick synchronous check — used in FunkoRepository to filter catalog results */
     suspend fun getEnabledCategories(): Set<String> = withContext(Dispatchers.IO) {
         val query = QueryBuilder
-            .select(SelectResult.expression(Meta.id))
+            .select(SelectResult.expression(Meta.id).`as`("id"))
             .from(DataSource.database(database))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)
@@ -102,11 +103,31 @@ class CategoryPreferenceRepository @Inject constructor(
     }
 
     private fun ensureDefaults() {
-        val marker = database.getDocument("system::cat_prefs_seeded")
-        if (marker != null) return
+        val marker = database.getDocument("system::cat_prefs_seeded_v3")
+        // Re-seed if marker missing OR if category docs were wiped (e.g. after restore)
+        val hasCategories = marker != null && run {
+            val q = QueryBuilder
+                .select(SelectResult.expression(Meta.id).`as`("id"))
+                .from(DataSource.database(database))
+                .where(Expression.property(FunkoDexDatabase.FIELD_TYPE)
+                    .equalTo(Expression.string(FunkoDexDatabase.TYPE_CATEGORY_PREF)))
+                .limit(Expression.intValue(1))
+            q.execute().use { it.allResults().isNotEmpty() }
+        }
+        if (hasCategories) return
+        // v2: force all categories to enabled (overwrite existing preferences)
         database.inBatch(UnitOfWork {
-            FunkoCategories.defaultPreferences().forEach { savePreference(it) }
-            val m = MutableDocument("system::cat_prefs_seeded")
+            FunkoCategories.defaultPreferences().forEach { pref ->
+                val docId = "cat_pref::${pref.categoryKey}"
+                val doc = database.getDocument(docId)?.toMutable() ?: MutableDocument(docId)
+                doc.setString(FunkoDexDatabase.FIELD_TYPE,      FunkoDexDatabase.TYPE_CATEGORY_PREF)
+                doc.setString(FunkoDexDatabase.FIELD_CAT_NAME,  pref.categoryName)
+                doc.setString(FunkoDexDatabase.FIELD_CAT_GENRE, pref.genreName)
+                doc.setBoolean(FunkoDexDatabase.FIELD_CAT_ENABLED, true)  // force all on
+                database.save(doc)
+            }
+            val m = MutableDocument("system::cat_prefs_seeded_v3")
+            m.setString("type", "system")
             m.setString("seededAt", java.time.LocalDate.now().toString())
             database.save(m)
         })

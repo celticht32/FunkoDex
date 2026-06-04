@@ -57,6 +57,7 @@ data class FunkoItem(
     val isOwned: Boolean = true,         // false = on want list
     val isVaulted: Boolean = false,      // Funko has retired/vaulted this item
     val isChase: Boolean = false,        // Chase variant (rare alternate version)
+    val isMissingOriginal: Boolean = false, // Owns variant but not the standard version
     val isExclusive: Boolean = false,    // Retailer or convention exclusive
     val exclusiveRetailer: String = "",  // "Target", "GameStop", "SDCC", etc.
 
@@ -65,8 +66,14 @@ data class FunkoItem(
     val notes: String = "",
     val imageUrl: String = "",
     val thumbnailBlob: ByteArray? = null,  // local blob downloaded on ownership confirmation
+    val userPhoto: ByteArray? = null,      // user's own camera/gallery photo
     val dateAdded: LocalDate = LocalDate.now(),
     val dateAcquired: LocalDate? = null,
+
+    // ── Variants ─────────────────────────────────────────────────────────────
+    // Same Funko figure, different paint/packaging version.
+    // Stored on the parent record — does NOT create a separate collection entry.
+    val variants: List<FunkoVariant> = emptyList(),
 )
 
 enum class Condition {
@@ -76,6 +83,20 @@ enum class Condition {
     FAIR,        // Significant damage
     LOOSE        // No box
 }
+
+/**
+ * A variant of a Funko item — same figure, different version (paint, packaging, etc.).
+ * Stored as a list on the parent FunkoItem. Does NOT create a separate collection record,
+ * so it doesn't affect series completion counts or duplicate the item in reports.
+ */
+data class FunkoVariant(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val note: String = "",           // What makes this different, e.g. "Metallic paint"
+    val photo: ByteArray? = null,    // User photo of this specific variant
+    val pricePaid: Double = 0.0,     // What was paid for this variant copy
+    val condition: Condition = Condition.MINT,
+    val dateAdded: LocalDate = LocalDate.now(),
+)
 
 /**
  * Top-level genre grouping — derived from the category field.

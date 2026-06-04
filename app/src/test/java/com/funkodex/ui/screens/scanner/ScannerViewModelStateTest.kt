@@ -59,11 +59,11 @@ class ScannerViewModelStateTest {
         // Safe defaults — no-ops unless overridden in a test
         coEvery { repository.getItemByUpc(any()) } returns null
         coEvery { repository.saveItem(any()) }      returns Result.success(sampleItem)
-        coEvery { repository.savePendingUpc(any()) } just Runs
+        coEvery { repository.savePendingUpc(any()) } just Awaits
         coEvery { lookup.lookupByUpc(any()) }        returns null
         coEvery { lookup.searchByName(any()) }       returns emptyList()
-        coEvery { imageBlobs.downloadAndStore(any()) } just Runs
-        coEvery { contribRepo.saveContribution(any()) } just Runs
+        coEvery { imageBlobs.downloadAndStore(any()) } just Awaits
+        coEvery { contribRepo.saveContribution(any()) } just Awaits
         every  { connectivity.isConnected() }        returns true
 
         vm = ScannerViewModel(repository, lookup, imageBlobs, contribRepo, connectivity)

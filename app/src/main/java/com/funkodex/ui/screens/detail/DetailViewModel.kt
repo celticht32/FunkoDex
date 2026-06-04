@@ -20,7 +20,7 @@ import javax.inject.Inject
 sealed class DetailUiState {
     object Loading                                                     : DetailUiState()
     data class Viewing(val item: FunkoItem)                           : DetailUiState()
-    data class Editing(val draft: FunkoItem, val isSaving: Boolean = false) : DetailUiState()
+    data class Editing(val draft: FunkoItem, val originalUpc: String = "", val isSaving: Boolean = false) : DetailUiState()
     data class Error(val message: String)                              : DetailUiState()
     object Deleted                                                     : DetailUiState()
 }
@@ -40,6 +40,10 @@ class DetailViewModel @Inject constructor(
     private val priceService: PriceService,
     private val photoRepository: PhotoRepository,
     private val alertRepository: AlertRepository,
+    private val imageBlobs: com.funkodex.data.repository.ImageBlobRepository,
+    private val db: com.funkodex.data.db.FunkoDexDatabase,
+    private val contribRepo: com.funkodex.data.repository.ContributionRepository,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
 
     private val itemId: String = checkNotNull(savedStateHandle["itemId"])
@@ -126,13 +130,30 @@ class DetailViewModel @Inject constructor(
 
     // ─── View actions ─────────────────────────────────────────────────────────
 
+    // Pending UPC contribution — non-null when user just added a new UPC and should be prompted
+    private val _pendingUpcContribution = MutableStateFlow<com.funkodex.data.model.CatalogContribution?>(null)
+    val pendingUpcContribution: StateFlow<com.funkodex.data.model.CatalogContribution?> = _pendingUpcContribution.asStateFlow()
+
+    fun dismissUpcContribution() { _pendingUpcContribution.value = null }
+
+    fun confirmUpcContribution() {
+        val contrib = _pendingUpcContribution.value ?: return
+        _pendingUpcContribution.value = null
+        viewModelScope.launch { contribRepo.saveContribution(contrib) }
+    }
+
     fun startEditing() {
         val item = (state.value as? DetailUiState.Viewing)?.item ?: return
-        _state.value = DetailUiState.Editing(item)
+        _state.value = DetailUiState.Editing(item, originalUpc = item.upc)
     }
 
     fun deleteItem() {
         viewModelScope.launch {
+            // Cancel any pending UPC contribution for this item before deleting
+            val item = (state.value as? DetailUiState.Viewing)?.item
+            if (item != null && item.upc.isNotEmpty()) {
+                contribRepo.deletePendingContribution(item.upc)
+            }
             repository.deleteItem(itemId)
             _state.value = DetailUiState.Deleted
         }
@@ -157,6 +178,51 @@ class DetailViewModel @Inject constructor(
     fun updatePricePaid(value: String)       = updateDraft { it.copy(pricePaid = value.toDoubleOrNull() ?: it.pricePaid) }
     fun updateCondition(value: Condition)    = updateDraft { it.copy(condition = value) }
     fun updateNotes(value: String)           = updateDraft { it.copy(notes = value) }
+    fun updateUpc(value: String)             = updateDraft { it.copy(upc = value) }
+
+    fun clearMissingOriginal() {
+        val item = (state.value as? DetailUiState.Viewing)?.item ?: return
+        // Clear the flag in the draft and enter edit mode so user can fill in original details
+        _state.value = DetailUiState.Editing(
+            draft       = item.copy(isMissingOriginal = false),
+            originalUpc = item.upc,
+        )
+    }
+
+    fun markVariantOnly() {
+        val item = (state.value as? DetailUiState.Viewing)?.item ?: return
+        viewModelScope.launch {
+            repository.saveItem(item.copy(isMissingOriginal = true))
+            loadItem()
+        }
+    }
+
+    fun updateVariantNote(index: Int, note: String) = updateDraft { item ->
+        val updated = item.variants.toMutableList()
+        if (index in updated.indices) updated[index] = updated[index].copy(note = note)
+        item.copy(variants = updated)
+    }
+
+    fun updateVariantPrice(index: Int, price: String) = updateDraft { item ->
+        val updated = item.variants.toMutableList()
+        if (index in updated.indices) {
+            updated[index] = updated[index].copy(pricePaid = price.toDoubleOrNull() ?: updated[index].pricePaid)
+        }
+        item.copy(variants = updated)
+    }
+
+    fun removeVariant(index: Int) = updateDraft { item ->
+        val updated = item.variants.toMutableList()
+        if (index in updated.indices) updated.removeAt(index)
+        val newItem = item.copy(variants = updated)
+        // If last variant removed and item was flagged as missing original,
+        // clear the flag too — no variants means no variant/original distinction
+        if (updated.isEmpty() && item.isMissingOriginal) {
+            newItem.copy(isMissingOriginal = false)
+        } else {
+            newItem
+        }
+    }
     fun updateDateAcquired(date: LocalDate?) = updateDraft { it.copy(dateAcquired = date) }
 
     fun saveEdit() {
@@ -164,7 +230,43 @@ class DetailViewModel @Inject constructor(
         _state.value = editing.copy(isSaving = true)
         viewModelScope.launch {
             repository.saveItem(editing.draft).fold(
-                onSuccess = { saved -> _state.value = DetailUiState.Viewing(saved) },
+                onSuccess = { saved ->
+                    _state.value = DetailUiState.Viewing(saved)
+                    val newUpc = editing.draft.upc.trim()
+                    val oldUpc = editing.originalUpc.trim()
+                    viewModelScope.launch {
+                        when {
+                            // UPC cleared — delete any pending contribution for the old UPC
+                            newUpc.isEmpty() && oldUpc.isNotEmpty() -> {
+                                contribRepo.deletePendingContribution(oldUpc)
+                            }
+                            // UPC changed to a different value
+                            newUpc.isNotEmpty() && newUpc != oldUpc -> {
+                                // Delete pending contribution for old UPC if it exists
+                                if (oldUpc.isNotEmpty()) {
+                                    contribRepo.deletePendingContribution(oldUpc)
+                                }
+                                // Prompt to contribute the new/corrected UPC
+                                _pendingUpcContribution.value = com.funkodex.data.model.CatalogContribution(
+                                    upc               = newUpc,
+                                    handle            = editing.draft.catalogRef,
+                                    name              = editing.draft.name,
+                                    franchise         = editing.draft.franchise,
+                                    category          = editing.draft.category,
+                                    seriesNumber      = editing.draft.seriesNumber,
+                                    retailPrice       = editing.draft.retailPrice,
+                                    isVaulted         = editing.draft.isVaulted,
+                                    isChase           = editing.draft.isChase,
+                                    isExclusive       = editing.draft.isExclusive,
+                                    exclusiveRetailer = editing.draft.exclusiveRetailer,
+                                    imageUrl          = editing.draft.imageUrl,
+                                    source            = "USER_EDIT",
+                                )
+                            }
+                            // UPC unchanged — nothing to do
+                        }
+                    }
+                },
                 onFailure = { _state.value = DetailUiState.Error(it.message ?: "Save failed") }
             )
         }
@@ -199,7 +301,108 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    fun clearPhotoError() { _photoError.value = null }
+    // ─── Photo target selection ───────────────────────────────────────────────
+
+    enum class PhotoTarget { MAIN, VARIATION, BOTH }
+
+    private val _pendingPhotoUri = MutableStateFlow<android.net.Uri?>(null)
+    val pendingPhotoUri: StateFlow<android.net.Uri?> = _pendingPhotoUri.asStateFlow()
+
+    fun setPendingPhoto(uri: android.net.Uri) { _pendingPhotoUri.value = uri }
+    fun clearPendingPhoto() { _pendingPhotoUri.value = null }
+
+    fun savePhotoWithTarget(uri: android.net.Uri, target: PhotoTarget) {
+        clearPendingPhoto()
+        viewModelScope.launch {
+            when (target) {
+                PhotoTarget.MAIN -> savePhoto(uri)
+                PhotoTarget.VARIATION -> addVariantPhoto(uri)
+                PhotoTarget.BOTH -> {
+                    savePhoto(uri)
+                    addVariantPhoto(uri)
+                }
+            }
+        }
+    }
+
+    private suspend fun addVariantPhoto(uri: android.net.Uri) {
+        val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        } ?: return
+
+        when (val s = state.value) {
+            is DetailUiState.Editing -> {
+                // In edit mode — update the draft directly, saved when user taps Save
+                val newVariant = com.funkodex.data.model.FunkoVariant(
+                    note  = "Variant",
+                    photo = bytes,
+                )
+                _state.value = s.copy(draft = s.draft.copy(
+                    variants = s.draft.variants + newVariant
+                ))
+            }
+            is DetailUiState.Viewing -> {
+                // In view mode — save immediately and reload
+                val item = s.item
+                val newVariant = com.funkodex.data.model.FunkoVariant(
+                    note  = "Variant",
+                    photo = bytes,
+                )
+                repository.saveItem(item.copy(variants = item.variants + newVariant))
+                loadItem()
+            }
+            else -> return
+        }
+    }
+
+    sealed class FetchState {
+        object Idle : FetchState()
+        object Fetching : FetchState()
+        object Success : FetchState()
+        data class Failed(val reason: String) : FetchState()
+    }
+
+    private val _fetchState = MutableStateFlow<FetchState>(FetchState.Idle)
+    val fetchState: StateFlow<FetchState> = _fetchState.asStateFlow()
+
+    fun clearFetchState() { _fetchState.value = FetchState.Idle }
+
+    fun fetchImageFromCatalog() {
+        val item = when (val s = state.value) {
+            is DetailUiState.Viewing -> s.item
+            is DetailUiState.Editing -> s.draft
+            else -> null
+        } ?: return
+        if (item.imageUrl.isEmpty()) {
+            _fetchState.value = FetchState.Failed("No catalog image URL available for this item")
+            return
+        }
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            _fetchState.value = FetchState.Fetching
+            _photoError.value = null
+            // Remove existing thumbnailBlob so downloadAndStore doesn't skip
+            val doc = db.getDatabase().getDocument(itemId)?.toMutable()
+            if (doc != null) {
+                doc.remove(com.funkodex.data.db.FunkoDexDatabase.FIELD_THUMBNAIL_BLOB)
+                db.getDatabase().save(doc)
+            }
+            val success = imageBlobs.downloadAndStore(item.copy(id = itemId))
+            if (success) {
+                val bytes = db.getDatabase().getDocument(itemId)
+                    ?.getBlob(com.funkodex.data.db.FunkoDexDatabase.FIELD_THUMBNAIL_BLOB)
+                    ?.content
+                _photoBytes.value = bytes
+                _fetchState.value = FetchState.Success
+            } else {
+                _fetchState.value = FetchState.Failed(
+                    "Could not download image from catalog.\n\n" +
+                    "Checked: ${item.imageUrl}\n\n" +
+                    "Possible causes: no internet connection, image not available in catalog, " +
+                    "or image exceeds size limit (600KB)."
+                )
+            }
+        }
+    }
 
     // ─── Price alert actions (D4) ────────────────────────────────────────────
 

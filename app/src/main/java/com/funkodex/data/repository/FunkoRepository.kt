@@ -15,6 +15,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import java.util.UUID
 import javax.inject.Inject
@@ -32,8 +33,9 @@ class FunkoRepository @Inject constructor(
 
     suspend fun saveItem(item: FunkoItem): kotlin.Result<FunkoItem> = withContext(Dispatchers.IO) {
         runCatching {
-            val id = if (item.id.isEmpty()) "funko::${UUID.randomUUID()}" else item.id
-            val doc = FunkoMapper.toDocument(item.copy(id = id))
+            val id       = if (item.id.isEmpty()) "funko::${UUID.randomUUID()}" else item.id
+            val existing = database.getDocument(id)
+            val doc      = FunkoMapper.toDocument(item.copy(id = id), existing)
             database.save(doc)
             val saved = item.copy(id = id)
             updateWidget()
@@ -56,7 +58,7 @@ class FunkoRepository @Inject constructor(
 
     suspend fun getItemByUpc(upc: String): FunkoItem? = withContext(Dispatchers.IO) {
         val query = QueryBuilder
-            .select(SelectResult.expression(Meta.id))
+            .select(SelectResult.expression(Meta.id).`as`("id"))
             .from(DataSource.database(database))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)
@@ -72,10 +74,34 @@ class FunkoRepository @Inject constructor(
         }
     }
 
+    /** Find an owned collection item by name + franchise — used for duplicate detection. */
+    suspend fun findOwnedByNameAndFranchise(name: String, franchise: String): FunkoItem? =
+        withContext(Dispatchers.IO) {
+            val query = QueryBuilder
+                .select(SelectResult.expression(Meta.id).`as`("id"))
+                .from(DataSource.database(database))
+                .where(
+                    Expression.property(FunkoDexDatabase.FIELD_TYPE)
+                        .equalTo(Expression.string(FunkoDexDatabase.TYPE_FUNKO))
+                        .and(Expression.property(FunkoDexDatabase.FIELD_IS_OWNED)
+                            .equalTo(Expression.booleanValue(true)))
+                        .and(Expression.property(FunkoDexDatabase.FIELD_NAME)
+                            .equalTo(Expression.string(name)))
+                        .and(Expression.property(FunkoDexDatabase.FIELD_FRANCHISE)
+                            .equalTo(Expression.string(franchise)))
+                )
+                .limit(Expression.intValue(1))
+
+            query.execute().use { rs ->
+                val docId = rs.next()?.getString("id") ?: return@use null
+                database.getDocument(docId)?.let { FunkoMapper.fromDocument(it) }
+            }
+        }
+
     /** Live Flow of all owned items, re-emits whenever data changes. */
     fun collectionFlow(): Flow<List<FunkoItem>> = callbackFlow {
         val query = QueryBuilder
-            .select(SelectResult.expression(Meta.id), SelectResult.all())
+            .select(SelectResult.expression(Meta.id).`as`("id"), SelectResult.all())
             .from(DataSource.database(database))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)
@@ -86,22 +112,21 @@ class FunkoRepository @Inject constructor(
             .orderBy(Ordering.property(FunkoDexDatabase.FIELD_DATE_ADDED).descending())
 
         val token = query.addChangeListener { change ->
-            change.results?.let { rs ->
-                val items = rs.allResults().mapNotNull { result ->
-                    val docId = result.getString("id") ?: return@mapNotNull null
-                    database.getDocument(docId)?.let { FunkoMapper.fromDocument(it) }
-                }
-                trySend(items)
-            }
+            val items = change.results?.allResults()?.mapNotNull { result ->
+                val docId = result.getString("id") ?: return@mapNotNull null
+                database.getDocument(docId)?.let { FunkoMapper.fromDocument(it) }
+            } ?: emptyList()
+            trySend(items)
         }
         query.execute()
         awaitClose { query.removeChangeListener(token) }
     }.buffer(Channel.UNLIMITED)  // SAFE-5: prevents dropped updates on burst writes
+     .flowOn(Dispatchers.IO)
 
     /** Live Flow of want-list (isOwned = false). */
     fun wantListFlow(): Flow<List<FunkoItem>> = callbackFlow {
         val query = QueryBuilder
-            .select(SelectResult.expression(Meta.id), SelectResult.all())
+            .select(SelectResult.expression(Meta.id).`as`("id"), SelectResult.all())
             .from(DataSource.database(database))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)
@@ -112,17 +137,16 @@ class FunkoRepository @Inject constructor(
             .orderBy(Ordering.property(FunkoDexDatabase.FIELD_FRANCHISE).ascending())
 
         val token = query.addChangeListener { change ->
-            change.results?.let { rs ->
-                val items = rs.allResults().mapNotNull { result ->
-                    val docId = result.getString("id") ?: return@mapNotNull null
-                    database.getDocument(docId)?.let { FunkoMapper.fromDocument(it) }
-                }
-                trySend(items)
-            }
+            val items = change.results?.allResults()?.mapNotNull { result ->
+                val docId = result.getString("id") ?: return@mapNotNull null
+                database.getDocument(docId)?.let { FunkoMapper.fromDocument(it) }
+            } ?: emptyList()
+            trySend(items)
         }
         query.execute()
         awaitClose { query.removeChangeListener(token) }
     }.buffer(Channel.UNLIMITED)  // SAFE-5: prevents dropped updates on burst writes
+     .flowOn(Dispatchers.IO)
 
     // ─── Analytics ────────────────────────────────────────────────────────────
 
@@ -132,9 +156,13 @@ class FunkoRepository @Inject constructor(
         val wanted   = allItems.filter { !it.isOwned }
 
         // Group by franchise for series completion
-        val franchiseMap = owned.groupBy { it.franchise }
-        val seriesSummaries = franchiseMap.map { (franchiseName, ownedInFranchise) ->
-            val wantedInFranchise = wanted.filter { it.franchise == franchiseName }
+        val franchiseMap = owned.groupBy { "${it.franchise}|${it.category}" }
+        val seriesSummaries = franchiseMap.map { (key, ownedInFranchise) ->
+            val franchiseName = key.substringBefore("|")
+            val wantedInFranchise = wanted.filter { it.franchise == franchiseName && it.category == ownedInFranchise.first().category }
+            // Also include owned items flagged as missing their original — show original as wanted
+            val missingOriginals  = ownedInFranchise.filter { it.isMissingOriginal }
+                .map { it.copy(isOwned = false, name = "${it.name} (original)", variants = emptyList()) }
             val firstCategory     = ownedInFranchise.firstOrNull()?.category ?: ""
             val genre             = ownedInFranchise.firstOrNull()?.genre ?: FunkoGenre.OTHER
             SeriesSummary(
@@ -142,23 +170,23 @@ class FunkoRepository @Inject constructor(
                 category       = firstCategory,
                 genre          = genre,
                 totalInCatalog = ownedInFranchise.size + wantedInFranchise.size,
-                ownedCount     = ownedInFranchise.size,
-                wantedCount    = wantedInFranchise.size,
-                missingItems   = wantedInFranchise,
-                totalCostPaid  = ownedInFranchise.sumOf { it.pricePaid },
+                ownedCount     = ownedInFranchise.size + ownedInFranchise.sumOf { it.variants.size },
+                wantedCount    = wantedInFranchise.size + missingOriginals.size,
+                missingItems   = wantedInFranchise + missingOriginals,
+                totalCostPaid  = ownedInFranchise.sumOf { it.pricePaid + it.variants.sumOf { v -> v.pricePaid } },
                 marketValue    = ownedInFranchise.sumOf { it.marketAvg },
                 imageUrls      = ownedInFranchise.take(4).map { it.imageUrl }.filter { it.isNotEmpty() },
             )
         }.sortedByDescending { it.ownedCount }
 
         CollectionStats(
-            totalOwned          = owned.size,
-            totalWanted         = wanted.size,
-            totalPaid           = owned.sumOf { it.pricePaid },
+            totalOwned          = owned.size + owned.sumOf { it.variants.size },
+            totalWanted         = wanted.size + owned.count { it.isMissingOriginal },
+            totalPaid           = owned.sumOf { it.pricePaid + it.variants.sumOf { v -> v.pricePaid } },
             totalRetailValue    = owned.sumOf { it.retailPrice },
             totalMarketValue    = owned.sumOf { it.marketAvg },
             uniqueFranchises    = franchiseMap.keys.size,
-            mostExpensivePaid   = owned.maxByOrNull { it.pricePaid },
+            mostExpensivePaid   = owned.maxByOrNull { it.pricePaid + it.variants.sumOf { v -> v.pricePaid } },
             highestMarketValue  = owned.maxByOrNull { it.marketAvg },
             recentlyAdded       = owned.sortedByDescending { it.dateAdded }.take(10),
             seriesSummaries     = seriesSummaries,
@@ -198,7 +226,7 @@ class FunkoRepository @Inject constructor(
      */
     suspend fun getResolvedPrice(itemId: String): ResolvedPrice = withContext(Dispatchers.IO) {
         val query = QueryBuilder
-            .select(SelectResult.all(), SelectResult.expression(Meta.id))
+            .select(SelectResult.all(), SelectResult.expression(Meta.id).`as`("id"))
             .from(DataSource.database(database))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)
@@ -286,7 +314,7 @@ class FunkoRepository @Inject constructor(
         try {
             // COUNT owned items — far cheaper than getAllItems().filter { it.isOwned }
             val ownedQuery = QueryBuilder
-                .select(SelectResult.expression(Function.count(Expression.string("*")).`as`("cnt")))
+                .select(SelectResult.expression(Function.count(Expression.string("*"))).`as`("cnt"))
                 .from(DataSource.database(database))
                 .where(
                     Expression.property(FunkoDexDatabase.FIELD_TYPE)
@@ -342,7 +370,7 @@ class FunkoRepository @Inject constructor(
 
     private suspend fun getAllItems(): List<FunkoItem> = withContext(Dispatchers.IO) {
         val query = QueryBuilder
-            .select(SelectResult.expression(Meta.id))
+            .select(SelectResult.expression(Meta.id).`as`("id"))
             .from(DataSource.database(database))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)
@@ -357,19 +385,4 @@ class FunkoRepository @Inject constructor(
     }
 
     // ─── Category-filtered catalog search (A6) ────────────────────────────────
-
-    /**
-     * Returns collection items filtered to enabled categories only.
-     * Called from CollectionViewModel to apply the user's category preferences.
-     */
-    suspend fun getOwnedFiltered(): List<FunkoItem> = withContext(Dispatchers.IO) {
-        val enabled = categoryPrefs.getEnabledCategories()
-        getAllItems().filter { item ->
-            // Keep item if: its category is enabled, OR there are no preferences yet,
-            // OR the item's category is blank (graceful fallback)
-            enabled.isEmpty() ||
-            item.category.isEmpty() ||
-            enabled.any { key -> item.category.contains(key, ignoreCase = true) }
-        }
-    }
 }

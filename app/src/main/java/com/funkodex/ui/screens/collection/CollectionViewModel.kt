@@ -66,9 +66,15 @@ class CollectionViewModel @Inject constructor(
                 .combine(categoryPrefs.enabledCategoryKeysFlow()) { items, enabledKeys ->
                     if (enabledKeys.isEmpty()) items  // no prefs yet → show all
                     else items.filter { item ->
-                        item.category.isEmpty() ||
+                        // Always show owned items — category filter applies to browsing only
+                        if (item.isOwned) return@filter true
+                        if (item.category.isEmpty()) return@filter true
+                        // enabledKeys are like "pop_heroes"; item.category is like "Pop! Heroes"
+                        val itemCatKey = item.category.lowercase()
+                            .removePrefix("pop! ").replace(" ", "_").replace("!", "")
+                        enabledKeys.contains(itemCatKey) ||
                         enabledKeys.any { key ->
-                            item.category.contains(key, ignoreCase = true)
+                            item.category.contains(key.replace("_", " "), ignoreCase = true)
                         }
                     }
                 }

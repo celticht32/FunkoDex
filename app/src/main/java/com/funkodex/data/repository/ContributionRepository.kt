@@ -1,6 +1,7 @@
 package com.funkodex.data.repository
 
 import com.couchbase.lite.*
+import com.couchbase.lite.Function
 import com.funkodex.data.db.FunkoDexDatabase
 import com.funkodex.data.model.CatalogContribution
 import kotlinx.coroutines.Dispatchers
@@ -55,12 +56,29 @@ class ContributionRepository @Inject constructor(
         }
     }
 
+    /** Delete a pending (not yet uploaded) contribution by UPC. */
+    suspend fun deletePendingContribution(upc: String) = withContext(Dispatchers.IO) {
+        val docId = "${CatalogContribution.DOC_PREFIX}$upc"
+        val doc   = database.getDocument(docId) ?: return@withContext
+        // Only delete if not yet uploaded — uploaded contributions are kept for audit
+        if (!doc.getBoolean(FunkoDexDatabase.FIELD_CONTRIB_UPLOADED)) {
+            database.delete(doc)
+        }
+    }
+
+    /** Check if a pending contribution exists for a given UPC. */
+    suspend fun hasPendingContribution(upc: String): Boolean = withContext(Dispatchers.IO) {
+        val docId = "${CatalogContribution.DOC_PREFIX}$upc"
+        val doc   = database.getDocument(docId) ?: return@withContext false
+        !doc.getBoolean(FunkoDexDatabase.FIELD_CONTRIB_UPLOADED)
+    }
+
     // ─── Read ─────────────────────────────────────────────────────────────────
 
     /** All contributions not yet uploaded — fed to GitHubUploadWorker. */
     suspend fun getPendingContributions(): List<CatalogContribution> = withContext(Dispatchers.IO) {
         val query = QueryBuilder
-            .select(SelectResult.all(), SelectResult.expression(Meta.id))
+            .select(SelectResult.all(), SelectResult.expression(Meta.id).`as`("id"))
             .from(DataSource.database(database))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)

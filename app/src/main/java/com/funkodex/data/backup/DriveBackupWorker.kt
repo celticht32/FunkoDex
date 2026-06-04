@@ -7,6 +7,7 @@ import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.*
+import com.couchbase.lite.CouchbaseLite
 import com.funkodex.data.db.FunkoDexDatabase
 import com.funkodex.security.SecureKeyStore
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -120,6 +121,7 @@ class DriveBackupWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
+            CouchbaseLite.init(applicationContext)
             val account = GoogleSignIn.getLastSignedInAccount(applicationContext)
                 ?: return@withContext Result.success(workDataOf("skipped" to "not_signed_in"))
 

@@ -13,6 +13,7 @@ import androidx.work.*
 import com.funkodex.MainActivity
 import com.funkodex.data.repository.AlertRepository
 import com.funkodex.network.PriceService
+import com.couchbase.lite.CouchbaseLite
 import androidx.hilt.work.HiltWorker
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -77,6 +78,7 @@ class PriceAlertWorker @AssistedInject constructor(
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        CouchbaseLite.init(applicationContext)
         FunkoDexLogger.d(TAG, "Price alert check started")
         try {
             val alerts = alertRepository.getActiveAlerts()

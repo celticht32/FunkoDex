@@ -64,6 +64,7 @@ class CatalogPreloader @Inject constructor(
             return@withContext PreloadResult.AlreadyLoaded(count)
         }
 
+
         // Load JSON from assets
         val json = try {
             context.assets.open("funko_data.json").bufferedReader().use { it.readText() }
@@ -85,8 +86,11 @@ class CatalogPreloader @Inject constructor(
         database.inBatch(UnitOfWork {
             records.chunked(batch).forEach { chunk ->
                 chunk.forEach { record ->
+                    val docId  = "catalog::${record.handle ?: return@forEach}"
+                    // Skip if already exists — avoids conflict on partial re-run
+                    if (database.getDocument(docId) != null) return@forEach
                     val mapped = mapRecord(record) ?: return@forEach
-                    val doc    = MutableDocument("catalog::${record.handle}", mapped)
+                    val doc    = MutableDocument(docId, mapped)
                     database.save(doc)
                     imported++
                 }
@@ -95,6 +99,7 @@ class CatalogPreloader @Inject constructor(
 
         // Write version marker
         val markerDoc = MutableDocument(MARKER_DOC).apply {
+            setString("type", "system")
             setString("version", CATALOG_VER)
             setInt("count", imported)
             setString("loadedAt", java.time.LocalDate.now().toString())

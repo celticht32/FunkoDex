@@ -40,6 +40,7 @@ class FunkoDexApp : Application(), Configuration.Provider {
     @Inject lateinit var userPrefs:             com.funkodex.ui.screens.settings.UserPreferencesRepository
     @Inject lateinit var connectivityObserver:  ConnectivityObserver
     @Inject lateinit var workerFactory:         HiltWorkerFactory
+    @Inject lateinit var db:                    com.funkodex.data.db.FunkoDexDatabase
 
     // Required by Configuration.Provider — lets Hilt inject dependencies into Workers
     override val workManagerConfiguration: Configuration
@@ -50,17 +51,19 @@ class FunkoDexApp : Application(), Configuration.Provider {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
+        // CouchbaseLite MUST be initialised before super.onCreate() because Hilt
+        // injection (triggered by super) immediately provides FunkoDexDatabase,
+        // which opens the Couchbase database — crashing if init() hasn't run yet.
+        CouchbaseLite.init(this)
+
         super.onCreate()
 
-        // 0. Install crash handler — must be absolute first so pre-init crashes are captured
+        // 0. Install crash handler
         CrashHandler.install(this)
 
         // 0b. Init logger with default level — updated from DataStore once prefs are ready
         FunkoDexLogger.init(this, LogLevel.DEFAULT)
         FunkoDexLogger.i("FunkoDexApp", "App starting")
-
-        // 1. Initialise Couchbase Lite — must be first
-        CouchbaseLite.init(this)
 
         // 1b. Configure Coil image loader — F-PERF-1
         //     30% memory, full disk cache, crossfade globally for smooth loads
@@ -113,7 +116,13 @@ class FunkoDexApp : Application(), Configuration.Provider {
             }
         }
 
-        // 5b. Preload the Funko catalog in the background.
+        // 5b. Create DB indexes in the background — deferred from startup to reduce
+        //     memory pressure during Hilt injection on first launch.
+        appScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            db.ensureIndexes()
+        }
+
+        // 5c. Preload the Funko catalog in the background.
         //    Runs during the splash screen — typically completes within 1.8s on
         //    first install; subsequent launches skip immediately (marker doc check).
         appScope.launch {

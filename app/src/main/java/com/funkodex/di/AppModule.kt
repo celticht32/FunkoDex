@@ -38,7 +38,7 @@ object AppModule {
 
     @Provides @Singleton
     fun provideFunkoDexDatabase(@ApplicationContext context: Context): FunkoDexDatabase =
-        FunkoDexDatabase(context).also { it.ensureIndexes() }
+        FunkoDexDatabase(context)
 
     @Provides @Singleton
     fun provideUserPreferences(@ApplicationContext context: Context): UserPreferencesRepository =

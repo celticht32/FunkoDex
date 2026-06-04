@@ -5,6 +5,7 @@ import com.funkodex.data.db.FunkoDexDatabase
 import com.funkodex.data.model.PriceAlert
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
@@ -74,7 +75,7 @@ class AlertRepository @Inject constructor(
     /** All currently enabled price alerts — used by PriceAlertWorker. */
     suspend fun getActiveAlerts(): List<PriceAlert> = withContext(Dispatchers.IO) {
         val query = QueryBuilder
-            .select(SelectResult.all(), SelectResult.expression(Meta.id))
+            .select(SelectResult.all(), SelectResult.expression(Meta.id).`as`("id"))
             .from(DataSource.database(database))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)
@@ -107,7 +108,7 @@ class AlertRepository @Inject constructor(
         }
         query.execute()
         awaitClose { query.removeChangeListener(token) }
-    }
+    }.flowOn(Dispatchers.IO)
 
     // ─── Mapping helpers ──────────────────────────────────────────────────────
 

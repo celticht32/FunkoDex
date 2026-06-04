@@ -27,12 +27,26 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.FunkoDex"
         android:usesCleartextTraffic="false"
+        android:enableOnBackInvokedCallback="true"
         android:networkSecurityConfig="@xml/network_security_config">
 
         <!--
             FileProvider: lets us share .xlsx/.csv files from cache via content:// URI.
             Required by Android 7+ for cross-app file sharing.
         -->
+        <!-- Disable WorkManager's default initializer so FunkoDexApp.Configuration.Provider
+             controls initialization — required for HiltWorkerFactory to be used. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -46,6 +60,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:theme="@style/Theme.FunkoDex.Splash"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

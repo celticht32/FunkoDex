@@ -193,11 +193,12 @@ class ConnectivityObserver @Inject constructor(
             val body  = if (names.size == 1) names[0]
                         else "${names.take(2).joinToString(", ")} and ${count - 2} more added to want list"
 
-            val notification = android.app.Notification.Builder(context, "pending_scans")
+            val notification = androidx.core.app.NotificationCompat.Builder(context, "pending_scans")
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setAutoCancel(true)
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
                 .build()
 
             nm.notify(NOTIFICATION_ID, notification)

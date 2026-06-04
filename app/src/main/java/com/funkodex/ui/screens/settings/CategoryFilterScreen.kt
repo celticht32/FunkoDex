@@ -106,10 +106,11 @@ fun CategoryFilterScreen(
             }
         }
     }
-}
+} // end Scaffold lambda
+} // end CategoryFilterScreen
 
 @Composable
-private fun GenreHeader(
+internal fun GenreHeader(
     genre: FunkoGenre,
     enabledCount: Int,
     total: Int,
@@ -181,7 +182,6 @@ private fun GenreHeader(
                 tint     = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
-        }
         }
     }
 }

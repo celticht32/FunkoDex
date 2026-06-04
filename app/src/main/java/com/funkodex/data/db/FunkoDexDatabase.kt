@@ -43,6 +43,8 @@ class FunkoDexDatabase(private val context: Context) {
         const val FIELD_IS_OWNED       = "isOwned"
         const val FIELD_IS_VAULTED     = "isVaulted"
         const val FIELD_IS_CHASE       = "isChase"
+        const val FIELD_IS_MISSING_ORIGINAL = "isMissingOriginal"
+        const val FIELD_VARIANTS            = "variants"
         const val FIELD_IS_EXCLUSIVE   = "isExclusive"
         const val FIELD_EXCL_RETAILER  = "exclusiveRetailer"
 
@@ -94,15 +96,30 @@ class FunkoDexDatabase(private val context: Context) {
         const val FIELD_CONTRIB_SCHEMA_V  = "schemaVersion"
     }
 
-    private val database: Database by lazy {
+    private var _database: Database? = null
+
+    private fun openDatabase(): Database {
         val config = DatabaseConfigurationFactory.newConfig(context.filesDir.absolutePath)
-        Database(DB_NAME, config)
+        return Database(DB_NAME, config)
     }
 
-    fun getDatabase(): Database = database
+    fun getDatabase(): Database {
+        if (_database == null) _database = openDatabase()
+        return _database!!
+    }
+
+    fun close() {
+        try { _database?.close() } catch (_: Exception) {}
+        _database = null
+    }
+
+    /** Reopen after a force restore — creates a fresh database instance. */
+    fun reopen() {
+        _database = openDatabase()
+    }
 
     fun ensureIndexes() {
-        val db = database
+        val db = getDatabase()
         // Collection indexes
         db.createIndex("idx_owned",
             IndexBuilder.valueIndex(ValueIndexItem.property(FIELD_IS_OWNED)))
@@ -147,9 +164,5 @@ class FunkoDexDatabase(private val context: Context) {
             IndexBuilder.valueIndex(
                 ValueIndexItem.property(FIELD_TYPE),
                 ValueIndexItem.property(FIELD_CONTRIB_UPLOADED)))
-    }
-
-    fun close() {
-        try { database.close() } catch (_: Exception) { /* already closed */ }
     }
 }

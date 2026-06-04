@@ -60,13 +60,13 @@ class ImageBlobRepository @Inject constructor(
                 .header("User-Agent", "FunkoDex/1.0 Android (image cache)")
                 .build()
 
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) {
-                FunkoDexLogger.w(TAG, "Image fetch failed ${response.code} for ${item.name}")
-                return@runCatching false
+            val bytes = client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    FunkoDexLogger.w(TAG, "Image fetch failed ${response.code} for ${item.name}")
+                    return@runCatching false
+                }
+                response.body?.bytes() ?: return@runCatching false
             }
-
-            val bytes = response.body?.bytes() ?: return@runCatching false
             if (bytes.size > MAX_BYTES) {
                 FunkoDexLogger.w(TAG, "Image too large (${bytes.size}B) for ${item.name} — skipping")
                 return@runCatching false

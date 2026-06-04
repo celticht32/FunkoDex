@@ -4,7 +4,6 @@ import android.content.Context
 import com.funkodex.data.model.FunkoItem
 import com.funkodex.security.SecureKeyStore
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -37,6 +36,8 @@ class FunkoLookupService @Inject constructor(
     @ApplicationContext private val context: Context,
     private val client: OkHttpClient,
     private val secureKeyStore: SecureKeyStore,
+    private val db: com.funkodex.data.db.FunkoDexDatabase,
+    private val categoryPrefs: com.funkodex.data.repository.CategoryPreferenceRepository,
 ) {
     companion object {
         private const val CHANNEL3_BASE    = "https://api.trychannel3.com/v1"
@@ -51,6 +52,12 @@ class FunkoLookupService @Inject constructor(
     // Lazy-loaded local database — loaded once on first lookup, kept in memory
     private var localDb: List<LocalFunkoRecord>? = null
 
+    /** Call once at app startup to pre-parse funko_data.json in background. */
+    fun warmup() {
+        if (localDb != null) return
+        Thread { loadLocalDb() }.start()
+    }
+
     // ─── Public API ────────────────────────────────────────────────────────────
 
     /** Primary entry point: look up by UPC barcode. */
@@ -63,22 +70,37 @@ class FunkoLookupService @Inject constructor(
 
     /** Free-text search — used by the not-found lookup sheet. */
     suspend fun searchByName(query: String): List<FunkoItem> = withContext(Dispatchers.IO) {
+        val enabled = categoryPrefs.getEnabledCategories()
         val localResults = searchLocalByName(query)
-        if (localResults.isNotEmpty()) return@withContext localResults
-        searchChannel3ByName(query)
+        val results = if (localResults.isNotEmpty()) localResults else searchChannel3ByName(query)
+        // Apply category filter — only show items whose category is enabled
+        if (enabled.isEmpty()) results
+        else results.filter { item ->
+            item.category.isEmpty() ||
+            enabled.any { key -> item.category.contains(key, ignoreCase = true) }
+        }
     }
 
     // ─── Layer 1: Kenny Chan local JSON ───────────────────────────────────────
 
     private fun loadLocalDb(): List<LocalFunkoRecord> {
-        localDb?.let { return it }
+        localDb?.let {
+            return it
+        }
+        val t0 = System.currentTimeMillis()
         return try {
-            val json = context.assets.open("funko_data.json")
-                .bufferedReader().use { it.readText() }
-            val type = object : TypeToken<List<LocalFunkoRecord>>() {}.type
-            val records: List<LocalFunkoRecord> = gson.fromJson(json, type)
+            val records = mutableListOf<LocalFunkoRecord>()
+            context.assets.open("funko_data.json").bufferedReader().use { reader ->
+                val jr = com.google.gson.stream.JsonReader(reader)
+                jr.beginArray()
+                while (jr.hasNext()) {
+                    records.add(gson.fromJson(jr, LocalFunkoRecord::class.java))
+                }
+                jr.endArray()
+            }
             records.also { localDb = it }
         } catch (e: Exception) {
+            android.util.Log.e("FunkoLookup", "Failed to load funko_data.json: ${e.message}")
             emptyList<LocalFunkoRecord>().also { localDb = it }
         }
     }
@@ -90,14 +112,67 @@ class FunkoLookupService @Inject constructor(
     }
 
     private fun searchLocalByName(query: String): List<FunkoItem> {
-        val q = query.lowercase()
-        return loadLocalDb()
-            .filter { record ->
-                record.name?.lowercase()?.contains(q) == true ||
-                record.series?.lowercase()?.contains(q) == true
-            }
-            .take(20)
-            .map { it.toFunkoItem() }
+        val t0 = System.currentTimeMillis()
+        return try {
+            val q = query.lowercase()
+            // Diagnostic: count total catalog documents
+            val totalCount = com.couchbase.lite.QueryBuilder
+                .select(com.couchbase.lite.SelectResult.expression(com.couchbase.lite.Meta.id).`as`("id"))
+                .from(com.couchbase.lite.DataSource.database(db.getDatabase()))
+                .where(com.couchbase.lite.Expression.property("type")
+                    .equalTo(com.couchbase.lite.Expression.string("catalog")))
+                .execute().use { it.allResults().size }
+            val results = com.couchbase.lite.QueryBuilder
+                .select(
+                    com.couchbase.lite.SelectResult.expression(com.couchbase.lite.Meta.id).`as`("id"),
+                    com.couchbase.lite.SelectResult.all()
+                )
+                .from(com.couchbase.lite.DataSource.database(db.getDatabase()))
+                .where(
+                    com.couchbase.lite.Expression.property("type")
+                        .equalTo(com.couchbase.lite.Expression.string(
+                            com.funkodex.data.preload.CatalogPreloader.TYPE_CATALOG))
+                        .and(
+                            com.couchbase.lite.Function.lower(
+                                com.couchbase.lite.Expression.property("title"))
+                                .like(com.couchbase.lite.Expression.string("%$q%"))
+                            .or(
+                                com.couchbase.lite.Function.lower(
+                                    com.couchbase.lite.Expression.property("series"))
+                                    .like(com.couchbase.lite.Expression.string("%$q%"))
+                            )
+                        )
+                )
+                .limit(com.couchbase.lite.Expression.intValue(20))
+                .execute()
+                .allResults()
+                .mapNotNull { result ->
+                    val docId = result.getString("id") ?: return@mapNotNull null
+                    val doc = db.getDatabase().getDocument(docId) ?: return@mapNotNull null
+                    com.funkodex.data.model.FunkoItem(
+                        id           = docId,
+                        upc          = doc.getString("upc") ?: "",
+                        name         = doc.getString("title") ?: "",
+                        franchise    = doc.getString("series") ?: "",
+                        seriesNumber = doc.getString("seriesNumber") ?: "",
+                        category     = doc.getString("category") ?: "",
+                        imageUrl     = doc.getString("imageUrl") ?: "",
+                        retailPrice  = doc.getDouble("retailPrice"),
+                        isExclusive  = doc.getBoolean("isExclusive"),
+                        exclusiveRetailer = doc.getString("exclusiveRetailer") ?: "",
+                        isVaulted    = doc.getBoolean("isVaulted"),
+                    )
+                }
+            // If Couchbase returned nothing, catalog may still be loading — fall back to JSON
+            if (results.isEmpty()) loadLocalDb().filter { record ->
+                record.resolvedName?.lowercase()?.contains(q) == true ||
+                record.series?.any { it.lowercase().contains(q) } == true
+            }.take(20).map { it.toFunkoItem() }
+            else results
+        } catch (e: Exception) {
+            android.util.Log.e("FunkoLookup", "Couchbase search failed: ${e.message}")
+            emptyList()
+        }
     }
 
     // ─── Layer 2: Channel3 API ────────────────────────────────────────────────
@@ -111,11 +186,12 @@ class FunkoLookupService @Inject constructor(
                 .header("Authorization", "Bearer $key")
                 .header("User-Agent", USER_AGENT)
                 .build()
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) return@runCatching null
-            val body = response.body?.string() ?: return@runCatching null
-            val parsed = gson.fromJson(body, Channel3Response::class.java)
-            parsed.products?.firstOrNull()?.toFunkoItem()
+            client.newCall(request).execute().let { response ->
+                val body = response.use { it.body?.string() }
+                if (!response.isSuccessful || body == null) return@runCatching null
+                val parsed = gson.fromJson(body, Channel3Response::class.java)
+                parsed.products?.firstOrNull()?.toFunkoItem()
+            }
         }.getOrNull()
     }
 
@@ -129,11 +205,12 @@ class FunkoLookupService @Inject constructor(
                 .header("Authorization", "Bearer $key")
                 .header("User-Agent", USER_AGENT)
                 .build()
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) return@runCatching emptyList()
-            val body = response.body?.string() ?: return@runCatching emptyList()
-            val parsed = gson.fromJson(body, Channel3Response::class.java)
-            parsed.products?.map { it.toFunkoItem() } ?: emptyList()
+            client.newCall(request).execute().let { response ->
+                val body = response.use { it.body?.string() }
+                if (!response.isSuccessful || body == null) return@runCatching emptyList()
+                val parsed = gson.fromJson(body, Channel3Response::class.java)
+                parsed.products?.map { it.toFunkoItem() } ?: emptyList()
+            }
         }.getOrElse { emptyList() }
     }
 
@@ -145,11 +222,12 @@ class FunkoLookupService @Inject constructor(
                 .url("$UPCITEMDB_LOOKUP$upc")
                 .header("User-Agent", USER_AGENT)
                 .build()
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) return@runCatching null
-            val body = response.body?.string() ?: return@runCatching null
-            val parsed = gson.fromJson(body, UpcItemDbResponse::class.java)
-            parsed.items?.firstOrNull()?.toFunkoItem(upc)
+            client.newCall(request).execute().let { response ->
+                val body = response.use { it.body?.string() }
+                if (!response.isSuccessful || body == null) return@runCatching null
+                val parsed = gson.fromJson(body, UpcItemDbResponse::class.java)
+                parsed.items?.firstOrNull()?.toFunkoItem(upc)
+            }
         }.getOrNull()
     }
 
@@ -168,9 +246,11 @@ class FunkoLookupService @Inject constructor(
                 .header("User-Agent", "Mozilla/5.0 (Android) FunkoDex/1.0")
                 .header("Accept", "text/html")
                 .build()
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) return@runCatching null
-            val html = response.body?.string() ?: return@runCatching null
+            val html = client.newCall(request).execute().let { response ->
+                response.use { it.body?.string() }.also {
+                    if (!response.isSuccessful) return@runCatching null
+                }
+            } ?: return@runCatching null
 
             // Extract product name from <h4 class="product-name">
             val nameRegex  = Regex("""<h4[^>]*class="product-name"[^>]*>(.*?)</h4>""", RegexOption.DOT_MATCHES_ALL)
@@ -196,7 +276,8 @@ class FunkoLookupService @Inject constructor(
     /** Kenny Chan JSON record shape */
     data class LocalFunkoRecord(
         val handle: String? = null,
-        val name: String? = null,
+        val title: String? = null,       // Kenny Chan JSON uses "title" not "name"
+        val name: String? = null,        // fallback alias
         val imageName: String? = null,
         val series: List<String>? = null,
         val upc: String? = null,
@@ -206,12 +287,14 @@ class FunkoLookupService @Inject constructor(
         val vaulted: Boolean? = null,
         val price: Double? = null,
     ) {
+        // Resolve name from either field
+        val resolvedName get() = title ?: name
         fun toFunkoItem(upcOverride: String? = null): FunkoItem {
             val id = "funko::${upcOverride ?: upc ?: UUID.randomUUID()}"
             return FunkoItem(
                 id                = id,
                 upc               = upcOverride ?: upc ?: "",
-                name              = name ?: "Unknown",
+                name              = resolvedName ?: "Unknown",
                 franchise         = series?.firstOrNull() ?: "",
                 seriesNumber      = number ?: "",
                 category          = category ?: "",

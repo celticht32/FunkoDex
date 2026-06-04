@@ -3,6 +3,7 @@ package com.funkodex.data.export
 import android.content.Context
 import android.net.Uri
 import androidx.core.content.FileProvider
+import dagger.hilt.android.qualifiers.ApplicationContext
 import com.funkodex.data.model.FunkoItem
 import com.funkodex.data.model.SeriesSummary
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +20,7 @@ import javax.inject.Singleton
 
 @Singleton
 class CollectionExporter @Inject constructor(
-    private val context: Context
+    @ApplicationContext private val context: Context
 ) {
     companion object {
         private val DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd")

@@ -33,19 +33,25 @@ fun CollectionScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
 
-        // Search bar
-        SearchBar(
-            query           = uiState.searchQuery,
-            onQueryChange   = viewModel::setSearchQuery,
-            onSearch        = {},
-            active          = false,
-            onActiveChange  = {},
-            placeholder     = { Text("Search collection…") },
-            leadingIcon     = { Icon(Icons.Default.Search, null) },
-            trailingIcon    = {
+        // Search field — plain OutlinedTextField avoids SearchBar/DockedSearchBar
+        // focus system issues that cause Compose to deadlock on initialization.
+        val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+
+        // Prevent keyboard appearing automatically when screen loads
+        LaunchedEffect(Unit) { focusManager.clearFocus() }
+
+        OutlinedTextField(
+            value         = uiState.searchQuery,
+            onValueChange = viewModel::setSearchQuery,
+            placeholder   = { Text("Search collection…") },
+            leadingIcon   = { Icon(Icons.Default.Search, null) },
+            trailingIcon  = {
                 Row {
                     if (uiState.searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                        IconButton(onClick = {
+                            viewModel.setSearchQuery("")
+                            focusManager.clearFocus()
+                        }) {
                             Icon(Icons.Default.Clear, "Clear")
                         }
                     }
@@ -56,8 +62,15 @@ fun CollectionScreen(
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {}
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                imeAction = androidx.compose.ui.text.input.ImeAction.Done
+            ),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                onDone = { focusManager.clearFocus() }
+            ),
+            singleLine = true,
+            modifier   = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+        )
 
         // Filter chips
         if (showFilters) {
@@ -168,7 +181,12 @@ private fun FunkoGridCard(
         Column {
             Box {
                 AsyncImage(
-                    model             = item.imageUrl.ifEmpty { null },
+                    model             = when {
+                        item.imageUrl.isNotEmpty() -> item.imageUrl
+                        item.userPhoto != null     -> item.userPhoto
+                        item.thumbnailBlob != null -> item.thumbnailBlob
+                        else                       -> null
+                    },
                     contentDescription = item.name,
                     modifier          = Modifier
                         .fillMaxWidth()
@@ -176,7 +194,67 @@ private fun FunkoGridCard(
                         .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
                     contentScale      = ContentScale.Fit,
                     placeholder       = null,
+                    error             = if (item.userPhoto != null)
+                        coil.compose.rememberAsyncImagePainter(item.userPhoto)
+                    else if (item.thumbnailBlob != null)
+                        coil.compose.rememberAsyncImagePainter(item.thumbnailBlob)
+                    else null,
                 )
+                // Variant count badge — amber warning if any variant is missing a photo
+                if (item.variants.isNotEmpty()) {
+                    val anyMissingPhoto = item.variants.any { it.photo == null }
+                    Surface(
+                        modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
+                        shape    = RoundedCornerShape(4.dp),
+                        color    = if (anyMissingPhoto)
+                            MaterialTheme.colorScheme.errorContainer
+                        else
+                            MaterialTheme.colorScheme.secondaryContainer,
+                    ) {
+                        Row(
+                            modifier            = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            verticalAlignment   = Alignment.CenterVertically,
+                        ) {
+                            if (anyMissingPhoto) {
+                                Icon(Icons.Default.PhotoCamera, null,
+                                    modifier = Modifier.size(10.dp),
+                                    tint     = MaterialTheme.colorScheme.onErrorContainer)
+                            }
+                            Text(
+                                "${item.variants.size} VARIANT${if (item.variants.size > 1) "S" else ""}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (anyMissingPhoto)
+                                    MaterialTheme.colorScheme.onErrorContainer
+                                else
+                                    MaterialTheme.colorScheme.onSecondaryContainer,
+                            )
+                        }
+                    }
+                }
+                // Missing original badge — bottom-left to avoid overlapping EXCL top-right
+                if (item.isMissingOriginal) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(6.dp),
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                    ) {
+                        Row(
+                            modifier              = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            verticalAlignment     = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Default.Bookmark, null,
+                                modifier = Modifier.size(10.dp),
+                                tint     = MaterialTheme.colorScheme.onTertiaryContainer)
+                            Text("NO ORIGINAL",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer)
+                        }
+                    }
+                }
                 if (item.isExclusive) {
                     Surface(
                         modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),

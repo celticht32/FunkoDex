@@ -11,10 +11,10 @@ class FunkoLookupServiceTest {
     fun `LocalFunkoRecord toFunkoItem maps all fields`() {
         val record = FunkoLookupService.LocalFunkoRecord(
             name      = "Batman (1989)",
-            franchise = "DC Comics",
+            series    = listOf("DC Comics"),
             number    = "#01",
             upc       = "012345678901",
-            image     = "https://example.com/batman.png",
+            imageName = "https://example.com/batman.png",
             category  = "Pop! Movies",
             exclusive = "Target",
             vaulted   = false,
@@ -23,7 +23,7 @@ class FunkoLookupServiceTest {
         val item = record.toFunkoItem()
 
         assertEquals("Batman (1989)",                   item.name)
-        assertEquals("DC Comics",                       item.franchise)
+        assertEquals("DC Comics",                       item.franchise) // mapped from series[0]
         assertEquals("#01",                             item.seriesNumber)
         assertEquals("012345678901",                    item.upc)
         assertEquals("https://example.com/batman.png", item.imageUrl)
@@ -37,7 +37,7 @@ class FunkoLookupServiceTest {
     @Test
     fun `LocalFunkoRecord toFunkoItem handles null exclusive`() {
         val record = FunkoLookupService.LocalFunkoRecord(
-            name = "Test Pop", franchise = "Test", exclusive = null
+            name = "Test Pop", series = listOf("Test"), exclusive = null
         )
         val item = record.toFunkoItem()
         assertFalse(item.isExclusive)

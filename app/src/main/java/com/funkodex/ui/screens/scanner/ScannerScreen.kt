@@ -28,6 +28,8 @@ import android.os.VibratorManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -90,9 +92,7 @@ fun ScannerScreen(
         .firstOrNull { it.permission == Manifest.permission.CAMERA }?.status?.isGranted == true
 
     LaunchedEffect(cameraGranted) {
-        if (cameraGranted && state is ScanState.Idle) {
-            viewModel.startScanning()
-        }
+        // Don't auto-start — show idle screen first so user can choose scan or manual search
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -155,21 +155,29 @@ fun ScannerScreen(
             }
             is ScanState.ManualSearch -> {
                 ManualSearchSheet(
-                    state    = s,
+                    state          = s,
                     onQueryChange  = viewModel::onManualQueryChanged,
                     onSearch       = viewModel::submitManualSearch,
-                    onSelectResult = viewModel::selectManualResult,
+                    onToggleSelect = viewModel::toggleManualSelection,
+                    onConfirmBulk  = viewModel::confirmBulkAdd,
                     onDismiss      = viewModel::reset,
                 )
             }
             is ScanState.Saved -> {
-                SavedConfirmation(item = s.item, onNext = viewModel::startScanning, onDone = viewModel::reset)
+                SavedConfirmation(
+                    item          = s.item,
+                    onNext        = viewModel::reset,
+                    onDone        = viewModel::reset,
+                    onMarkVariant = viewModel::markVariantMissingOriginal,
+                )
             }
             is ScanState.AlreadyOwned -> {
                 AlreadyOwnedSheet(
-                    item      = s.item,
-                    onUpdate  = { viewModel.confirmUpdate(s.item) },
-                    onDismiss = viewModel::dismissPreview,
+                    item                    = s.item,
+                    onUpdate                = { viewModel.confirmUpdate(s.item) },
+                    onAddAsVariant          = { viewModel.addAsVariant(s.item) },
+                    onAddAsVariantMissing   = { viewModel.addAsVariantMissingOriginal(s.item) },
+                    onDismiss               = viewModel::dismissPreview,
                 )
             }
             is ScanState.NotFound -> {
@@ -206,10 +214,6 @@ private fun CameraPreview(
 
     Box(modifier = Modifier.fillMaxSize()) {
 
-        // E1: Batch scan mode sheet
-        if (showBatchScan) {
-            BatchScanSheet(onDismiss = { showBatchScan = false })
-        }
         AndroidView(
             factory  = { ctx ->
                 val previewView = PreviewView(ctx)
@@ -356,7 +360,12 @@ private fun FunkoPreviewSheet(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Image
+            // Close button row
+            Box(Modifier.fillMaxWidth()) {
+                IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd)) {
+                    Icon(Icons.Default.Close, "Close")
+                }
+            }
             if (item.imageUrl.isNotEmpty()) {
                 AsyncImage(
                     model             = item.imageUrl,
@@ -444,65 +453,239 @@ private fun FunkoPreviewSheet(
 
 // ─── Manual search ─────────────────────────────────────────────────────────────
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 private fun ManualSearchSheet(
     state: ScanState.ManualSearch,
     onQueryChange: (String) -> Unit,
     onSearch: (String) -> Unit,
-    onSelectResult: (FunkoItem) -> Unit,
+    onToggleSelect: (FunkoItem) -> Unit,
+    onConfirmBulk: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 40.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+
+    // Clear focus immediately on open so keyboard doesn't appear automatically
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(100)
+        keyboardController?.hide()
+        focusManager.clearFocus()
+    }
+
+    // Dismiss keyboard when results arrive so the full list is visible
+    LaunchedEffect(state.results) {
+        if (state.results.isNotEmpty()) {
+            keyboardController?.hide()
+            focusManager.clearFocus()
+        }
+    }
+
+    // Also hide keyboard when search is in progress
+    LaunchedEffect(state.isSearching) {
+        if (state.isSearching) {
+            keyboardController?.hide()
+            focusManager.clearFocus()
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Search Funko.com", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            val listHeight = maxHeight - 200.dp  // subtract header + search field + button
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+            ) {
+            // ── Header ──────────────────────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Search Catalog", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, "Close")
+                }
+            }
+
+            // ── Search field ─────────────────────────────────────────────
             OutlinedTextField(
                 value         = state.query,
                 onValueChange = onQueryChange,
-                placeholder   = { Text("e.g. Batman 1989, Mandalorian") },
-                modifier      = Modifier.fillMaxWidth(),
+                placeholder   = { Text("e.g. Stitch, Batman, Mandalorian") },
+                modifier      = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 singleLine    = true,
-                trailingIcon  = {
-                    if (state.isSearching) CircularProgressIndicator(Modifier.size(24.dp))
-                    else IconButton(onClick = { onSearch(state.query) }) {
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Done
+                ),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                    onDone = {
+                        keyboardController?.hide()
+                        focusManager.clearFocus()
+                        onSearch(state.query)
+                    }
+                ),
+                trailingIcon = {
+                    IconButton(onClick = {
+                        keyboardController?.hide()
+                        focusManager.clearFocus()
+                        onSearch(state.query)
+                    }, enabled = !state.isSearching) {
                         Icon(Icons.Default.Search, "Search")
                     }
                 }
             )
 
-            if (state.results.isNotEmpty()) {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(state.results) { item ->
-                        ListItem(
-                            headlineContent   = { Text(item.name, fontWeight = FontWeight.Medium) },
-                            supportingContent = { if (item.franchise.isNotEmpty()) Text(item.franchise) },
-                            leadingContent    = {
-                                AsyncImage(
-                                    model = item.imageUrl,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)),
-                                    contentScale = ContentScale.Fit,
+            Spacer(Modifier.height(8.dp))
+
+            // ── Status row ───────────────────────────────────────────────
+            when {
+                state.isSearching -> {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                }
+                state.results.isEmpty() && state.query.isNotBlank() -> {
+                    Text(
+                        "No results found",
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                state.results.isNotEmpty() -> {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "${state.results.size} result${if (state.results.size == 1) "" else "s"}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (state.selected.isNotEmpty()) {
+                            Text(
+                                "${state.selected.size} selected",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        }
+                    }
+
+                    HorizontalDivider()
+
+                    // ── Results list ─────────────────────────────────────
+                    LazyColumn(modifier = Modifier.height(listHeight)) {
+                        items(state.results) { item ->
+                            val isSelected = item.id in state.selected
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onToggleSelect(item) }
+                                    .background(
+                                        if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                        else MaterialTheme.colorScheme.surface
+                                    )
+                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Checkbox(
+                                    checked = isSelected,
+                                    onCheckedChange = { onToggleSelect(item) },
                                 )
-                            },
-                            modifier = Modifier.clickable { onSelectResult(item) }
+                                if (item.imageUrl.isNotEmpty()) {
+                                    AsyncImage(
+                                        model = item.imageUrl,
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .clip(RoundedCornerShape(6.dp)),
+                                        contentScale = ContentScale.Fit,
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(Icons.Default.Image, null, Modifier.size(24.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        item.name,
+                                        fontWeight = FontWeight.Medium,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    )
+                                    if (item.franchise.isNotEmpty()) {
+                                        Text(
+                                            buildString {
+                                                append(item.franchise)
+                                                if (item.seriesNumber.isNotEmpty()) append("  #${item.seriesNumber}")
+                                            },
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                        )
+                                    }
+                                }
+                            }
+                            HorizontalDivider(thickness = 0.5.dp)
+                        }
+                    }
+
+                    // ── Add button ───────────────────────────────────────
+                    HorizontalDivider()
+                    Button(
+                        onClick = onConfirmBulk,
+                        enabled = state.selected.isNotEmpty(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        Icon(Icons.Default.Add, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (state.selected.isEmpty()) "Select items to add"
+                            else "Add ${state.selected.size} to collection"
                         )
                     }
                 }
             }
-        }
+        } // BoxWithConstraints
     }
+}
 }
 
 // ─── Saved confirmation ────────────────────────────────────────────────────────
 
 @Composable
-private fun SavedConfirmation(item: FunkoItem, onNext: () -> Unit, onDone: () -> Unit) {
+private fun SavedConfirmation(
+    item:           FunkoItem,
+    onNext:         () -> Unit,
+    onDone:         () -> Unit,
+    onMarkVariant:  () -> Unit,
+) {
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -514,9 +697,18 @@ private fun SavedConfirmation(item: FunkoItem, onNext: () -> Unit, onDone: () ->
         Text(item.name, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(32.dp))
         Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.QrCodeScanner, null)
+            Icon(Icons.Default.Add, null)
             Spacer(Modifier.width(8.dp))
-            Text("Scan another")
+            Text("Add another")
+        }
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(
+            onClick  = onMarkVariant,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(Icons.Default.Bookmark, null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("I only have the variant — want the original")
         }
         Spacer(Modifier.height(12.dp))
         OutlinedButton(onClick = onDone, modifier = Modifier.fillMaxWidth()) { Text("Done") }
@@ -544,7 +736,8 @@ private fun ErrorSheet(message: String, onRetry: () -> Unit, onManual: () -> Uni
 
 // ─── CameraX bootstrap ─────────────────────────────────────────────────────────
 
-private fun startCamera(
+@OptIn(ExperimentalGetImage::class)
+internal fun startCamera(
     context: Context,
     lifecycleOwner: LifecycleOwner,
     previewView: PreviewView,
@@ -579,62 +772,80 @@ private fun startCamera(
     }, ContextCompat.getMainExecutor(context))
 }
 
-// ─── ML Kit barcode analyzer ───────────────────────────────────────────────────
-
-@OptIn(ExperimentalGetImage::class)
-
 // ─── AlreadyOwned sheet ────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AlreadyOwnedSheet(
-    item:      FunkoItem,
-    onUpdate:  () -> Unit,
-    onDismiss: () -> Unit,
+    item:                  FunkoItem,
+    onUpdate:              () -> Unit,
+    onAddAsVariant:        () -> Unit,
+    onAddAsVariantMissing: () -> Unit,
+    onDismiss:             () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
-            modifier              = Modifier
+            modifier            = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 8.dp)
                 .padding(bottom = 32.dp),
-            verticalArrangement   = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             Row(
+                modifier              = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment     = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Default.CheckCircle,
-                    contentDescription = null,
+                Icon(Icons.Default.CheckCircle, null,
                     tint     = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp))
-                Text("Already in your collection",
-                    style      = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold)
+                    modifier = Modifier.size(24.dp))
+                Column {
+                    Text("Already in your collection",
+                        style      = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold)
+                    Text(item.name,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
-            Text(item.name,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface)
-            if (item.franchise.isNotEmpty()) {
-                Text(item.franchise,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text(HelpContent.SCANNER_ALREADY_OWNED,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
             HorizontalDivider()
-            Row(
-                modifier              = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
-                    Text("Done")
-                }
-                Button(onClick = { onUpdate(); onDismiss() }, modifier = Modifier.weight(1f)) {
-                    Text("Update item")
-                }
-            }
+
+            // Add as variant — same item, different version
+            ListItem(
+                headlineContent   = { Text("I have a variant of this", fontWeight = FontWeight.Medium) },
+                supportingContent = { Text("Adds a variant copy to the existing record — same Funko, different version") },
+                leadingContent    = { Icon(Icons.Default.PhotoLibrary, null,
+                    tint = MaterialTheme.colorScheme.secondary) },
+                modifier = Modifier.clickable { onAddAsVariant(); onDismiss() }
+            )
+            HorizontalDivider()
+
+            // Have variant, missing original
+            ListItem(
+                headlineContent   = { Text("I have a variant but NOT the original", fontWeight = FontWeight.Medium) },
+                supportingContent = { Text("Adds as a variant and flags the original on your want list") },
+                leadingContent    = { Icon(Icons.Default.Bookmark, null,
+                    tint = MaterialTheme.colorScheme.tertiary) },
+                modifier = Modifier.clickable { onAddAsVariantMissing(); onDismiss() }
+            )
+            HorizontalDivider()
+
+            // Update existing
+            ListItem(
+                headlineContent   = { Text("Update existing record", fontWeight = FontWeight.Medium) },
+                supportingContent = { Text("Edit condition, price, or notes on the existing item") },
+                leadingContent    = { Icon(Icons.Default.Edit, null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                modifier = Modifier.clickable { onUpdate(); onDismiss() }
+            )
+            HorizontalDivider()
+
+            // Dismiss
+            ListItem(
+                headlineContent = { Text("Cancel", color = MaterialTheme.colorScheme.error) },
+                leadingContent  = { Icon(Icons.Default.Close, null,
+                    tint = MaterialTheme.colorScheme.error) },
+                modifier = Modifier.clickable { onDismiss() }
+            )
         }
     }
 }
@@ -662,15 +873,24 @@ private fun NotFoundSheet(
             verticalArrangement   = Arrangement.spacedBy(10.dp),
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment     = Alignment.CenterVertically,
+                modifier              = Modifier.fillMaxWidth(),
             ) {
-                Icon(Icons.Default.SearchOff, null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp))
-                Text(HelpContent.SCANNER_NOT_FOUND_TITLE,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment     = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Default.SearchOff, null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp))
+                    Text(HelpContent.SCANNER_NOT_FOUND_TITLE,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold)
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, "Close")
+                }
             }
             // Manual UPC entry — for when the camera couldn't resolve the barcode
             var manualUpc by remember { mutableStateOf(state.upc) }
@@ -710,7 +930,10 @@ private fun NotFoundSheet(
                 Text("Tap to match this UPC to an item:",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.heightIn(max = 300.dp)
+                ) {
                     items(state.results) { item ->
                         Card(
                             onClick   = { onSelectMatch(item) },

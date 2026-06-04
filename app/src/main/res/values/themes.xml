@@ -1,7 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Base application theme — no action bar since Compose handles the UI -->
+    <!-- Base application theme -->
     <style name="Theme.FunkoDex" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@android:color/white</item>
+    </style>
+
+    <!--
+        System splash screen (Android 12+) shown before MainActivity launches.
+        Uses the Celtic heart icon centered on navy. Duration is 0 so it
+        transitions immediately to our Compose SplashScreen.
+    -->
+    <style name="Theme.FunkoDex.Splash" parent="Theme.FunkoDex">
+        <!-- Navy background matching SplashScreen.kt -->
+        <item name="android:windowSplashScreenBackground">#0B1929</item>
+        <!-- Celtic heart icon — fits the 66% safe circle zone -->
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_icon</item>
+        <!-- Match background so icon blends seamlessly -->
+        <item name="android:windowSplashScreenIconBackgroundColor">#0B1929</item>
+        <!-- Hand off to Compose splash immediately -->
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+        <item name="postSplashScreenTheme">@style/Theme.FunkoDex</item>
     </style>
 </resources>

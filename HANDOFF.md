@@ -27,6 +27,7 @@ See `DEVICE_TEST_PLAN.md` for the 8 on-device tests to run.
 ### Already resolved this session
 - [x] `android:enableOnBackInvokedCallback="true"` manifest warning
 - [x] Diagnostic logs removed from FunkoLookupService and CatalogPreloader
+- [x] Bottom nav label renamed: "Collection" → "My Dex" (fit constraint)
 
 ---
 
@@ -50,6 +51,7 @@ ui/screens/scanner/ScannerScreen.kt + ScannerViewModel.kt
 ui/screens/settings/SettingsScreen.kt + DatabaseTransferViewModel.kt
 ui/screens/reports/ReportsScreen.kt + ReportsViewModel.kt
 ui/screens/collection/CollectionScreen.kt
+ui/screens/collection/CollectionScreen.kt   — "My Dex" tab
 ```
 
 **Important invariants:**

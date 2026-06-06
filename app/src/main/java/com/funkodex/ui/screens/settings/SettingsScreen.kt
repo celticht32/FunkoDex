@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.funkodex.data.preload.ImportProgress
 import com.funkodex.ui.help.HelpCard
 import com.funkodex.util.FunkoDexLogger
 import com.funkodex.util.LogLevel
@@ -35,25 +36,37 @@ fun SettingsScreen(
     dbTransferViewModel: DatabaseTransferViewModel = hiltViewModel(),
     catalogSettingsViewModel: CatalogSettingsViewModel = hiltViewModel(),
 ) {
-    val currentTheme  by viewModel.currentTheme.collectAsState()
-    val logLevel      by viewModel.logLevel.collectAsState()
-    val transferState by dbTransferViewModel.state.collectAsState()
+    val currentTheme   by viewModel.currentTheme.collectAsState()
+    val logLevel       by viewModel.logLevel.collectAsState()
+    val transferState  by dbTransferViewModel.state.collectAsState()
+    val importProgress by viewModel.importProgress.collectAsState()
     val context = LocalContext.current
 
     val shareLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { dbTransferViewModel.reset() }
 
-    // File picker for database import
+    // File picker for database import (backup restore)
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let {
-            // Take persistable read permission so we can open the file
             context.contentResolver.takePersistableUriPermission(
                 it, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
             dbTransferViewModel.importDatabase(it)
+        }
+    }
+
+    // File picker for enriched catalog import
+    val enrichedCatalogLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            context.contentResolver.takePersistableUriPermission(
+                it, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            viewModel.importEnrichedCatalog(it)
         }
     }
 
@@ -133,7 +146,6 @@ fun SettingsScreen(
         )
     }
 
-    // Import success / error snackbar feedback
     if (transferState is DatabaseTransferState.ForceRestoreSuccess) {
         AlertDialog(
             onDismissRequest = { dbTransferViewModel.reset() },
@@ -170,6 +182,87 @@ fun SettingsScreen(
                 TextButton(onClick = { dbTransferViewModel.reset() }) { Text("Done") }
             }
         )
+    }
+
+    // ── Enriched catalog import dialogs ────────────────────────────────────
+    importProgress?.let { progress ->
+        if (progress.error != null) {
+            AlertDialog(
+                onDismissRequest = { viewModel.clearImportProgress() },
+                icon    = { Icon(Icons.Default.Error, null, tint = MaterialTheme.colorScheme.error) },
+                title   = { Text("Import failed") },
+                text    = { Text(progress.error, style = MaterialTheme.typography.bodyMedium) },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { viewModel.clearImportProgress() }) { Text("Close") }
+                }
+            )
+        } else if (!progress.done) {
+            // Progress dialog — non-dismissable while running
+            AlertDialog(
+                onDismissRequest = { /* non-dismissable */ },
+                icon  = { CircularProgressIndicator(modifier = Modifier.size(32.dp)) },
+                title = { Text("Importing catalog…") },
+                text  = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (progress.total > 0) {
+                            LinearProgressIndicator(
+                                progress = { progress.processed.toFloat() / progress.total },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Text(
+                                "${progress.processed} / ${progress.total} records",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            Text("Reading file…", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {},
+            )
+        } else {
+            // Result summary dialog
+            val result = progress.result
+            AlertDialog(
+                onDismissRequest = { viewModel.clearImportProgress() },
+                icon  = { Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary) },
+                title = { Text("Import complete") },
+                text  = {
+                    if (result != null) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("${result.enriched} existing records updated",
+                                style = MaterialTheme.typography.bodyMedium)
+                            Text("${result.added} new records added",
+                                style = MaterialTheme.typography.bodyMedium)
+                            if (result.skipped > 0)
+                                Text("${result.skipped} records skipped (missing handle/title)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (result.errors > 0)
+                                Text("${result.errors} errors",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Completed in ${result.durationMs / 1000}s",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        Text("Import finished.", style = MaterialTheme.typography.bodyMedium)
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { viewModel.clearImportProgress() }) { Text("Done") }
+                }
+            )
+        }
     }
 
     Scaffold(
@@ -265,7 +358,6 @@ fun SettingsScreen(
                         onClick  = onNavigateToCategoryFilter
                     )
                     HorizontalDivider()
-                    // Send to another phone
                     SettingsRow(
                         icon        = Icons.Default.PhoneAndroid,
                         title       = "Send to another phone",
@@ -275,7 +367,6 @@ fun SettingsScreen(
                     )
                     HorizontalDivider()
 
-                    // E2: Google Drive backup
                     if (driveAccount == null) {
                         SettingsRow(
                             icon     = Icons.Default.CloudUpload,
@@ -304,7 +395,6 @@ fun SettingsScreen(
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-                    // F4: Community contribution toggle
                     val config by catalogSettingsViewModel.config.collectAsState()
                     ListItem(
                         headlineContent   = { Text("Contribute to community database", fontWeight = FontWeight.Medium) },
@@ -495,7 +585,31 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            // ── About ────────────────────────────────────────────────────────
+            // ── Catalog ───────────────────────────────────────────────────────
+            SectionHeader("Catalog")
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                // Snapshot to a local val so Kotlin can smart-cast inside lambdas
+                val currentImportProgress = importProgress
+                val importRunning = currentImportProgress != null
+                    && !currentImportProgress.done
+                    && currentImportProgress.error == null
+                SettingsRow(
+                    icon      = Icons.Default.CloudDownload,
+                    title     = "Import Enriched Catalog",
+                    subtitle  = "Load enriched funko.com and pricing data from a JSON file",
+                    isLoading = importRunning,
+                    onClick   = {
+                        if (!importRunning) {
+                            enrichedCatalogLauncher.launch(arrayOf("application/json", "*/*"))
+                        }
+                    }
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // ── Diagnostics ──────────────────────────────────────────────────
             SectionHeader("Diagnostics")
 
             var showDiagnosticsDialog by remember { mutableStateOf(false) }
@@ -728,7 +842,6 @@ fun CatalogDataSection(
     var ebayConnected       by remember { mutableStateOf(viewModel.isEbayConnected()) }
     val context             = LocalContext.current
 
-    // Listen for OAuth success/failure broadcasts from OAuthCallbackActivity
     DisposableEffect(Unit) {
         val receiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(ctx: android.content.Context?, intent: android.content.Intent?) {
@@ -760,7 +873,6 @@ fun CatalogDataSection(
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
-                // Auto-refresh toggle
                 Row(
                     modifier              = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -777,7 +889,6 @@ fun CatalogDataSection(
                 if (config.enabled) {
                     HorizontalDivider()
 
-                    // Interval selector
                     Column {
                         Text("Refresh interval", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -794,7 +905,6 @@ fun CatalogDataSection(
                         }
                     }
 
-                    // WiFi only
                     Row(
                         modifier              = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -808,7 +918,6 @@ fun CatalogDataSection(
                         Switch(checked = config.wifiOnly, onCheckedChange = viewModel::setWifiOnly)
                     }
 
-                    // Last refresh
                     config.lastRefreshed?.let { date ->
                         Text(
                             "Last refreshed: $date",
@@ -817,7 +926,6 @@ fun CatalogDataSection(
                         )
                     }
 
-                    // Refresh now button
                     OutlinedButton(
                         onClick  = viewModel::refreshNow,
                         modifier = Modifier.fillMaxWidth()
@@ -830,7 +938,6 @@ fun CatalogDataSection(
             }
         }
 
-        // Data sources card
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Lookup sources", fontWeight = FontWeight.Medium)
@@ -840,7 +947,6 @@ fun CatalogDataSection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                // Kenny Chan — always on
                 SourceRow(
                     name     = "Kenny Chan dataset",
                     detail   = "~23,000 items · free · offline · auto-updates",
@@ -849,7 +955,6 @@ fun CatalogDataSection(
                     onToggle = {}
                 )
 
-                // Channel3 API
                 SourceRow(
                     name    = "Channel3 API",
                     detail  = if (config.channel3ApiKey.isNotEmpty())
@@ -860,7 +965,6 @@ fun CatalogDataSection(
                     onToggle = { showChannel3Dialog = true }
                 )
 
-                // HobbyDB OAuth
                 SourceRow(
                     name    = "HobbyDB / Pop Price Guide",
                     detail  = if (hobbyDbConnected)
@@ -878,7 +982,6 @@ fun CatalogDataSection(
                         }
                     }
                 )
-                // eBay OAuth
                 SourceRow(
                     name    = "eBay sold listings",
                     detail  = if (ebayConnected)
@@ -900,7 +1003,6 @@ fun CatalogDataSection(
         }
     }
 
-    // Channel3 key dialog
     if (showChannel3Dialog) {
         AlertDialog(
             onDismissRequest = { showChannel3Dialog = false },

@@ -1,13 +1,16 @@
 package com.funkodex.ui.screens.settings
 
 import android.content.Context
+import android.net.Uri
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.funkodex.util.FunkoDexLogger
-import com.funkodex.util.LogLevel
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.funkodex.data.preload.CatalogImporter
+import com.funkodex.data.preload.ImportProgress
+import com.funkodex.util.FunkoDexLogger
+import com.funkodex.util.LogLevel
 import com.funkodex.ui.theme.AppTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -48,6 +51,7 @@ class UserPreferencesRepository @Inject constructor(
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val prefs: UserPreferencesRepository,
+    private val catalogImporter: CatalogImporter,
 ) : ViewModel() {
 
     val currentTheme: StateFlow<AppTheme> = prefs.appTheme
@@ -62,5 +66,23 @@ class SettingsViewModel @Inject constructor(
 
     fun setLogLevel(level: LogLevel) {
         viewModelScope.launch { prefs.setLogLevel(level) }
+    }
+
+    // ── Enriched catalog import ────────────────────────────────────────────
+
+    private val _importProgress = MutableStateFlow<ImportProgress?>(null)
+    val importProgress: StateFlow<ImportProgress?> = _importProgress.asStateFlow()
+
+    fun importEnrichedCatalog(uri: Uri) {
+        viewModelScope.launch {
+            _importProgress.value = ImportProgress(total = 0, done = false)
+            catalogImporter.importFromUri(uri).collect { progress ->
+                _importProgress.value = progress
+            }
+        }
+    }
+
+    fun clearImportProgress() {
+        _importProgress.value = null
     }
 }

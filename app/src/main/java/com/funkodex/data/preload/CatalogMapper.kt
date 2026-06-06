@@ -8,18 +8,16 @@ package com.funkodex.data.preload
  * that CatalogRefreshWorker can call the same logic without coupling to
  * the preloader class or duplicating code.
  *
- * This is the fix for the A1 stub in CatalogRefreshWorker — the worker
- * was incrementing a counter but never actually writing records because
- * mapRecord() was private inside CatalogPreloader.
+ * MIT License — Copyright (c) 2026 Chris Ahrendt
  */
 object CatalogMapper {
 
-    // ── Field name constants (mirrors CatalogPreloader.companion) ─────────────
+    // ── Field name constants ───────────────────────────────────────────────
     const val TYPE_CATALOG          = "catalog"
     const val FIELD_TYPE            = "type"
     const val FIELD_HANDLE          = "handle"
     const val FIELD_TITLE           = "title"
-    const val FIELD_IMAGE_URL       = "imageUrl"
+    const val FIELD_IMAGE_URL       = "imageUrl"        // HobbyDB CDN — never overwrite
     const val FIELD_SERIES_LIST     = "seriesList"
     const val FIELD_PRIMARY_SERIES  = "series"
     const val FIELD_CATEGORY        = "category"
@@ -27,13 +25,22 @@ object CatalogMapper {
     const val FIELD_EXCL_RETAILER   = "exclusiveRetailer"
     const val FIELD_IS_CHASE        = "isChase"
     const val FIELD_NUMBER          = "seriesNumber"
-    // Phase A2 — global meta additions
     const val FIELD_UPC             = "upc"
     const val FIELD_SOURCE          = "source"
     const val FIELD_LAST_UPDATED    = "lastUpdated"
     const val FIELD_CONTRIBUTED_BY  = "contributedBy"
     const val FIELD_RETAIL_PRICE    = "retailPrice"
     const val FIELD_IS_VAULTED      = "isVaulted"
+
+    // ── Enriched catalog fields (funko.com + PriceCharting) ────────────────
+    const val FIELD_IS_AVAILABLE    = "isAvailable"     // funko.com availability flag
+    const val FIELD_PRODUCT_URL     = "productUrl"      // funko.com product page URL
+    const val FIELD_FUNKO_IMAGE     = "funkoImageUrl"   // funko.com CDN image (separate from imageUrl)
+    const val FIELD_FUNKO_SHOP_ID   = "funkoShopId"     // Funko's internal SFCC product ID (pid)
+    const val FIELD_MKT_VALUE_LOOSE = "marketValueLoose" // PriceCharting OOB / loose price
+    const val FIELD_MKT_VALUE_NEW   = "marketValueNew"   // PriceCharting sealed / new price
+    const val FIELD_PC_ID           = "pricechartingId"  // PriceCharting product ID
+    const val FIELD_PC_URL          = "pricechartingUrl" // PriceCharting page URL
 
     private val EXCLUSIVE_KEYWORDS = listOf(
         "exclusive", "funko-shop", "sdcc", "nycc", "eccc", "c2e2",
@@ -68,30 +75,33 @@ object CatalogMapper {
     private val NUMBER_REGEX = Regex("""#\d+""")
 
     /**
-     * Map a raw Kenny Chan record to a Couchbase document property map.
+     * Map a raw Kenny Chan or enriched record to a Couchbase document property map.
      * Returns null if essential fields (handle, title) are missing.
      *
-     * @param handle   The Kenny Chan slug (used as the Couchbase doc ID suffix)
-     * @param title    Product title
-     * @param imageName HobbyDB CDN image URL
-     * @param seriesList Raw series/tag array from Kenny Chan
-     * @param upc      UPC code if known (null for initial Kenny Chan load)
-     * @param price    Retail price if known
-     * @param vaulted  Whether this item is vaulted
-     * @param source   Data source label (e.g. "KENNY_CHAN", "CHANNEL3")
+     * Enriched fields are all optional (null = not present in source, omitted from doc).
+     * imageUrl (HobbyDB) is NEVER overwritten by funkoImageUrl — they are separate fields.
      */
     fun mapRecord(
-        handle:      String,
-        title:       String,
-        imageName:   String   = "",
-        seriesList:  List<String> = emptyList(),
-        upc:         String?  = null,
-        price:       Double   = 0.0,
-        vaulted:     Boolean  = false,
-        source:      String   = "KENNY_CHAN",
+        handle:           String,
+        title:            String,
+        imageName:        String        = "",
+        seriesList:       List<String>  = emptyList(),
+        upc:              String?       = null,
+        price:            Double        = 0.0,
+        vaulted:          Boolean       = false,
+        source:           String        = "KENNY_CHAN",
+        // Enriched fields — funko.com
+        available:        Boolean?      = null,
+        productUrl:       String?       = null,
+        funkoImageUrl:    String?       = null,
+        funkoShopId:      String?       = null,
+        // Enriched fields — PriceCharting
+        marketValueLoose: String?       = null,
+        marketValueNew:   String?       = null,
+        pricechartingId:  String?       = null,
+        pricechartingUrl: String?       = null,
     ): Map<String, Any> {
 
-        // Primary series = first non-Pop!/non-exclusive/non-chase tag
         val primarySeries = seriesList.firstOrNull { s ->
             !s.startsWith("Pop!", ignoreCase = true) &&
             !s.equals("Pop! Vinyl", ignoreCase = true) &&
@@ -99,21 +109,13 @@ object CatalogMapper {
             !s.equals("Chase Pieces", ignoreCase = true)
         } ?: seriesList.firstOrNull() ?: ""
 
-        // Category = the Pop! product line tag
         val category = seriesList
             .firstOrNull { it.startsWith("Pop!", ignoreCase = true) } ?: ""
 
-        // Exclusive detection
         val isExclusive       = seriesList.any { isExclusiveSeries(it) }
         val exclusiveRetailer = if (isExclusive) extractRetailer(seriesList) else ""
-
-        // Chase detection
-        val isChase = seriesList.any {
-            it.equals("Chase Pieces", ignoreCase = true)
-        }
-
-        // Series number from title (e.g. "Batman #01" → "#01")
-        val seriesNumber = NUMBER_REGEX.find(title)?.value ?: ""
+        val isChase           = seriesList.any { it.equals("Chase Pieces", ignoreCase = true) }
+        val seriesNumber      = NUMBER_REGEX.find(title)?.value ?: ""
 
         return buildMap {
             put(FIELD_TYPE,           TYPE_CATALOG)
@@ -131,7 +133,17 @@ object CatalogMapper {
             put(FIELD_IS_VAULTED,     vaulted)
             put(FIELD_SOURCE,         source)
             put(FIELD_LAST_UPDATED,   java.time.LocalDate.now().toString())
-            if (upc != null) put(FIELD_UPC, upc)
+            if (upc != null)                          put(FIELD_UPC,             upc)
+            // Enriched — funko.com
+            if (available != null)                    put(FIELD_IS_AVAILABLE,    available)
+            if (!productUrl.isNullOrBlank())          put(FIELD_PRODUCT_URL,     productUrl)
+            if (!funkoImageUrl.isNullOrBlank())       put(FIELD_FUNKO_IMAGE,     funkoImageUrl)
+            if (!funkoShopId.isNullOrBlank())         put(FIELD_FUNKO_SHOP_ID,   funkoShopId)
+            // Enriched — PriceCharting
+            if (!marketValueLoose.isNullOrBlank())    put(FIELD_MKT_VALUE_LOOSE, marketValueLoose)
+            if (!marketValueNew.isNullOrBlank())      put(FIELD_MKT_VALUE_NEW,   marketValueNew)
+            if (!pricechartingId.isNullOrBlank())     put(FIELD_PC_ID,           pricechartingId)
+            if (!pricechartingUrl.isNullOrBlank())    put(FIELD_PC_URL,          pricechartingUrl)
         }
     }
 

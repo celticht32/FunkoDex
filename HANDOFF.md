@@ -1,7 +1,7 @@
 # FunkoDex — Session Handoff
-**Date:** 2026-06-04
-**Sessions completed:** 1 (initial build), 2 (enricher/catalog import), 3 (UI/variant/photo/backup)
-**Next session focus:** Device testing results + GoogleSignIn → Credential Manager migration
+**Date:** 2026-06-12
+**Sessions completed:** 1 (initial build), 2 (enricher/catalog import), 3 (UI/variant/photo/backup), 4 (enriched catalog import implementation + handle repair)
+**Next session focus:** Device testing results (incl. on-device enriched import run) + GoogleSignIn → Credential Manager migration
 
 ---
 
@@ -22,13 +22,13 @@ See `DEVICE_TEST_PLAN.md` for the 8 on-device tests to run.
 ### Pre-Play Store blockers remaining
 - [ ] GoogleSignIn → Credential Manager migration (significant — own session)
 - [ ] Community contribution Cloudflare Worker deployment (infrastructure)
-- [ ] Device testing results (may surface new bugs)
-- [ ] Enriched catalog import feature (see section below — spec complete, not implemented)
+- [ ] Device testing results (may surface new bugs) — now includes on-device enriched import run
 
 ### Already resolved
 - [x] `android:enableOnBackInvokedCallback="true"` manifest warning
 - [x] Diagnostic logs removed from FunkoLookupService and CatalogPreloader
 - [x] All emulator tests passing
+- [x] Enriched catalog import feature (implemented Session 4 — see section below)
 
 ---
 
@@ -105,83 +105,68 @@ Reference: https://developer.android.com/identity/sign-in/credential-manager-siw
 
 ---
 
-## Enriched Catalog Import Feature (Spec Complete — Not Implemented)
+## Enriched Catalog Import Feature (Implemented — Session 4)
 
 ### What it is
 A Settings menu item — **"Import Enriched Catalog"** — that lets the user pick a
 `funko_data_enriched.json` file from their device and merge it into the live Couchbase
-catalog. Handles both:
-- **New fields on existing catalog docs** (upsert / merge by handle)
-- **Net-new records** not in the original HobbyDB/Kenny Chan dataset (insert)
+catalog. Existing catalog docs are enriched (merge by handle, then unambiguous
+normalized-title fallback); net-new records are inserted.
 
-### Files to create/touch
+### As-built file map
 ```
 app/src/main/java/com/funkodex/data/preload/
-  EnrichedRecord.kt      ← new data class
-  CatalogImporter.kt     ← new, core upsert + insert logic
-  CatalogMapper.kt       ← add new field constants
+  EnrichedRecord.kt      — Gson target; all fields nullable. Unknown JSON keys
+                           (hdbid, hdbChecked, franchise, funkoSection,
+                           funkoNumberFromTitle) are ignored by Gson — harmless.
+  CatalogImporter.kt     — core logic (see behaviour below)
+  CatalogMapper.kt       — field constants incl. FIELD_FUNKO_NUMBER, FIELD_POP_TYPE;
+                           mapRecord() extended with defaulted enriched params
 
 app/src/main/java/com/funkodex/ui/screens/settings/
-  SettingsScreen.kt      ← menu item + file picker + progress dialog
-  SettingsViewModel.kt   ← importEnrichedCatalog() + importProgress flow
+  SettingsScreen.kt      — "Import Enriched Catalog" row (Catalog section), OpenDocument
+                           picker, non-dismissable progress dialog, result + error dialogs
+  SettingsViewModel.kt   — importEnrichedCatalog(uri) + importProgress StateFlow
 ```
 
-### Upsert logic
-Match by `handle` exact match first, then normalized title match. Low match rate (~5%)
-expected between funko.com and HobbyDB titles due to different prefix formats.
-```kotlin
-val existing = database.getDocument("catalog::${record.handle}")
-if (existing != null) {
-    val mutable = existing.toMutable()
-    // only write new fields — never overwrite imageUrl, title, handle, seriesList
-    record.funkoImageUrl?.let  { mutable.setString(FIELD_FUNKO_IMAGE_URL, it) }
-    record.retailPrice?.let    { mutable.setDouble(FIELD_RETAIL_PRICE, it) }
-    record.popType?.let        { mutable.setString(FIELD_POP_TYPE, it) }
-    record.funkoNumber?.let    { mutable.setString(FIELD_FUNKO_NUMBER, it) }
-    // ... other enriched fields
-    database.save(mutable)
-} else {
-    // full insert via CatalogMapper.mapRecord(...)
-}
-```
+### Importer behaviour (as built)
+1. **Match by handle** — `catalog::$handle` exact lookup.
+2. **Title fallback** — one upfront query builds normalized-title → docId map over all
+   catalog docs; titles shared by >1 doc are removed as ambiguous (a fallback merge must
+   be unambiguous). Index failure degrades to handle-only matching.
+3. **Merge path** — writes only non-null enriched fields (isAvailable, productUrl,
+   funkoImageUrl, funkoShopId, funkoNumber, popType, retailPrice, marketValue*, pc*).
+   UPC written only if doc has none. NEVER overwrites imageUrl, title, handle, seriesList.
+   Merges are NOT filtered by the non-Pop regex — enriching an existing doc is harmless.
+4. **Insert path** —
+   - Non-Pop filter (spec regex, verbatim) skips merchandise.
+   - **Handle repair:** funko.com Pass-2 emits page filenames (`^\d+\.html$`, e.g.
+     `91991.html`) as handles for records it could not match to HobbyDB. These are
+     replaced with a title-derived slug (lowercase, non-alphanumeric runs → single
+     hyphen, trimmed). Verified against the 2026-06-12 enriched JSON: 729/729 clean,
+     zero collisions internally and against the 23,940 base handles.
+   - **Never-clobber guard:** if a doc already exists at the insert docId, the record
+     is skipped — `database.save(MutableDocument(id, map))` would otherwise replace the
+     existing doc's entire content.
+5. Batches of 500 inside `database.inBatch(UnitOfWork { … })`; `ImportProgress` emitted
+   per batch; final emission carries `ImportResult(enriched, added, skipped, errors,
+   durationMs)`.
 
-### Non-Pop filter — add to CatalogImporter
-```kotlin
-private val NON_POP_TITLE = Regex(
-    "\\b(tee|shirt|backpack|bag|wallet|keychain|soda|mystery minis|wacky wobbler|" +
-    "funkoverse|bitty pop|pocket pop|pin set|enamel pin|dorbz|hikari|rock candy|" +
-    "fabrikations|paka paka|plush|mug|cup|cushion)\\b",
-    RegexOption.IGNORE_CASE
-)
-private fun isStandardPop(record: EnrichedRecord): Boolean {
-    if (NON_POP_TITLE.containsMatchIn(record.title ?: "")) return false
-    val series = record.series?.map { it.lowercase() } ?: return true
-    return listOf("pop! tees","loungefly","mystery minis","wacky wobblers",
-        "vinyl soda","funkoverse","dorbz","rock candy","hikari","fabrikations")
-        .none { tag -> series.any { it.contains(tag) } }
-}
-```
+### Expected result for funko_data_enriched.json (2026-06-12, 14,314 records)
+13,583 enriched · 2 title-fallback merges · ~725 added · ~4 skipped.
+On-device run still pending (add to device test pass).
 
-### Progress / result data classes
-```kotlin
-data class ImportProgress(val processed: Int, val total: Int, val enriched: Int, val added: Int)
-data class ImportResult(val enriched: Int, val added: Int, val skipped: Int, val errors: Int, val durationMs: Long)
-```
+### Accepted spec behaviour (do not "fix" without discussion)
+- `NON_POP_TITLE` regex is verbatim from spec and false-positives on real Pops whose
+  titles contain shirt/soda/bag as descriptors — e.g. "Hulk Hogan (Tearing Shirt)",
+  "LA Knight (Yellow Shirt)", "Jinu (Soda Pop)", "Bilbo Baggins in Bag-End". These 4
+  are skipped, by decision (stay close to spec).
+- The series-tag list in `isStandardPop()` does not include "pocket pop" — Pocket Pops
+  whose titles lack the phrase pass the filter. No impact on the current file (all such
+  records merge into existing docs), but a future raw dataset could insert Pocket Pops
+  as standard records.
 
-### Settings wiring
-```kotlin
-val filePicker = rememberLauncherForActivityResult(
-    ActivityResultContracts.OpenDocument()
-) { uri -> uri?.let { viewModel.importEnrichedCatalog(it) } }
-
-SettingsItem(
-    title    = "Import Enriched Catalog",
-    subtitle = "Load enriched funko.com data from a JSON file",
-    onClick  = { filePicker.launch(arrayOf("application/json")) }
-)
-```
-
-### What NOT to do
+### What NOT to do (unchanged)
 - Do NOT bump `CATALOG_VER` in `CatalogPreloader`
 - Do NOT replace `funko_data.json` asset for existing installs
 - Do NOT overwrite `imageUrl` (HobbyDB) — only write `funkoImageUrl`
@@ -206,6 +191,10 @@ node enrich.js --input funko_data_enriched.json --output funko_data_enriched.jso
 ```
 
 ### Known data quality issues
+- **funko.com page-name handles:** Pass 2 assigns `NNNNN.html` (the product page
+  filename) as `handle` for records it cannot match to a HobbyDB handle — 729 such
+  records in the 2026-06-12 file. The importer repairs these with a title slug, but the
+  proper fix is upstream in `enrich.js` (slugify the title when no HobbyDB match).
 - **Shared UPCs:** Some HobbyDB records share the same UPC (e.g. `889698491181` assigned to both `Zombie Gambit` and `Zombie She-Hulk`). User is the safety net — wrong name shows in Preview and they can cancel.
 - **Duplicate handles:** Enricher's `mergeDuplicateHandles()` post-process handles ~3,200 duplicates. Import a raw dataset and the second of each pair silently overwrites the first.
 - **Shared funkoNumber:** Multiple records legitimately share the same number (e.g. `#157` for Darth Vader variants). Display only — no impact on scanner.
@@ -225,5 +214,5 @@ Key decisions needed: host location, update trigger, delta vs full, version endp
 - Community UPC upload — needs Cloudflare Worker deployed
 - Catalog refresh worker — weekly update, untested
 - Check/PreScan screen — never tested (device test plan item #5)
-- Enriched catalog import — spec complete, not implemented
+- Enriched catalog import on-device run — code complete, fold into device test pass
 - Scan-time funko.com enrichment — future, needs Item Number → URL resolution research

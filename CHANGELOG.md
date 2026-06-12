@@ -5,6 +5,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — Session 4 — 2026-06-12
+
+### Added
+
+**Enriched Catalog Import**
+- Settings → Catalog → "Import Enriched Catalog" — user picks `funko_data_enriched.json`
+  via file picker, merges into the live Couchbase catalog
+- `EnrichedRecord.kt` — Gson deserialization target for the enriched JSON superset
+- `CatalogImporter.kt` — handle-match → normalized-title fallback (ambiguous titles
+  excluded) → merge or insert
+- Merge path writes only new enriched fields (`isAvailable`, `productUrl`,
+  `funkoImageUrl`, `funkoShopId`, `funkoNumber`, `popType`, `retailPrice`,
+  `marketValueLoose/New`, `pricechartingId/Url`); never overwrites `imageUrl`, `title`,
+  `handle`, `seriesList`; UPC written only if missing
+- Insert path applies non-Pop merchandise filter, repairs funko.com page-name handles
+  (`NNNNN.html` → title slug), and skips on docId collision (never-clobber guard)
+- `CatalogMapper.kt` — added `FIELD_FUNKO_NUMBER`, `FIELD_POP_TYPE` and corresponding
+  `mapRecord()` parameters
+- Progress dialog (live record counter) and result summary dialog
+  (enriched/added/skipped/errors/duration)
+- `DEVICE_TEST_PLAN.md` — added Test 9 for on-device import verification
+
+---
+
 ## [Unreleased] — Session 3 — 2026-06-04
 
 ### Added

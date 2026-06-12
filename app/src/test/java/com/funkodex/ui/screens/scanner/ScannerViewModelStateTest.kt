@@ -27,7 +27,7 @@ import org.junit.Test
  *   Idle → Scanning → LookingUp → Preview / AlreadyOwned / NotFound / Pending / Error
  *   Preview → Saved (via confirmAdd)
  *   NotFound → Preview (via selectNotFoundMatch)
- *   ManualSearch → Preview (via selectManualResult)
+ *   ManualSearch → Saved (via toggleManualSelection + confirmBulkAdd)
  *   Any → Scanning (via dismissPreview)
  *   Any → Idle (via reset)
  */
@@ -325,9 +325,19 @@ class ScannerViewModelStateTest {
     }
 
     @Test
-    fun `selectManualResult transitions to Preview`() = runTest {
+    fun `confirmBulkAdd saves selected manual result and transitions to Saved`() = runTest {
+        coEvery { repository.findOwnedByNameAndFranchise(any(), any()) } returns null
+        coEvery { lookup.searchByName("Batman") } returns listOf(sampleItem)
+
         vm.openManualSearch()
-        vm.selectManualResult(sampleItem)
-        assertTrue(vm.state.value is ScanState.Preview)
+        vm.submitManualSearch("Batman")
+        advanceUntilIdle()
+
+        vm.toggleManualSelection(sampleItem)
+        vm.confirmBulkAdd()
+        advanceUntilIdle()
+
+        assertTrue(vm.state.value is ScanState.Saved)
+        coVerify { repository.saveItem(match { it.isOwned }) }
     }
 }

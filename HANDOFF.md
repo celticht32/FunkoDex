@@ -1,7 +1,7 @@
 # FunkoDex — Session Handoff
 **Date:** 2026-06-12
-**Sessions completed:** 1 (initial build), 2 (enricher/catalog import), 3 (UI/variant/photo/backup), 4 (enriched catalog import implementation + handle repair)
-**Next session focus:** Device testing results (incl. on-device enriched import run) + GoogleSignIn → Credential Manager migration
+**Sessions completed:** 1 (initial build), 2 (enricher/catalog import), 3 (UI/variant/photo/backup), 4 (enriched catalog import implementation + handle repair), 5 (16 KB page-size compliance + Drive auth migration)
+**Next session focus:** Cloud Console OAuth client verification + device tests T-D1–T-D5 (Drive auth), then physical device testing (DEVICE_TEST_PLAN.md, incl. on-device enriched import run)
 
 ---
 
@@ -10,17 +10,27 @@
 Android Funko Pop collectibles tracker.
 - **Repo:** github.com/celticht32/FunkoDex
 - **Local:** C:\Downloads\Development\FunkoDex\
-- **Toolchain:** AGP 8.13.2, Gradle 8.13, Kotlin 2.0.21, Couchbase Lite 3.2.1, minSdk 26, targetSdk 35
+- **Toolchain:** AGP 8.13.2, Gradle 8.13, Kotlin 2.0.21, Couchbase Lite 3.2.4, CameraX 1.6.1, minSdk 26, targetSdk 36
 
 ---
 
 ## Current State
 
-All emulator testing complete. Ready for physical device testing.
-See `DEVICE_TEST_PLAN.md` for the 8 on-device tests to run.
+Session 5 complete: 16 KB page-size compliance (P0) verified via Analyze APK on
+release build — all `.so` files across all ABIs report 16 KB alignment, including
+the previously-contested ML Kit barcode `libbarhopper_v3.so` (no fallback needed).
+Smoke-tested on a 16 KB-page emulator with no errors. Drive auth migration (P1)
+also complete and building/running clean — see `docs/CredentialManager_Migration_SPEC.md`.
+
+Ready for: Cloud Console OAuth client confirmation, device tests T-D1–T-D5, then
+physical device testing per `DEVICE_TEST_PLAN.md`.
 
 ### Pre-Play Store blockers remaining
-- [ ] GoogleSignIn → Credential Manager migration (significant — own session)
+- [ ] Cloud Console: confirm Android OAuth client ID (`com.funkodex` + signing SHA-1)
+- [ ] Device tests T-D1–T-D5 (`docs/CredentialManager_Migration_SPEC.md` §9) —
+      T-D3 (lapsed grant) is the critical one
+- [ ] Photo Picker migration (P1 — `docs/PlayStore_Readiness_Migration_SPEC.md` §2.3,
+      READ_MEDIA_IMAGES policy)
 - [ ] Community contribution Cloudflare Worker deployment (infrastructure)
 - [ ] Device testing results (may surface new bugs) — now includes on-device enriched import run
 
@@ -29,6 +39,10 @@ See `DEVICE_TEST_PLAN.md` for the 8 on-device tests to run.
 - [x] Diagnostic logs removed from FunkoLookupService and CatalogPreloader
 - [x] All emulator tests passing
 - [x] Enriched catalog import feature (implemented Session 4 — see section below)
+- [x] 16 KB page-size compliance — Couchbase Lite 3.2.4, CameraX 1.6.1,
+      ResolutionSelector migration (Session 5)
+- [x] GoogleSignIn → AuthorizationClient Drive auth migration (Session 5 —
+      code complete, device tests pending)
 
 ---
 
@@ -94,14 +108,30 @@ Collection card priority: `imageUrl` (remote) → error fallback to `userPhoto` 
 
 ---
 
-## Google Drive / Credential Manager Migration
+## Google Drive Auth Migration (Implemented — Session 5)
 
-Current `DriveBackupWorker` uses deprecated `GoogleSignIn` API.
-Migration path:
-1. Replace `GoogleSignIn` with `CredentialManager` + `GetGoogleIdOption`
-2. Update `DriveBackupWorker` to use the new auth token
-3. Test automatic daily backup worker
-Reference: https://developer.android.com/identity/sign-in/credential-manager-siwg
+`DriveBackupWorker` now uses `AuthorizationClient` (DRIVE_FILE scope) via
+`data/backup/DriveAuthManager.kt`, replacing the deprecated `GoogleSignIn`/
+`GoogleAccountCredential` path. Authorization-only — no Credential Manager
+dependency (the original "Credential Manager" framing in earlier sessions was
+half right; see `docs/CredentialManager_Migration_SPEC.md` §1 for the full
+reasoning). Key facts:
+- No access token is persisted — `DriveAuthManager.authorize()` is called fresh
+  each use (worker run, connect, etc.); tokens are ~1h-lived and
+  `AuthorizationClient` caches internally.
+- `SecureKeyStore.isDriveConnected()` is the only persisted state — a boolean flag.
+- UI shows "Connected · Tap to back up now" (no email — `AuthorizationResult`
+  carries no identity by design).
+- Worker: `NeedsConsent` → reconnect notification (id 3002), skip without retry
+  (a worker can't show consent UI). 401/403 mid-flight → `clearToken()` +
+  `Result.retry()`.
+- Settings: connect → `connectDrive()` (may surface consent `PendingIntent` via
+  `IntentSenderRequest`); disconnect → clears the flag + cancels the periodic
+  worker; reconnect re-schedules it.
+
+**Remaining:** Cloud Console OAuth client confirmation (package `com.funkodex` +
+signing SHA-1) and device tests T-D1–T-D5 (`docs/CredentialManager_Migration_SPEC.md`
+§9) — T-D3 (lapsed grant) is the one that catches worker-lifecycle mistakes.
 
 ---
 

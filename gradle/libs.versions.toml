@@ -6,14 +6,14 @@ hilt               = "2.51.1"
 hiltNav            = "1.2.0"
 hilt-work          = "1.2.0"    # androidx.hilt:hilt-work — Hilt + WorkManager integration
 glance             = "1.1.0"
-play-services-auth = "21.2.0"
+play-services-auth = "21.6.0"
 google-drive-api   = "v3-rev20240123-2.0.0"
 compose-bom        = "2024.09.00"
-couchbase-lite     = "3.2.1"
+couchbase-lite     = "3.2.4"
 okhttp             = "4.12.0"
 gson               = "2.11.0"
 mlkit-barcode      = "17.3.0"
-camerax            = "1.3.4"
+camerax            = "1.6.1"
 coil               = "2.7.0"
 navigation         = "2.8.0"
 coroutines         = "1.9.0"
@@ -99,6 +99,7 @@ apache-poi             = { group = "org.apache.poi",      name = "poi-ooxml",   
 
 # Coroutines
 coroutines-android     = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android",  version.ref = "coroutines" }
+coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutines" }
 coroutines-test        = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test",     version.ref = "coroutines" }
 
 # Testing

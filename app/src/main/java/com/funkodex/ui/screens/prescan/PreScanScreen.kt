@@ -27,6 +27,8 @@ import com.funkodex.data.model.FunkoItem
 import com.funkodex.ui.screens.scanner.BarcodeAnalyzer
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.camera.core.*
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
@@ -303,7 +305,16 @@ private fun PreScanCameraPreview(onBarcodeDetected: (String) -> Unit) {
                 val preview = Preview.Builder().build()
                     .also { it.setSurfaceProvider(previewView.surfaceProvider) }
                 val analyzer = ImageAnalysis.Builder()
-                    .setTargetResolution(Size(1280, 720))
+                    .setResolutionSelector(
+                        ResolutionSelector.Builder()
+                            .setResolutionStrategy(
+                                ResolutionStrategy(
+                                    Size(1280, 720),
+                                    ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                                )
+                            )
+                            .build()
+                    )
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
                     .also { ia ->

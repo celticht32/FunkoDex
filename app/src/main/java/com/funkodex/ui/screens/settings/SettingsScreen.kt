@@ -70,31 +70,20 @@ fun SettingsScreen(
         }
     }
 
-    // Google Sign-In for Drive backup
-    val googleSignInClient = remember {
-        com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(
-            context,
-            com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
-                com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
-            )
-                .requestEmail()
-                .requestScopes(com.google.android.gms.common.api.Scope(
-                    com.google.api.services.drive.DriveScopes.DRIVE_FILE))
-                .build()
-        )
-    }
-    var driveAccount by remember {
-        mutableStateOf(
-            com.google.android.gms.auth.api.signin.GoogleSignIn
-                .getLastSignedInAccount(context)
-        )
-    }
-    val driveSignInLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
+    // Google Drive connect — consent PendingIntent launcher (AuthorizationClient)
+    val driveConsentIntent by viewModel.driveConsentIntent.collectAsState()
+    val driveConsentLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
-        com.google.android.gms.auth.api.signin.GoogleSignIn
-            .getSignedInAccountFromIntent(result.data)
-            .addOnSuccessListener { account -> driveAccount = account }
+        viewModel.onConsentResult(result.data)
+        viewModel.clearDriveConsentIntent()
+    }
+    LaunchedEffect(driveConsentIntent) {
+        driveConsentIntent?.let { pi ->
+            driveConsentLauncher.launch(
+                androidx.activity.result.IntentSenderRequest.Builder(pi.intentSender).build()
+            )
+        }
     }
 
     var showBackupDoneDialog by remember { mutableStateOf(false) }
@@ -367,28 +356,34 @@ fun SettingsScreen(
                     )
                     HorizontalDivider()
 
-                    if (driveAccount == null) {
+                    val driveConnected by viewModel.driveConnected.collectAsState()
+                    // Re-arm the periodic worker whenever Drive is (re)connected.
+                    // schedule() uses ExistingPeriodicWorkPolicy.UPDATE — idempotent,
+                    // so firing on initial composition while connected is harmless.
+                    LaunchedEffect(driveConnected) {
+                        if (driveConnected) com.funkodex.data.backup.DriveBackupWorker.schedule(context)
+                    }
+                    if (!driveConnected) {
                         SettingsRow(
                             icon     = Icons.Default.CloudUpload,
                             title    = "Connect Google Drive",
                             subtitle = "Sign in to enable automatic daily backups",
-                            onClick  = { driveSignInLauncher.launch(googleSignInClient.signInIntent) }
+                            onClick  = { viewModel.connectDrive() }
                         )
                     } else {
                         SettingsRow(
                             icon     = Icons.Default.CloudDone,
                             title    = "Back up to Google Drive",
-                            subtitle = "Signed in as ${driveAccount!!.email}  ·  Tap to back up now",
+                            subtitle = "Connected · Tap to back up now",
                             onClick  = { com.funkodex.data.backup.DriveBackupWorker.runNow(context) }
                         )
                         SettingsRow(
                             icon     = Icons.Default.Logout,
                             title    = "Disconnect Google Drive",
-                            subtitle = "Stop automatic backups",
+                            subtitle = "Stop automatic backups · To fully revoke access, visit Google Account → Connections",
                             onClick  = {
-                                googleSignInClient.signOut().addOnCompleteListener {
-                                    driveAccount = null
-                                }
+                                com.funkodex.data.backup.DriveBackupWorker.cancel(context)
+                                viewModel.disconnectDrive()
                             }
                         )
                     }

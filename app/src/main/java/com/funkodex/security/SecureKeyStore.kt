@@ -36,6 +36,7 @@ class SecureKeyStore @Inject constructor(
         private const val KEY_EBAY_OAUTH = "ebay_oauth_token"
         private const val KEY_INSTALL_ID = "community_install_id"
         private const val KEY_LAST_BACKUP = "drive_last_backup"
+        private const val KEY_DRIVE_CONNECTED = "drive_connected"
     }
 
     private val prefs: SharedPreferences by lazy { buildPrefs() }
@@ -94,6 +95,11 @@ class SecureKeyStore @Inject constructor(
     // ─── Drive backup timestamp ──────────────────────────────────────────────
     fun getLastBackup(): String  = prefs.getString(KEY_LAST_BACKUP, "") ?: ""
     fun setLastBackup(ts: String) { prefs.edit().putString(KEY_LAST_BACKUP, ts.trim()).apply() }
+
+    // ─── Drive connection flag (AuthorizationClient — no token stored, §5.5) ────
+    fun isDriveConnected(): Boolean   = prefs.getBoolean(KEY_DRIVE_CONNECTED, false)
+    fun setDriveConnected(connected: Boolean) { prefs.edit().putBoolean(KEY_DRIVE_CONNECTED, connected).apply() }
+    fun clearDriveConnected()         { prefs.edit().remove(KEY_DRIVE_CONNECTED).apply() }
 
     fun isEbayTokenValid(): Boolean {
         val parts = getEbayOAuthToken().split("|")

@@ -5,6 +5,57 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — Session 5 — 2026-06-12
+
+### Changed
+
+**16 KB Page Size Compliance (Play P0)**
+- Bumped `couchbase-lite` 3.2.1 → 3.2.4 (16 KB-aligned `libLiteCore.so`/`libLiteCoreJNI.so`,
+  per Couchbase engineering confirmation)
+- Bumped `camerax` 1.3.4 → 1.6.1 (16 KB-aligned `libimage_processing_util_jni.so`/
+  `libsurface_util_jni.so`)
+- `ScannerScreen.kt` / `PreScanScreen.kt` — replaced deprecated
+  `ImageAnalysis.Builder().setTargetResolution(Size(1280,720))` with
+  `ResolutionSelector`/`ResolutionStrategy(FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)`
+- Fixed broken unit test: `ScannerViewModelStateTest.kt` referenced a non-existent
+  `selectManualResult()`; replaced with a test of the actual implemented flow
+  (`toggleManualSelection` + `confirmBulkAdd` → `ScanState.Saved`)
+- Verified via Analyze APK on release build: all `.so` files across all ABIs
+  (arm64-v8a, armeabi-v7a, x86, x86_64) — including the previously-contested
+  `libbarhopper_v3.so` (ML Kit barcode 17.3.0) — report 16 KB alignment. No
+  fallback to `play-services-mlkit-barcode-scanning` needed.
+- Smoke-tested on a 16 KB-page-size emulator (catalog preload, barcode scan,
+  photo capture) — no errors
+
+**Google Drive Auth Migration (Play P1)**
+- Replaced deprecated `GoogleSignIn`/`GoogleAccountCredential` with
+  `AuthorizationClient` (DRIVE_FILE scope) — authorization-only, no Credential
+  Manager dependency (see `docs/CredentialManager_Migration_SPEC.md`)
+- New `data/backup/DriveAuthManager.kt` — single owner of `AuthorizationClient`
+  interaction; normalizes results to `Authorized`/`NeedsConsent`/`Failed`
+- `SecureKeyStore.kt` — added `isDriveConnected()`/`setDriveConnected()`/
+  `clearDriveConnected()` boolean flag; no access token persisted (1h lifetime,
+  re-`authorize()` each use)
+- `DriveBackupWorker.kt` — worker calls `authorize()` every run; `NeedsConsent`
+  → reconnect notification (id 3002), skip without retry; 401/403 mid-flight →
+  `clearToken()` + `Result.retry()`
+- `SettingsViewModel.kt` — `driveConnected` StateFlow, `connectDrive()`,
+  `onConsentResult()`, `disconnectDrive()`, consent `PendingIntent` StateFlow
+- `SettingsScreen.kt` — "Connect Google Drive" / "Connected · Tap to back up now"
+  / "Disconnect Google Drive" rows; dropped "Signed in as {email}" (no identity
+  in AuthorizationResult by design); disconnect cancels periodic worker, connect
+  re-schedules it (`ExistingPeriodicWorkPolicy.UPDATE`, idempotent)
+- Bumped `play-services-auth` 21.2.0 → 21.6.0; added
+  `kotlinx-coroutines-play-services` for `Task.await()`
+- Zero remaining references to `GoogleSignIn`/`GoogleAccountCredential`
+
+### Outstanding
+- Cloud Console: confirm Android OAuth client ID (`com.funkodex` + signing SHA-1)
+- Device tests T-D1–T-D5 (`docs/CredentialManager_Migration_SPEC.md` §9),
+  especially T-D3 (lapsed grant)
+
+---
+
 ## [Unreleased] — Session 4 — 2026-06-12
 
 ### Added

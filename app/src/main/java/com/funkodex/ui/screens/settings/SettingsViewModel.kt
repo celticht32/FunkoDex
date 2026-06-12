@@ -1,14 +1,17 @@
 package com.funkodex.ui.screens.settings
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.funkodex.data.backup.DriveAuthManager
 import com.funkodex.data.preload.CatalogImporter
 import com.funkodex.data.preload.ImportProgress
+import com.funkodex.security.SecureKeyStore
 import com.funkodex.util.FunkoDexLogger
 import com.funkodex.util.LogLevel
 import com.funkodex.ui.theme.AppTheme
@@ -52,6 +55,8 @@ class UserPreferencesRepository @Inject constructor(
 class SettingsViewModel @Inject constructor(
     private val prefs: UserPreferencesRepository,
     private val catalogImporter: CatalogImporter,
+    private val driveAuthManager: DriveAuthManager,
+    private val secureKeyStore: SecureKeyStore,
 ) : ViewModel() {
 
     val currentTheme: StateFlow<AppTheme> = prefs.appTheme
@@ -84,5 +89,58 @@ class SettingsViewModel @Inject constructor(
 
     fun clearImportProgress() {
         _importProgress.value = null
+    }
+
+    // ── Google Drive connection (AuthorizationClient-only, see spec §5) ────────
+
+    private val _driveConnected = MutableStateFlow(secureKeyStore.isDriveConnected())
+    val driveConnected: StateFlow<Boolean> = _driveConnected.asStateFlow()
+
+    /** Emits a consent PendingIntent when authorize() needs UI; UI launches it then clears. */
+    private val _driveConsentIntent = MutableStateFlow<android.app.PendingIntent?>(null)
+    val driveConsentIntent: StateFlow<android.app.PendingIntent?> = _driveConsentIntent.asStateFlow()
+
+    fun clearDriveConsentIntent() {
+        _driveConsentIntent.value = null
+    }
+
+    /** Settings "Connect Google Drive" tap — may surface a consent PendingIntent. */
+    fun connectDrive() {
+        viewModelScope.launch {
+            when (val auth = driveAuthManager.authorize()) {
+                is DriveAuthManager.DriveAuth.Authorized -> {
+                    secureKeyStore.setDriveConnected(true)
+                    _driveConnected.value = true
+                }
+                is DriveAuthManager.DriveAuth.NeedsConsent -> {
+                    _driveConsentIntent.value = auth.pendingIntent
+                }
+                is DriveAuthManager.DriveAuth.Failed -> {
+                    FunkoDexLogger.w("SettingsViewModel", "Drive connect failed: ${auth.reason}")
+                }
+            }
+        }
+    }
+
+    /** Result of launching the consent PendingIntent from connectDrive(). */
+    fun onConsentResult(data: Intent?) {
+        when (val auth = driveAuthManager.resultFromConsentIntent(data)) {
+            is DriveAuthManager.DriveAuth.Authorized -> {
+                secureKeyStore.setDriveConnected(true)
+                _driveConnected.value = true
+            }
+            is DriveAuthManager.DriveAuth.NeedsConsent -> { /* shouldn't recurse; no-op */ }
+            is DriveAuthManager.DriveAuth.Failed -> {
+                FunkoDexLogger.w("SettingsViewModel", "Drive consent failed: ${auth.reason}")
+            }
+        }
+    }
+
+    /** Settings "Disconnect Google Drive" tap — clears the local connection flag.
+     *  No access token is ever persisted (§5.5), so there is nothing to clearToken()
+     *  here; full server-side revocation is via Google Account → Connections (UI subtitle). */
+    fun disconnectDrive() {
+        secureKeyStore.clearDriveConnected()
+        _driveConnected.value = false
     }
 }

@@ -10,13 +10,12 @@ import androidx.work.*
 import com.couchbase.lite.CouchbaseLite
 import com.funkodex.data.db.FunkoDexDatabase
 import com.funkodex.security.SecureKeyStore
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
+import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.http.FileContent
+import com.google.api.client.http.HttpRequestInitializer
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.drive.Drive
-import com.google.api.services.drive.DriveScopes
 import com.google.api.services.drive.model.File as DriveFile
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -35,22 +34,24 @@ import java.util.zip.ZipOutputStream
  * Daily WorkManager job that backs up the Couchbase Lite database to
  * the user's Google Drive in a folder called "FunkoDex Backups".
  *
- * Authentication: Google Sign-In via GoogleAccountCredential.
- * If no account is signed in the worker exits cleanly (no retry).
+ * Authentication: AuthorizationClient (DRIVE_FILE scope) via DriveAuthManager.
+ * If not connected, or the grant has lapsed, the worker exits cleanly (no retry)
+ * and posts a reconnect notification when consent is needed.
  *
  * Backup: FunkoDex_YYYY-MM-DD_HH-mm.zip containing the .cblite2 folder.
  * Keeps the last 7 backups; older ones are deleted automatically.
  *
  * Setup required:
- *  - User signs in via Settings > Backup & Restore > Connect Google Drive
+ *  - User connects via Settings > Backup & Restore > Connect Google Drive
  *  - Drive must be enabled in Google Cloud Console with the app's SHA-1
  */
 @HiltWorker
 class DriveBackupWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params:  WorkerParameters,
-    private val db:             FunkoDexDatabase,
-    private val secureKeyStore: SecureKeyStore,
+    private val db:               FunkoDexDatabase,
+    private val secureKeyStore:   SecureKeyStore,
+    private val driveAuthManager: DriveAuthManager,
 ) : CoroutineWorker(context, params) {
 
     private fun sendBackupNotification(fileName: String) {
@@ -76,6 +77,31 @@ class DriveBackupWorker @AssistedInject constructor(
                 .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
                 .build()
             nm.notify(3001, notification)
+        } catch (_: Exception) { /* notification failed — non-critical */ }
+    }
+
+    private fun sendReconnectNotification() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val granted = ContextCompat.checkSelfPermission(
+                    applicationContext, android.Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+                if (!granted) {
+                    FunkoDexLogger.d(TAG, "POST_NOTIFICATIONS not granted — skipping reconnect notification")
+                    return
+                }
+            }
+            val nm = applicationContext.getSystemService(android.content.Context.NOTIFICATION_SERVICE)
+                as android.app.NotificationManager
+            val notification = androidx.core.app.NotificationCompat
+                .Builder(applicationContext, "backup_status")
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("Google Drive backup paused")
+                .setContentText("Reconnect in Settings to resume automatic backups.")
+                .setAutoCancel(true)
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
+                .build()
+            nm.notify(3002, notification)
         } catch (_: Exception) { /* notification failed — non-critical */ }
     }
 
@@ -122,28 +148,51 @@ class DriveBackupWorker @AssistedInject constructor(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             CouchbaseLite.init(applicationContext)
-            val account = GoogleSignIn.getLastSignedInAccount(applicationContext)
-                ?: return@withContext Result.success(workDataOf("skipped" to "not_signed_in"))
 
-            val credential = GoogleAccountCredential
-                .usingOAuth2(applicationContext, listOf(DriveScopes.DRIVE_FILE))
-                .apply { selectedAccount = account.account }
+            if (!secureKeyStore.isDriveConnected())
+                return@withContext Result.success(workDataOf("skipped" to "not_connected"))
+
+            val token = when (val auth = driveAuthManager.authorize()) {
+                is DriveAuthManager.DriveAuth.Authorized -> auth.accessToken
+                is DriveAuthManager.DriveAuth.NeedsConsent -> {
+                    // Grant lapsed/revoked — a worker cannot show consent UI. Not an error;
+                    // do NOT retry (it would spin). Tell the user to reconnect.
+                    sendReconnectNotification()
+                    return@withContext Result.success(workDataOf("skipped" to "needs_consent"))
+                }
+                is DriveAuthManager.DriveAuth.Failed -> {
+                    FunkoDexLogger.w(TAG, "Drive authorize failed: ${auth.reason}")
+                    return@withContext Result.retry()   // transient API failure — backoff applies
+                }
+            }
 
             val drive = Drive.Builder(
                 NetHttpTransport(),
                 GsonFactory.getDefaultInstance(),
-                credential,
+                HttpRequestInitializer { req -> req.headers.authorization = "Bearer $token" },
             ).setApplicationName("FunkoDex").build()
 
-            val zipFile  = zipDatabase()
-            val folderId = ensureFolder(drive)
+            val zipFile = zipDatabase()
 
-            drive.files().create(
-                DriveFile().apply { name = zipFile.name; parents = listOf(folderId) },
-                FileContent("application/zip", zipFile),
-            ).setFields("id,name").execute()
+            try {
+                val folderId = ensureFolder(drive)
 
-            pruneOldBackups(drive, folderId)
+                drive.files().create(
+                    DriveFile().apply { name = zipFile.name; parents = listOf(folderId) },
+                    FileContent("application/zip", zipFile),
+                ).setFields("id,name").execute()
+
+                pruneOldBackups(drive, folderId)
+            } catch (e: GoogleJsonResponseException) {
+                if (e.statusCode == 401 || e.statusCode == 403) {
+                    // Token went stale mid-flight (device slept, etc.) — drop it and
+                    // retry; the next run calls authorize() for a fresh token.
+                    driveAuthManager.clearToken(token)
+                    return@withContext Result.retry()
+                }
+                throw e
+            }
+
             secureKeyStore.setLastBackup(LocalDateTime.now().toString())
             zipFile.delete()
 

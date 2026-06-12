@@ -110,9 +110,10 @@ dependencies {
     ksp(libs.hilt.work.compiler)                 // Hilt-Work annotation processor
     // Phase E: widget + Drive backup
     implementation(libs.glance.appwidget)        // Jetpack Glance home screen widget
-    implementation(libs.play.services.auth)      // Google Sign-In for Drive backup
+    implementation(libs.play.services.auth)      // Drive AuthorizationClient
+    implementation(libs.coroutines.play.services) // .await() for Task<T> (DriveAuthManager)
     implementation(libs.google.api.drive)        // Google Drive API client
-    implementation(libs.google.api.client.android) // GoogleAccountCredential for Drive auth
+    implementation(libs.google.api.client.android) // Drive REST client (HttpRequestInitializer)
 
     // Hilt
     implementation(libs.hilt.android)

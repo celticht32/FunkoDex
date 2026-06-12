@@ -6,7 +6,7 @@ FunkoDex is an Android Kotlin/Jetpack Compose app for managing a Funko Pop colle
 Built entirely in Claude across multiple sessions. This file gives Claude the full
 context needed to work on the codebase without re-explaining architecture.
 
-**65 Kotlin source files. 6 test files (72 tests). All features complete.**
+**66 Kotlin source files. 6 test files (72 tests). Feature-complete; pre-Play-Store hardening in progress (see Migration specs below).**
 
 ---
 
@@ -16,11 +16,11 @@ context needed to work on the codebase without re-explaining architecture.
 |---|---|
 | Language | Kotlin 2.0, coroutines |
 | UI | Jetpack Compose + Material 3 |
-| Database | Couchbase Lite 3.2.0 (Community — free, no server, offline-first) |
+| Database | Couchbase Lite 3.2.x (Community — free, no server, offline-first; ≥3.2.3 required for 16 KB page-size compliance) |
 | DI | Hilt (KSP processor) |
 | Background | WorkManager + HiltWorker |
 | Networking | OkHttp 4.12 + Gson |
-| Camera | CameraX 1.3.4 + ML Kit Barcode |
+| Camera | CameraX + ML Kit Barcode (CameraX ≥1.4.x required for 16 KB compliance) |
 | Images | Coil 2.7 |
 | Export | Apache POI (Excel) |
 | Widget | Jetpack Glance 1.1.0 |
@@ -58,6 +58,9 @@ com.funkodex/
 │   │                           CategoryPreference, PendingUpcScan, CatalogContribution
 │   ├── preload/                CatalogPreloader, CatalogMapper, CatalogRefreshWorker
 │   │                           (Kenny Chan + community UPC + HobbyDB vaulted refresh),
+│   │                           CatalogImporter + EnrichedRecord (user-triggered enriched
+│   │                           catalog JSON import: handle match → title fallback →
+│   │                           merge/insert, non-Pop filter, .html handle repair),
 │   │                           PriceAlertWorker (@HiltWorker + POST_NOTIF guard)
 │   └── repository/             FunkoRepository (+updateWidget +getOwnedFiltered),
 │                               CategoryPreferenceRepository, AlertRepository (+upc field),
@@ -84,6 +87,7 @@ com.funkodex/
         │                       ScannerViewModel (ConnectivityObserver, no deprecated API),
         │                       BatchScanScreen/VM, BarcodeAnalyzer
         └── settings/           SettingsScreen (Drive sign-in/out, import file picker,
+                                    Import Enriched Catalog row + progress/result dialogs,
                                     Diagnostics: log level + VERBOSE warning + share log,
                                     HobbyDB OAuth sign-in, eBay OAuth sign-in),
                                 CatalogSettingsViewModel (+OAuth helpers),
@@ -104,6 +108,7 @@ No server, no sync subscription, 100% offline. Document types:
 - `pending_upc::{upc}` — offline UPC scan queue
 - `contrib::{upc}` — pending community UPC contributions
 - `cat_pref::{category}` — category filter preferences
+- `system` type docs — internal markers; preserved through backup/restore (never exported, never deleted)
 
 All constants in `FunkoDexDatabase.kt`. The Mapper handles `FunkoItem` ↔ Document conversion.
 
@@ -188,6 +193,17 @@ Test files:
 - `security/SecureKeyStoreTokenTest.kt` — token parsing/expiry logic (15 tests)
 
 ---
+
+## Migration specs (read BEFORE touching dependencies or auth)
+
+- **`docs/PlayStore_Readiness_Migration_SPEC.md`** — 16 KB page-size compliance and
+  deprecation cleanup. Hard rules from it: Couchbase Lite must stay ≥3.2.3, CameraX
+  ≥1.4.x; **do NOT migrate to Couchbase Lite 4.0.x** — it removed the database-level
+  APIs this codebase calls 107 times (Collection-API migration is its own scheduled
+  session); do NOT add extractNativeLibs/useLegacyPackaging workarounds.
+- **`docs/CredentialManager_Migration_SPEC.md`** — Google Drive auth migration off the
+  deprecated GoogleSignIn API. Uses AuthorizationClient only (authorization), NOT
+  Credential Manager (authentication) — read §1 before assuming otherwise.
 
 ## Future work
 

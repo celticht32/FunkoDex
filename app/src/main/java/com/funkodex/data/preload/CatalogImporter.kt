@@ -70,6 +70,18 @@ class CatalogImporter @Inject constructor(
             ?.trim()
             ?.takeIf { it.isNotBlank() }
 
+    // funko.com scrape emits page filenames (e.g. "91991.html") as handles for
+    // records it couldn't match to a HobbyDB handle. These are not valid catalog
+    // handles — inserting them would create garbage doc IDs like
+    // "catalog::91991.html". Detected and replaced with a title-derived slug.
+    private val FUNKO_PAGE_HANDLE = Regex("""^\d+\.html$""")
+
+    /** Title → handle slug: lowercase, non-alphanumeric runs → single hyphen, trimmed. */
+    private fun slugify(title: String): String =
+        title.lowercase()
+            .replace(Regex("[^a-z0-9]+"), "-")
+            .trim('-')
+
     /**
      * Build a one-shot index of normalized catalog title → document ID for the
      * title-fallback match. Titles shared by more than one catalog doc are
@@ -237,8 +249,27 @@ class CatalogImporter @Inject constructor(
                                 ?.replace(Regex("[^0-9.]"), "")
                                 ?.toDoubleOrNull() ?: 0.0
 
+                            // Repair funko.com page-name handles with a title slug.
+                            val insertHandle =
+                                if (FUNKO_PAGE_HANDLE.matches(handle)) slugify(title) else handle
+                            if (insertHandle.isBlank()) {
+                                skipped++
+                                processed++
+                                return@forEach
+                            }
+                            val insertDocId = "catalog::$insertHandle"
+
+                            // Never clobber: if a doc already exists at the target ID
+                            // (ambiguous-title doc, or a duplicate earlier in this
+                            // import), skip rather than replace its content.
+                            if (database.getDocument(insertDocId) != null) {
+                                skipped++
+                                processed++
+                                return@forEach
+                            }
+
                             val mapped = CatalogMapper.mapRecord(
-                                handle           = handle,
+                                handle           = insertHandle,
                                 title            = title,
                                 imageName        = record.imageName?.trim() ?: "",
                                 seriesList       = record.series ?: emptyList(),
@@ -256,7 +287,7 @@ class CatalogImporter @Inject constructor(
                                 pricechartingId  = record.pricechartingId,
                                 pricechartingUrl = record.pricechartingUrl,
                             )
-                            database.save(MutableDocument(docId, mapped))
+                            database.save(MutableDocument(insertDocId, mapped))
                             added++
                         }
                     } catch (e: Exception) {

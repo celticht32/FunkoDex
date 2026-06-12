@@ -37,6 +37,8 @@ object CatalogMapper {
     const val FIELD_PRODUCT_URL     = "productUrl"      // funko.com product page URL
     const val FIELD_FUNKO_IMAGE     = "funkoImageUrl"   // funko.com CDN image (separate from imageUrl)
     const val FIELD_FUNKO_SHOP_ID   = "funkoShopId"     // Funko's internal SFCC product ID (pid)
+    const val FIELD_FUNKO_NUMBER    = "funkoNumber"      // HobbyDB Funko item number — display only, may be shared
+    const val FIELD_POP_TYPE        = "popType"          // e.g. "Pop!", "Pop! Deluxe"
     const val FIELD_MKT_VALUE_LOOSE = "marketValueLoose" // PriceCharting OOB / loose price
     const val FIELD_MKT_VALUE_NEW   = "marketValueNew"   // PriceCharting sealed / new price
     const val FIELD_PC_ID           = "pricechartingId"  // PriceCharting product ID
@@ -95,6 +97,9 @@ object CatalogMapper {
         productUrl:       String?       = null,
         funkoImageUrl:    String?       = null,
         funkoShopId:      String?       = null,
+        // Enriched fields — HobbyDB
+        funkoNumber:      String?       = null,
+        popType:          String?       = null,
         // Enriched fields — PriceCharting
         marketValueLoose: String?       = null,
         marketValueNew:   String?       = null,
@@ -139,6 +144,9 @@ object CatalogMapper {
             if (!productUrl.isNullOrBlank())          put(FIELD_PRODUCT_URL,     productUrl)
             if (!funkoImageUrl.isNullOrBlank())       put(FIELD_FUNKO_IMAGE,     funkoImageUrl)
             if (!funkoShopId.isNullOrBlank())         put(FIELD_FUNKO_SHOP_ID,   funkoShopId)
+            // Enriched — HobbyDB
+            if (!funkoNumber.isNullOrBlank())         put(FIELD_FUNKO_NUMBER,    funkoNumber)
+            if (!popType.isNullOrBlank())             put(FIELD_POP_TYPE,        popType)
             // Enriched — PriceCharting
             if (!marketValueLoose.isNullOrBlank())    put(FIELD_MKT_VALUE_LOOSE, marketValueLoose)
             if (!marketValueNew.isNullOrBlank())      put(FIELD_MKT_VALUE_NEW,   marketValueNew)

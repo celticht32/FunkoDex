@@ -239,7 +239,7 @@ fun SettingsScreen(
                             Text("${result.added} new records added",
                                 style = MaterialTheme.typography.bodyMedium)
                             if (result.skipped > 0)
-                                Text("${result.skipped} records skipped (missing handle/title)",
+                                Text("${result.skipped} records skipped (non-Pop or missing handle/title)",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if (result.errors > 0)

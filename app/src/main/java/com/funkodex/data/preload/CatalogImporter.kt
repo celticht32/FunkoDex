@@ -2,7 +2,12 @@ package com.funkodex.data.preload
 
 import android.content.Context
 import android.net.Uri
+import com.couchbase.lite.DataSource
+import com.couchbase.lite.Expression
+import com.couchbase.lite.Meta
 import com.couchbase.lite.MutableDocument
+import com.couchbase.lite.QueryBuilder
+import com.couchbase.lite.SelectResult
 import com.couchbase.lite.UnitOfWork
 import com.funkodex.data.db.FunkoDexDatabase
 import com.google.gson.Gson
@@ -38,6 +43,61 @@ class CatalogImporter @Inject constructor(
 ) {
 
     private val gson = Gson()
+
+    // ── Non-Pop filter (handoff spec) ─────────────────────────────────────
+    // Net-new records matching these are merchandise, not standard Pops, and
+    // are skipped on insert. Merges into existing catalog docs are NOT
+    // filtered — if a doc is already in the catalog, enriching it is harmless.
+    private val NON_POP_TITLE = Regex(
+        "\\b(tee|shirt|backpack|bag|wallet|keychain|soda|mystery minis|wacky wobbler|" +
+        "funkoverse|bitty pop|pocket pop|pin set|enamel pin|dorbz|hikari|rock candy|" +
+        "fabrikations|paka paka|plush|mug|cup|cushion)\\b",
+        RegexOption.IGNORE_CASE
+    )
+
+    private fun isStandardPop(record: EnrichedRecord): Boolean {
+        if (NON_POP_TITLE.containsMatchIn(record.title ?: "")) return false
+        val series = record.series?.map { it.lowercase() } ?: return true
+        return listOf("pop! tees","loungefly","mystery minis","wacky wobblers",
+            "vinyl soda","funkoverse","dorbz","rock candy","hikari","fabrikations")
+            .none { tag -> series.any { it.contains(tag) } }
+    }
+
+    /** Lowercase, strip punctuation, collapse whitespace. Null if blank after normalization. */
+    private fun normalizeTitle(title: String?): String? =
+        title?.lowercase()
+            ?.replace(Regex("[^a-z0-9]+"), " ")
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+
+    /**
+     * Build a one-shot index of normalized catalog title → document ID for the
+     * title-fallback match. Titles shared by more than one catalog doc are
+     * ambiguous and removed — a fallback merge must be unambiguous.
+     */
+    private fun buildTitleIndex(database: com.couchbase.lite.Database): Map<String, String> {
+        val index     = HashMap<String, String>(32_768)
+        val ambiguous = HashSet<String>()
+        val query = QueryBuilder
+            .select(
+                SelectResult.expression(Meta.id).`as`("id"),
+                SelectResult.property(CatalogMapper.FIELD_TITLE).`as`("title"),
+            )
+            .from(DataSource.database(database))
+            .where(
+                Expression.property(CatalogMapper.FIELD_TYPE)
+                    .equalTo(Expression.string(CatalogMapper.TYPE_CATALOG))
+            )
+        query.execute().use { rs ->
+            rs.allResults().forEach { row ->
+                val id   = row.getString("id") ?: return@forEach
+                val norm = normalizeTitle(row.getString("title")) ?: return@forEach
+                if (index.put(norm, id) != null) ambiguous.add(norm)
+            }
+        }
+        ambiguous.forEach { index.remove(it) }
+        return index
+    }
 
     /**
      * Parse [uri] as a JSON array of [EnrichedRecord], merge into catalog, and
@@ -75,6 +135,15 @@ class CatalogImporter @Inject constructor(
 
         val database = db.getDatabase()
 
+        // Normalized title → docId, for the fallback match when handle misses.
+        // Built once up front; ~23k entries. Wrapped so an index failure
+        // degrades to handle-only matching instead of failing the import.
+        val titleIndex: Map<String, String> = try {
+            buildTitleIndex(database)
+        } catch (e: Exception) {
+            emptyMap()
+        }
+
         // ── 3. Upsert in batches of 500 ───────────────────────────────────
         records.chunked(500).forEach { chunk ->
             database.inBatch(UnitOfWork {
@@ -87,8 +156,14 @@ class CatalogImporter @Inject constructor(
                     }
 
                     try {
-                        val docId    = "catalog::$handle"
+                        val docId = "catalog::$handle"
+                        // Match by handle first; fall back to unambiguous
+                        // normalized-title match (low hit rate expected —
+                        // funko.com vs HobbyDB prefix formats differ).
                         val existing = database.getDocument(docId)
+                            ?: normalizeTitle(record.title)
+                                ?.let { titleIndex[it] }
+                                ?.let { database.getDocument(it) }
 
                         if (existing != null) {
                             // ── Merge: only write new fields, never overwrite identity ──
@@ -105,6 +180,12 @@ class CatalogImporter @Inject constructor(
                             }
                             record.pid?.takeIf { it.isNotBlank() }?.let {
                                 mutable.setString(CatalogMapper.FIELD_FUNKO_SHOP_ID, it)
+                            }
+                            record.funkoNumber?.takeIf { it.isNotBlank() }?.let {
+                                mutable.setString(CatalogMapper.FIELD_FUNKO_NUMBER, it)
+                            }
+                            record.popType?.takeIf { it.isNotBlank() }?.let {
+                                mutable.setString(CatalogMapper.FIELD_POP_TYPE, it)
                             }
                             record.upc?.takeIf { it.isNotBlank() }?.let {
                                 // Only write UPC if doc doesn't already have one
@@ -137,6 +218,14 @@ class CatalogImporter @Inject constructor(
 
                         } else {
                             // ── Insert: build full document via CatalogMapper ──────────
+                            // Non-Pop merchandise (tees, soda, Loungefly…) is never
+                            // inserted as a net-new catalog record.
+                            if (!isStandardPop(record)) {
+                                skipped++
+                                processed++
+                                return@forEach
+                            }
+
                             val title = record.title?.trim()
                             if (title.isNullOrBlank()) {
                                 skipped++
@@ -160,6 +249,8 @@ class CatalogImporter @Inject constructor(
                                 productUrl       = record.productUrl,
                                 funkoImageUrl    = record.funkoPrimaryImage,
                                 funkoShopId      = record.pid,
+                                funkoNumber      = record.funkoNumber,
+                                popType          = record.popType,
                                 marketValueLoose = record.marketValueLoose,
                                 marketValueNew   = record.marketValueNew,
                                 pricechartingId  = record.pricechartingId,

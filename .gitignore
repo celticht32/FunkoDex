@@ -20,7 +20,7 @@ Thumbs.db
 
 # Test reports
 test-results/
-reports/
+app/build/reports/
 
 # Kotlin build cache
 .kotlin/

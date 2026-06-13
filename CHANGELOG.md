@@ -5,7 +5,97 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased] — Session 9 — 2026-06-13
+## [Unreleased] — Session 10 — 2026-06-13
+
+### Fixed
+
+**Reports — "Est. Market Value" and "Total Retail Value" always showed $0.00**
+
+- Root cause: `FunkoItem.marketAvg` and `retailPrice` were only ever *read*
+  into `CollectionStats` (`totalMarketValue` / `totalRetailValue`), never
+  *written*. `DetailViewModel.refreshPrices` resolved a `ResolvedPrice` for
+  display on the Detail screen's "Market Price" card but never persisted any
+  of it back onto the saved `FunkoItem` document — so per-item and aggregate
+  totals stayed at their defaults regardless of what the Detail screen showed.
+- `DetailViewModel.kt::refreshPrices` — after resolving a price, if
+  `resolved.marketAvg` or `resolved.retail` differ from the stored values,
+  `repository.saveItem(item.copy(marketAvg = ..., resolvedRetail = ...))` and
+  update `_state` so the UI reflects the persisted values immediately.
+- **On-device result:** Stitch with Frog (UPC `889698517959`) — Market avg
+  $37.94 / Retail $26.93 (UPCitemdb) now persist to the item record; Reports
+  "Est. Market Value", "Highest Market Value", and series "Value" all show
+  $37.94 after a price refresh.
+
+**Reports — stats not recomputed after returning from Detail screen**
+
+- `ReportsViewModel.refresh()` only ran once in `init {}`. Refreshing a
+  price on the Detail screen and navigating back to Reports showed the
+  stale `CollectionStats` snapshot from before the refresh.
+- `ReportsScreen.kt` — added a `DisposableEffect` + `LifecycleEventObserver`
+  that calls `viewModel.refresh()` on `ON_RESUME`, so reopening the Reports
+  tab recomputes stats.
+
+**"Total Retail Value" — new `resolvedRetail` field, distinct from catalog
+`retailPrice`**
+
+- `item.retailPrice` is catalog-sourced Funko MSRP and also gates
+  `PriceService` Tier 1 (a non-zero `retailPrice` short-circuits the entire
+  price waterfall on every future refresh, returning `source =
+  RETAIL_CATALOG`). Writing a marketplace-resolved retail value (e.g. from
+  UPCitemdb) into `retailPrice` would mislabel its provenance and disable
+  eBay/Channel3/HobbyDB tiers for that item permanently.
+- Added `FunkoItem.resolvedRetail: Double = 0.0` — the best "retail" figure
+  from the price waterfall, refreshed independently of catalog data — plus
+  `FunkoItem.effectiveRetail` (`retailPrice` if > 0, else `resolvedRetail`).
+  All "retail" *display/total* sites now use `effectiveRetail`:
+  `FunkoRepository.totalRetailValue`, `DetailScreen`'s Pricing card,
+  `ReportsScreen`'s per-series item rows, `PreScanScreen`'s preview label,
+  and every retail column/sum in `CollectionExporter` (xlsx + CSV).
+  Catalog-input contexts (`ScannerScreen`/`ScannerViewModel` price-paid
+  defaults) intentionally continue to use `retailPrice` (catalog MSRP),
+  unchanged.
+- `FunkoDexDatabase.FIELD_RESOLVED_RETAIL = "resolvedRetail"` /
+  `FunkoMapper` — persist/read the new field.
+
+**"I only have the variant — want the original" control looked like static
+text, not a button**
+
+- `DetailScreen.kt` — the variant-only flag control (shown for owned items
+  not yet flagged) was a `TextButton` with no visible chrome, indistinguishable
+  from a label. Changed to `OutlinedButton` so it reads as tappable, matching
+  the outlined style of the "FYE Exclusive" chip above it.
+
+### Changed
+
+**Deprecation cleanup (Material icons, CBL, CameraX, Vibrator)**
+
+- `DetailScreen.kt`, `CategoryFilterScreen.kt` — `Icons.Default.ArrowBack` →
+  `Icons.AutoMirrored.Filled.ArrowBack` (with the corresponding
+  `androidx.compose.material.icons.automirrored.filled.ArrowBack` import —
+  `Icons.AutoMirrored` is not a member of the wildcard
+  `androidx.compose.material.icons.filled.*` import and needs its own import
+  to resolve).
+- `PreScanScreen.kt` — `Icons.Default.HelpOutline` →
+  `Icons.AutoMirrored.Filled.HelpOutline` (+ import).
+- `DetailViewModel.kt` — `db.getDatabase().getDocument(id)` /
+  `db.getDatabase().save(doc)` (deprecated CBL 3.x `Database` API) →
+  `db.getCollection().getDocument(id)` / `db.getCollection().save(doc)`,
+  matching the default-collection convention already used throughout
+  `FunkoRepository`.
+- `FunkoRepository.kt` — `query.removeChangeListener(token)` (deprecated) →
+  `token.remove()` in both `collectionFlow()` and `wantListFlow()`.
+- `ScannerScreen.kt` —
+  - `@OptIn(ExperimentalGetImage::class)` on `startCamera` removed: this
+    CameraX version's `ExperimentalGetImage` is not a `@RequiresOptIn` marker,
+    so the `@OptIn` was a no-op flagged by the compiler ("annotation ... is
+    not annotated with '@OptIn'. '@OptIn' has no effect."). `ImageProxy.image`
+    is not used in this file, so no opt-in is actually required.
+  - Legacy haptic fallback (`Vibrator.vibrate(Long)`, API < 31) — the
+    `@Suppress("DEPRECATION")` only covered the `val v = ...` declaration, not
+    the separate `v?.vibrate(50)` call. Wrapped both in a `run { }` block under
+    one `@Suppress("DEPRECATION")`.
+
+---
 
 ### Fixed
 

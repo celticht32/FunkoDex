@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -257,7 +258,7 @@ private fun NotFoundResult() {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(Icons.Default.HelpOutline, null, Modifier.size(40.dp), tint = Color.White)
+            Icon(Icons.AutoMirrored.Filled.HelpOutline, null, Modifier.size(40.dp), tint = Color.White)
             Text("Unknown Funko", color = Color.White, fontWeight = FontWeight.Medium)
             Text("Not in local database", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
         }

@@ -119,7 +119,7 @@ class FunkoRepository @Inject constructor(
             trySend(items)
         }
         query.execute()
-        awaitClose { query.removeChangeListener(token) }
+        awaitClose { token.remove() }
     }.buffer(Channel.UNLIMITED)  // SAFE-5: prevents dropped updates on burst writes
      .flowOn(Dispatchers.IO)
 
@@ -144,7 +144,7 @@ class FunkoRepository @Inject constructor(
             trySend(items)
         }
         query.execute()
-        awaitClose { query.removeChangeListener(token) }
+        awaitClose { token.remove() }
     }.buffer(Channel.UNLIMITED)  // SAFE-5: prevents dropped updates on burst writes
      .flowOn(Dispatchers.IO)
 

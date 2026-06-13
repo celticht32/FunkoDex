@@ -80,7 +80,8 @@ com.funkodex/
 │   ├── backup/                 DriveBackupWorker, GitHubUploadWorker
 │   ├── db/                     FunkoDexDatabase (all constants + 9 indexes), FunkoMapper
 │   ├── export/                 CollectionExporter, ExportScreen (ExportButton), ExportViewModel
-│   ├── model/                  FunkoItem (27 fields), PriceData, PriceAlert (+upc field),
+│   ├── model/                  FunkoItem (30 fields, incl. resolvedRetail +
+│   │                           effectiveRetail computed getter), PriceData, PriceAlert (+upc field),
 │   │                           CategoryPreference, PendingUpcScan, CatalogContribution
 │   ├── preload/                CatalogPreloader, CatalogMapper, CatalogRefreshWorker
 │   │                           (Kenny Chan + community UPC + HobbyDB vaulted refresh),

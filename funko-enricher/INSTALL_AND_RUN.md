@@ -152,15 +152,22 @@ for sale - vaulted items are expected to show nothing here.
 
 **Pass 4 - HobbyDB reference numbers** (~5 minutes at the default limit)
 Looks up each catalog item's HobbyDB page for its UPC barcode, Funko number,
-HobbyDB ID, and retailer-exclusive SKUs (Hot Topic, GameStop, Target, Walmart,
-Amazon). Limited to 200 lookups per run by default (`--hdb-limit`); records
-are marked as checked so repeated runs work through the backlog without
-re-checking the same items.
+HobbyDB ID, retailer-exclusive SKUs (Hot Topic, GameStop, Target, Walmart,
+Amazon), and `series` — a deduped list of HobbyDB "subject" tags (format,
+event, or product-line tags as HobbyDB presents them, not classified as
+franchise vs. category). Limited to 200 lookups per run by default
+(`--hdb-limit`); records are marked as checked so repeated runs work through
+the backlog without re-checking the same items. Use `--retry-no-series` to
+re-check `hdbChecked` records that came back with no `series` tags (e.g. to
+backfill `series` on records scraped before this field existed).
 
 **Pass 5 - funko.com product detail pages** (varies)
-For funko.com-only records that have no franchise/series data, fetches the
-product page and reads its breadcrumb to fill in `franchise`, `funkoSection`,
-and `series`.
+For any record with no `franchise` that has a `productUrl` (not just
+funko.com-only records — HobbyDB-origin records that picked up a `productUrl`
+via the dedup/merge pass are also eligible), fetches the product page and
+reads its breadcrumb to fill in `franchise` and `funkoSection`. Sets `series`
+to `["Pop! Vinyl", franchise]` only if the record doesn't already have a
+`series` array (so Pass 4's HobbyDB tags aren't overwritten).
 
 **Pass 3 - PriceCharting** (long - see timing below)
 Looks up secondary market values (what collectors actually pay) from
@@ -174,7 +181,7 @@ Runs last so it can price records enriched by the earlier passes.
 | Pass 1 | < 30 seconds |
 | Pass 2 (full catalog) | ~10 minutes |
 | Pass 4 (default --hdb-limit 200) | ~5 minutes |
-| Pass 5 | varies - only funko.com-only records missing series |
+| Pass 5 | varies - only records missing franchise that have a productUrl |
 | Pass 3 at --pc-limit 500 | ~40 minutes |
 | Pass 3 at --pc-limit 10000 | ~14 hours |
 
@@ -237,6 +244,11 @@ Expected for some titles - HobbyDB doesn't have a page for every item, or the
 handle-to-URL conversion doesn't match. Records are marked `hdbChecked: true`
 so they aren't retried every run; use `--retry-no-refs` to give them another
 attempt later.
+
+**Want to backfill `series` tags without rebuilding from scratch**
+Use `--retry-no-series` to re-check `hdbChecked` records with an empty
+`series` array — see `README.md`'s Pass 4 troubleshooting for the full
+command.
 
 **Pass 3 mostly "not found"**
 Expected - PriceCharting matches ~60-70% of titles. Unusual names and special

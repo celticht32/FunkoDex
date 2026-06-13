@@ -70,8 +70,10 @@ fun ScannerScreen(
                     )
                 } else {
                     @Suppress("DEPRECATION")
-                    val v = context.getSystemService(Vibrator::class.java)
-                    v?.vibrate(50)
+                    run {
+                        val v = context.getSystemService(Vibrator::class.java)
+                        v?.vibrate(50)
+                    }
                 }
             } // silently ignore if vibrator unavailable (Do Not Disturb, no hardware)
         }
@@ -738,7 +740,6 @@ private fun ErrorSheet(message: String, onRetry: () -> Unit, onManual: () -> Uni
 
 // ─── CameraX bootstrap ─────────────────────────────────────────────────────────
 
-@OptIn(ExperimentalGetImage::class)
 internal fun startCamera(
     context: Context,
     lifecycleOwner: LifecycleOwner,

@@ -181,12 +181,23 @@ alpha06 deliberately and note why.
   Compose foundation has had `FlowRow` since 1.4 (the BOM in use includes it). Swap the
   import (`androidx.compose.foundation.layout.FlowRow`, `horizontalArrangement =
   Arrangement.spacedBy(8.dp)` replaces `mainAxisSpacing`), then drop the dependency.
-- **`Icons.Default.ArrowBack`** (DetailScreen.kt:235, CategoryFilterScreen.kt:37) and
+- ~~**`Icons.Default.ArrowBack`** (DetailScreen.kt:235, CategoryFilterScreen.kt:37) and
   **`Icons.Default.Logout`** (SettingsScreen.kt:385) — deprecated in favor of
-  `Icons.AutoMirrored.Filled.*` (RTL support). Mechanical rename.
-- **`vibrate(50)`** (ScannerScreen.kt:72) — already correctly version-gated with
+  `Icons.AutoMirrored.Filled.*` (RTL support). Mechanical rename.~~
+  **DONE (Session 10).** `Logout` was fixed in Session 9. `ArrowBack` (both
+  sites, plus `PreScanScreen.kt:260` `HelpOutline` found during the same pass)
+  fixed in Session 10 — note each swap needs its own
+  `import androidx.compose.material.icons.automirrored.filled.<IconName>`,
+  the existing `filled.*` wildcard import does not cover `Icons.AutoMirrored`
+  and the rename alone produces a new "receiver type mismatch" compile error.
+- ~~**`vibrate(50)`** (ScannerScreen.kt:72) — already correctly version-gated with
   `@Suppress("DEPRECATION")` for pre-API-31. **No change needed**; this is the right
-  pattern. Noting it so nobody "fixes" it.
+  pattern. Noting it so nobody "fixes" it.~~
+  **CORRECTION (Session 10):** this assessment was wrong — the
+  `@Suppress("DEPRECATION")` was attached only to the `val v = ...`
+  declaration, not the separate `v?.vibrate(50)` call on the next line, so
+  the warning still fired. Fixed by wrapping both statements in one `run { }`
+  block under a single `@Suppress("DEPRECATION")`.
 - **`accompanist-permissions`** — still maintained (unlike flowlayout) and used for the
   CAMERA flow in 3 screens. Keep for now; if §2.3 removes the DetailScreen use, the
   remaining uses are scanner/prescan CAMERA gates which are fine.

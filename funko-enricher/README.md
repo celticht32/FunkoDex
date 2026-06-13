@@ -34,6 +34,7 @@ node enrich.js [options]
 | `--hdb-delay` | `1500` | Milliseconds between HobbyDB requests (Pass 4) |
 | `--hdb-all` | off | Look up all records on HobbyDB, not just those missing UPC/Funko# (Pass 4) |
 | `--retry-no-refs` | off | Re-fetch only records previously checked but with no HobbyDB refs found (Pass 4) |
+| `--retry-no-series` | off | Re-fetch only records previously checked (`hdbChecked`) but with no `series` tags found (Pass 4) — use to backfill `series` on records scraped before `parseHobbyDbSeries` existed, without rebuilding from scratch |
 | `--skip-funko-detail` | off | Skip Pass 5 |
 | `--funko-detail-delay` | `1000` | Milliseconds between funko.com product detail page fetches (Pass 5) |
 
@@ -93,9 +94,17 @@ price records enriched by the earlier passes).
   and are skipped)
 - `--hdb-all` looks up every eligible record regardless of existing data;
   `--retry-no-refs` re-checks only records previously marked `hdbChecked` with
-  no refs found
+  no refs found; `--retry-no-series` re-checks only records previously marked
+  `hdbChecked` with an empty `series` array
 - Fields added when present on the HobbyDB page: `hdbid`, `upc`, `funkoNumber`,
-  `hotTopicSku`, `gamestopSku`, `targetSku`, `walmartSku`, `amazonSku`
+  `hotTopicSku`, `gamestopSku`, `targetSku`, `walmartSku`, `amazonSku`, and
+  `series` — a deduped list of HobbyDB "subject" tags scraped via
+  `parseHobbyDbSeries` (selector `a[href*="/subjects/"][href$="-series"]`,
+  which also matches `-event-series` hrefs). This is a raw tag list (format,
+  event, or product-line tags as HobbyDB presents them) — not classified as
+  franchise vs. category, since some pages (e.g. Saint Cloth Myth EX) expose
+  only one tag total with no distinct franchise tag. `series` is filled only
+  if the record doesn't already have one.
 - Marks every checked record `hdbChecked: true` (whether or not refs were found)
   so subsequent runs skip already-checked records unless `--hdb-all` or
   `--retry-no-refs` is set
@@ -103,13 +112,18 @@ price records enriched by the earlier passes).
   200 records to control memory growth
 
 ### Pass 5 - funko.com Product Page Franchise Enrichment
-- Candidates: records where `funkoSource === "funko.com"` and `series` is empty
-  (i.e. funko.com-only records added by Pass 2 that have no franchise/series data)
+- Candidates: **any** record with an empty `franchise` that has a
+  `productUrl` (widened from the original `funkoSource === "funko.com"`-only
+  gate, so HobbyDB-origin records that picked up a `productUrl` via the
+  dedup/merge pass are also eligible — records with no `productUrl` at all
+  have no funko.com page to check and are left as-is)
 - Fetches each record's `productUrl` and reads the JSON-LD `BreadcrumbList`
   (`Funko -> Section -> Franchise -> Product`)
 - Fields added: `franchise` (breadcrumb position 3), `funkoSection` (breadcrumb
-  position 2, e.g. "Fandoms", "Sports", "Music"), and `series` is set to
-  `["Pop! Vinyl", franchise]` to match the HobbyDB format
+  position 2, e.g. "Fandoms", "Sports", "Music"); `series` is set to
+  `["Pop! Vinyl", franchise]` to match the HobbyDB format **only if the
+  record doesn't already have a `series` array** (e.g. one filled by Pass 4's
+  `parseHobbyDbSeries`) — Pass 5 no longer clobbers Pass 4's series tags.
 - Reuses the Puppeteer browser from Passes 2/4; paced at `--funko-detail-delay`
 
 ---
@@ -134,9 +148,9 @@ price records enriched by the earlier passes).
 | `funkoNumber` | 4 | Funko's official Pop number, digits only, max 6 (e.g. `"203"`) |
 | `hotTopicSku` / `gamestopSku` / `targetSku` / `walmartSku` / `amazonSku` | 4 | Retailer SKUs for exclusives, where present |
 | `hdbChecked` | 4 | `true` once a record has been checked against HobbyDB (controls re-fetch behavior) |
+| `series` | 4, 5 | Pass 4: deduped HobbyDB "subject" tags via `parseHobbyDbSeries` (raw, unclassified). Pass 5: `["Pop! Vinyl", franchise]` for records still missing `series` after Pass 4. |
 | `franchise` | 5 | Franchise/category from funko.com breadcrumb |
 | `funkoSection` | 5 | Top-level funko.com section (e.g. "Fandoms") |
-| `series` | 5 | Set to `["Pop! Vinyl", franchise]` for funko.com-only records |
 | `popType` | post-processing | e.g. "Pop!", "Pop! Deluxe", "Pop! Rides" |
 | `funkoNumberFromTitle` | post-processing | Pop # extracted from title text, kept separate from verified `funkoNumber` |
 
@@ -184,6 +198,16 @@ conversion doesn't match HobbyDB's URL convention for that title. Records are
 still marked `hdbChecked: true` so they won't be retried every run; use
 `--retry-no-refs` to give them another attempt after `enrich.js`'s handle
 normalization logic is updated.
+
+**Want to backfill `series` tags on records scraped before `parseHobbyDbSeries` existed**
+Records already marked `hdbChecked: true` won't be re-fetched by a normal run.
+Use `--retry-no-series` (with `--skip-kenny --skip-pc --skip-funko
+--skip-funko-detail` and a high `--hdb-limit` to cover the whole dataset) to
+re-fetch only `hdbChecked` records with an empty `series` array — without
+rebuilding from scratch:
+```
+node enrich.js --skip-kenny --skip-pc --skip-funko --skip-funko-detail --retry-no-series --hdb-limit 100000 --input funko_data_enriched.json --output funko_data_enriched.json
+```
 
 **Want to re-run after new Funko releases**
 ```

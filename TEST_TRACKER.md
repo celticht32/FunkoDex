@@ -39,6 +39,33 @@ they're untested like everything else in this tracker.
 
 See `CHANGELOG.md` Session 9 entry and `LESSONS_LEARNED.md` #26–27 for full detail.
 
+## Session 10 fixes (2026-06-13)
+
+- Reports "Est. Market Value" and "Total Retail Value" always showed $0.00 —
+  `DetailViewModel.refreshPrices` now persists `marketAvg`/`resolvedRetail`
+  onto the item; `ReportsScreen` now refreshes `CollectionStats` on
+  `ON_RESUME`. **A9 and B3 should be re-tested** with a price refresh +
+  navigation round trip to confirm Reports reflects Detail-screen values.
+- New `FunkoItem.resolvedRetail` field + `effectiveRetail` computed property
+  — "Total Retail Value" and all per-item "Retail" displays/exports now use
+  `effectiveRetail` (catalog `retailPrice` if set, else `resolvedRetail`).
+  Catalog `retailPrice` / Tier 1 price-waterfall behavior is unchanged.
+- DetailScreen's "I only have the variant — want the original" control was a
+  `TextButton` with no visible chrome (looked like static text) — now an
+  `OutlinedButton`.
+- Deprecation cleanup: `Icons.Default.ArrowBack` (DetailScreen.kt,
+  CategoryFilterScreen.kt) and `Icons.Default.HelpOutline` (PreScanScreen.kt)
+  → `Icons.AutoMirrored.Filled.*` (+ required imports);
+  `db.getDatabase().getDocument/save` → `db.getCollection().getDocument/save`
+  in `DetailViewModel.kt`; `query.removeChangeListener(token)` →
+  `token.remove()` in `FunkoRepository.kt` (both live-query flows); removed
+  no-op `@OptIn(ExperimentalGetImage::class)` in `ScannerScreen.kt`; fixed
+  `@Suppress("DEPRECATION")` placement for the legacy `vibrate(50)` fallback
+  (was only suppressing the declaration, not the call).
+
+See `CHANGELOG.md` Session 10 entry and `LESSONS_LEARNED.md` #28–30 for full
+detail.
+
 ---
 
 ## Part A — Core Collection Features

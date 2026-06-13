@@ -175,6 +175,14 @@ Indexes: `idx_owned`, `idx_upc`, `idx_franchise`, `idx_category`, `idx_genre`,
 | 3 | Channel3 premium | User's API key | Higher limits |
 | 4 | HobbyDB | OAuth sign-in | Silent token refresh via TokenRefreshManager |
 
+A price refresh (Detail screen "Market Price" card) persists the resolved
+`marketAvg` and `resolvedRetail` onto the item, so Reports' "Est. Market
+Value" / "Total Retail Value" reflect the same numbers shown on Detail —
+not just the in-memory display state. `resolvedRetail` is separate from the
+catalog `retailPrice` (Tier 1): `FunkoItem.effectiveRetail` prefers
+`retailPrice` when present, else falls back to `resolvedRetail`, so writing
+a resolved retail value never overwrites or gates the catalog/Tier-1 field.
+
 ---
 
 ## OAuth token lifecycle

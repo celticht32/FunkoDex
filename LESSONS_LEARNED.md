@@ -287,4 +287,44 @@ record" is the cheapest place to add a self-healing repair for previously
 mis-written derived fields — no migration script or catalog wipe needed, the
 fix applies the next time the import runs.
 
+### 28. A resolved/display value and a persisted/aggregated value are not the same write
+`DetailViewModel.refreshPrices` fetched and resolved a price, updated
+`_priceState` so the Detail screen's "Market Price" card showed Market avg
+$37.94 / Retail $26.93 — but never called `repository.saveItem(...)`. The
+item's persisted `marketAvg`/`retailPrice` stayed `0.0`, so
+`CollectionStats.totalMarketValue`/`totalRetailValue` (Reports) were always
+$0.00 even while the Detail screen displayed correct numbers. **Lesson:**
+when a value is both shown on one screen *and* summed/aggregated on another,
+trace both the display write (UI state) and the persistence write (saved
+document) as separate steps — a refresh flow that updates only the former
+will pass a visual check on the screen it was tested on while silently
+leaving every aggregate wrong.
+
+### 29. A "best resolved" fallback value must not feed back into the tier/source field that gates it
+`PriceService.fetchPrice` checks `item.retailPrice > 0` as Tier 1
+("Funko retail (catalog)", `staleDays = 30`) and short-circuits the entire
+waterfall — eBay/Channel3/HobbyDB are never tried again once `retailPrice` is
+set. The natural-seeming fix for "Total Retail Value is $0.00" — write the
+UPCitemdb-resolved retail into `retailPrice` — would have permanently
+disabled the price waterfall for that item and mislabeled a marketplace
+figure as catalog MSRP. **Lesson:** before writing a "resolved" value back
+into a field that also acts as a *gate* or *source-of-truth flag* elsewhere,
+check every read site of that field, not just the one you're trying to fix.
+Here the fix was a new field (`resolvedRetail`) + a derived
+`effectiveRetail` getter, keeping the gate field (`retailPrice`) reserved for
+its original catalog-only meaning.
+
+### 30. `Icons.AutoMirrored.*` requires its own import, not just the `filled.*` wildcard
+Replacing `Icons.Default.ArrowBack`/`HelpOutline` with the
+`Icons.AutoMirrored.Filled.*` equivalents (to fix the "use the AutoMirrored
+version" deprecation warning) produced a *new* compile error — "Unresolved
+reference... receiver type mismatch: val Icons.Filled.ArrowBack: ImageVector"
+— because `Icons.AutoMirrored` lives in package
+`androidx.compose.material.icons.automirrored.filled` and is not covered by
+the existing `import androidx.compose.material.icons.filled.*`. Each call
+site needs its own
+`import androidx.compose.material.icons.automirrored.filled.<IconName>`.
+**Lesson:** an AutoMirrored icon swap is a two-line change (usage + import),
+not one — verify the import before declaring the deprecation fixed.
+
 *Document maintained by Celtic Heart Steamworks. Update after each significant change.*

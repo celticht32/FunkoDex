@@ -24,13 +24,19 @@ private val LightColorScheme = lightColorScheme(
     background         = Color(0xFFF5F5F7),
 )
 
+// Gold dark palette. All accent/text pairs verified against WCAG 2.2 AAA
+// (7:1 text, 4.5:1 non-text) on surface #1C1C1E:
+//   primary #D4AF37 vs surface           8.09:1  (AAA)
+//   onPrimary #2E2200 on primary         7.43:1  (thumb/text on track)
+//   onPrimaryContainer #FCE9B8 on #4A3708 9.50:1 (AAA)
+//   secondary #E8CE8A vs surface         11.04:1 (AAA)
 private val DarkColorScheme = darkColorScheme(
-    primary            = Color(0xFFFFB4A0),
-    onPrimary          = Color(0xFF5F1400),
-    primaryContainer   = FunkoDarkOrange,
-    onPrimaryContainer = Color(0xFFFFDAD2),
-    secondary          = Color(0xFFE7BDB0),
-    onSecondary        = Color(0xFF432B20),
+    primary            = Color(0xFFD4AF37),
+    onPrimary          = Color(0xFF2E2200),
+    primaryContainer   = Color(0xFF4A3708),
+    onPrimaryContainer = Color(0xFFFCE9B8),
+    secondary          = Color(0xFFE8CE8A),
+    onSecondary        = Color(0xFF3A2D00),
     tertiary           = FunkoYellow,
     surface            = Color(0xFF1C1C1E),
     onSurface          = Color(0xFFEDE0DC),

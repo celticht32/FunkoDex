@@ -6,6 +6,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -410,6 +412,7 @@ fun SettingsScreen(
                             Switch(
                                 checked         = config.contributeEnabled,
                                 onCheckedChange = catalogSettingsViewModel::setContributeEnabled,
+                                colors          = accessibleSwitchColors(),
                             )
                         },
                     )
@@ -637,16 +640,15 @@ fun SettingsScreen(
                             Text(logLevel.description,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Row(
+                            LazyRow(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
-                                LogLevel.entries.forEach { level ->
+                                items(LogLevel.entries.toList()) { level ->
                                     FilterChip(
                                         selected  = logLevel == level,
                                         onClick   = { viewModel.setLogLevel(level) },
                                         label     = { Text(level.displayName, fontSize = 11.sp) },
-                                        modifier  = Modifier.weight(1f),
                                     )
                                 }
                             }
@@ -774,6 +776,17 @@ private fun SectionHeader(text: String) {
     )
 }
 
+// M3 derives the checked Switch track from primaryContainer, which is a dim
+// fill in the dark theme and fails WCAG 1.4.11 non-text contrast (needs 3:1).
+// Use primary as the track (8.09:1 vs surface) and onPrimary as the thumb
+// (7.43:1 on track) so the checked state clears WCAG 2.2 AAA.
+@Composable
+private fun accessibleSwitchColors(): SwitchColors = SwitchDefaults.colors(
+    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+    checkedTrackColor = MaterialTheme.colorScheme.primary,
+    checkedBorderColor = MaterialTheme.colorScheme.primary,
+)
+
 @Composable
 private fun ThemeOption(theme: AppTheme, selected: Boolean, onSelect: () -> Unit) {
     Row(
@@ -885,7 +898,8 @@ fun CatalogDataSection(
                         Text("Checks for new Funko releases", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Switch(checked = config.enabled, onCheckedChange = viewModel::setEnabled)
+                    Switch(checked = config.enabled, onCheckedChange = viewModel::setEnabled,
+                        colors = accessibleSwitchColors())
                 }
 
                 if (config.enabled) {
@@ -917,7 +931,8 @@ fun CatalogDataSection(
                             Text("Saves mobile data", style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Switch(checked = config.wifiOnly, onCheckedChange = viewModel::setWifiOnly)
+                        Switch(checked = config.wifiOnly, onCheckedChange = viewModel::setWifiOnly,
+                            colors = accessibleSwitchColors())
                     }
 
                     config.lastRefreshed?.let { date ->

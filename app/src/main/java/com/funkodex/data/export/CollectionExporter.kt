@@ -14,6 +14,7 @@ import org.apache.poi.xssf.usermodel.*
 import java.io.File
 import java.io.FileOutputStream
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -69,7 +70,7 @@ class CollectionExporter @Inject constructor(
             writeWantListSheet(workbook, styles, wantList)
             writeSummarySheet(workbook, styles, owned, wantList, seriesSummaries)
 
-            val fileName = "FunkoDex_${LocalDate.now().format(FILE_DATE_FMT)}.xlsx"
+            val fileName = "FunkoDex_${LocalDateTime.now().format(FILE_DATE_FMT)}.xlsx"
             val file = File(context.cacheDir, fileName)
             FileOutputStream(file).use { workbook.write(it) }
             workbook.close()
@@ -90,7 +91,7 @@ class CollectionExporter @Inject constructor(
             owned.forEach { item ->
                 sb.appendLine(buildCsvRow(item))
             }
-            val fileName = "FunkoDex_${LocalDate.now().format(FILE_DATE_FMT)}.csv"
+            val fileName = "FunkoDex_${LocalDateTime.now().format(FILE_DATE_FMT)}.csv"
             val file = File(context.cacheDir, fileName)
             file.writeText(sb.toString())
             FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
@@ -136,7 +137,7 @@ class CollectionExporter @Inject constructor(
         val totalSaved = items.sumOf { it.effectiveRetail - it.pricePaid }
         totalsRow.cellNum(8, totalSaved, if (totalSaved >= 0) styles.currencyGreenBold else styles.currencyRedBold)
 
-        autoSizeColumns(sheet, COLLECTION_COLS.size)
+        setColumnWidths(sheet, COLLECTION_COLS.size)
         sheet.setColumnWidth(0, 30 * 256)   // Name — wider
         sheet.setColumnWidth(15, 40 * 256)  // Notes — wider
         sheet.createFreezePane(0, 1)         // Freeze header row
@@ -160,7 +161,7 @@ class CollectionExporter @Inject constructor(
             row.cellNum(6, avg, styles.currency)
         }
 
-        autoSizeColumns(sheet, SERIES_COLS.size)
+        setColumnWidths(sheet, SERIES_COLS.size)
         sheet.createFreezePane(0, 1)
     }
 
@@ -183,7 +184,7 @@ class CollectionExporter @Inject constructor(
                 row.cellStr(7, if (item.isVaulted) "Yes" else "No", styles.body)
             }
 
-        autoSizeColumns(sheet, WANT_COLS.size)
+        setColumnWidths(sheet, WANT_COLS.size)
         sheet.createFreezePane(0, 1)
     }
 
@@ -312,8 +313,33 @@ class CollectionExporter @Inject constructor(
         }
     }
 
-    private fun autoSizeColumns(sheet: Sheet, count: Int) {
-        for (i in 0 until count) sheet.autoSizeColumn(i)
+    // Android-safe column sizing. POI's autoSizeColumn() routes through
+    // java.awt.font.FontRenderContext, which does not exist on Android and
+    // throws NoClassDefFoundError at runtime. Compute width from the widest
+    // cell content in each column instead (character count → 1/256 width units).
+    private fun setColumnWidths(sheet: Sheet, colCount: Int) {
+        val widths = IntArray(colCount)
+        for (r in 0..sheet.lastRowNum) {
+            val row = sheet.getRow(r) ?: continue
+            for (c in 0 until colCount) {
+                val cell = row.getCell(c) ?: continue
+                val len = when (cell.cellType) {
+                    CellType.STRING -> cell.stringCellValue.length
+                    CellType.NUMERIC -> {
+                        // Approximate the rendered width of the formatted number.
+                        val fmt = cell.cellStyle.dataFormatString ?: ""
+                        val digits = "%.2f".format(cell.numericCellValue).length
+                        if (fmt.contains("$") || fmt.contains("%")) digits + 2 else digits
+                    }
+                    else -> 0
+                }
+                if (len > widths[c]) widths[c] = len
+            }
+        }
+        for (c in 0 until colCount) {
+            val chars = (widths[c] + 2).coerceIn(10, 60)
+            sheet.setColumnWidth(c, chars * 256)
+        }
     }
 
     // ─── CSV helper ────────────────────────────────────────────────────────────

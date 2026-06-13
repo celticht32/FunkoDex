@@ -47,7 +47,10 @@ data class FunkoItem(
 
     // ── Pricing ───────────────────────────────────────────────────────────────
     val pricePaid: Double = 0.0,         // What the user actually paid
-    val retailPrice: Double = 0.0,       // Funko's listed retail (usually $11.99–$14.99)
+    val retailPrice: Double = 0.0,       // Funko's listed MSRP from catalog data (usually $11.99–$14.99)
+    val resolvedRetail: Double = 0.0,    // Best "retail" figure from the price waterfall
+                                          // (UPCitemdb, Channel3, etc.) when no catalog MSRP exists.
+                                          // Refreshed independently of catalogRef/retailPrice.
     val marketLow: Double = 0.0,         // Current market low (from HobbyDB/Channel3)
     val marketHigh: Double = 0.0,        // Current market high
     val marketAvg: Double = 0.0,         // Current market average / estimated value
@@ -74,7 +77,17 @@ data class FunkoItem(
     // Same Funko figure, different paint/packaging version.
     // Stored on the parent record — does NOT create a separate collection entry.
     val variants: List<FunkoVariant> = emptyList(),
-)
+) {
+    /**
+     * The retail value to use for display and totals: prefers catalog-sourced
+     * MSRP (retailPrice) when present, otherwise falls back to the best
+     * resolved retail figure from the price waterfall (resolvedRetail).
+     * Use this everywhere "retail" is shown to the user — not retailPrice
+     * directly — so items without a catalog match still report a value.
+     */
+    val effectiveRetail: Double
+        get() = if (retailPrice > 0) retailPrice else resolvedRetail
+}
 
 enum class Condition {
     MINT,        // Box perfect, never opened

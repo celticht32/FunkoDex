@@ -34,6 +34,7 @@ class FunkoDexDatabase(private val context: Context) {
         // Pricing
         const val FIELD_PRICE_PAID     = "pricePaid"
         const val FIELD_RETAIL_PRICE   = "retailPrice"
+        const val FIELD_RESOLVED_RETAIL = "resolvedRetail"
         const val FIELD_MARKET_LOW     = "marketLow"
         const val FIELD_MARKET_HIGH    = "marketHigh"
         const val FIELD_MARKET_AVG     = "marketAvg"

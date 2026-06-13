@@ -31,6 +31,7 @@ object FunkoMapper {
         // Pricing
         doc.setDouble(FunkoDexDatabase.FIELD_PRICE_PAID,     item.pricePaid)
         doc.setDouble(FunkoDexDatabase.FIELD_RETAIL_PRICE,   item.retailPrice)
+        doc.setDouble(FunkoDexDatabase.FIELD_RESOLVED_RETAIL, item.resolvedRetail)
         doc.setDouble(FunkoDexDatabase.FIELD_MARKET_LOW,     item.marketLow)
         doc.setDouble(FunkoDexDatabase.FIELD_MARKET_HIGH,    item.marketHigh)
         doc.setDouble(FunkoDexDatabase.FIELD_MARKET_AVG,     item.marketAvg)
@@ -94,6 +95,7 @@ object FunkoMapper {
         // Pricing
         pricePaid        = doc.getDouble(FunkoDexDatabase.FIELD_PRICE_PAID),
         retailPrice      = doc.getDouble(FunkoDexDatabase.FIELD_RETAIL_PRICE),
+        resolvedRetail   = doc.getDouble(FunkoDexDatabase.FIELD_RESOLVED_RETAIL),
         marketLow        = doc.getDouble(FunkoDexDatabase.FIELD_MARKET_LOW),
         marketHigh       = doc.getDouble(FunkoDexDatabase.FIELD_MARKET_HIGH),
         marketAvg        = doc.getDouble(FunkoDexDatabase.FIELD_MARKET_AVG),

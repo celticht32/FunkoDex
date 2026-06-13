@@ -108,7 +108,7 @@ class CollectionExporter @Inject constructor(
         items.sortedWith(compareBy({ it.franchise }, { it.seriesNumber }))
             .forEachIndexed { i, item ->
                 val row = sheet.createRow(i + 1)
-                val saved = item.retailPrice - item.pricePaid
+                val saved = item.effectiveRetail - item.pricePaid
 
                 row.cellStr(0, item.name, styles.body)
                 row.cellStr(1, item.franchise, styles.body)
@@ -117,7 +117,7 @@ class CollectionExporter @Inject constructor(
                 row.cellStr(4, item.upc, styles.body)
                 row.cellStr(5, item.funkoId, styles.body)
                 row.cellNum(6, item.pricePaid, styles.currency)
-                row.cellNum(7, item.retailPrice, styles.currency)
+                row.cellNum(7, item.effectiveRetail, styles.currency)
                 row.cellNum(8, saved, if (saved >= 0) styles.currencyGreen else styles.currencyRed)
                 row.cellStr(9, if (item.isExclusive) "Yes" else "No", styles.body)
                 row.cellStr(10, item.exclusiveRetailer, styles.body)
@@ -132,8 +132,8 @@ class CollectionExporter @Inject constructor(
         val totalsRow = sheet.createRow(items.size + 1)
         totalsRow.cellStr(0, "TOTALS", styles.headerCell)
         totalsRow.cellNum(6, items.sumOf { it.pricePaid }, styles.currencyBold)
-        totalsRow.cellNum(7, items.sumOf { it.retailPrice }, styles.currencyBold)
-        val totalSaved = items.sumOf { it.retailPrice - it.pricePaid }
+        totalsRow.cellNum(7, items.sumOf { it.effectiveRetail }, styles.currencyBold)
+        val totalSaved = items.sumOf { it.effectiveRetail - it.pricePaid }
         totalsRow.cellNum(8, totalSaved, if (totalSaved >= 0) styles.currencyGreenBold else styles.currencyRedBold)
 
         autoSizeColumns(sheet, COLLECTION_COLS.size)
@@ -177,7 +177,7 @@ class CollectionExporter @Inject constructor(
                 row.cellStr(1, item.franchise, styles.body)
                 row.cellStr(2, item.seriesNumber, styles.body)
                 row.cellStr(3, item.category, styles.body)
-                row.cellNum(4, item.retailPrice, styles.currency)
+                row.cellNum(4, item.effectiveRetail, styles.currency)
                 row.cellStr(5, if (item.isExclusive) "Yes" else "No", styles.body)
                 row.cellStr(6, item.exclusiveRetailer, styles.body)
                 row.cellStr(7, if (item.isVaulted) "Yes" else "No", styles.body)
@@ -203,7 +203,7 @@ class CollectionExporter @Inject constructor(
         }
 
         val totalPaid = owned.sumOf { it.pricePaid }
-        val totalRetail = owned.sumOf { it.retailPrice }
+        val totalRetail = owned.sumOf { it.effectiveRetail }
 
         sheet.createRow(0).cellStr(0, "FunkoDex Collection Report", styles.titleCell)
         sheet.addMergedRegion(CellRangeAddress(0, 0, 0, 3))
@@ -319,10 +319,10 @@ class CollectionExporter @Inject constructor(
     // ─── CSV helper ────────────────────────────────────────────────────────────
 
     private fun buildCsvRow(item: FunkoItem): String {
-        val saved = item.retailPrice - item.pricePaid
+        val saved = item.effectiveRetail - item.pricePaid
         return listOf(
             item.name, item.franchise, item.seriesNumber, item.category, item.upc, item.funkoId,
-            "%.2f".format(item.pricePaid), "%.2f".format(item.retailPrice), "%.2f".format(saved),
+            "%.2f".format(item.pricePaid), "%.2f".format(item.effectiveRetail), "%.2f".format(saved),
             if (item.isExclusive) "Yes" else "No", item.exclusiveRetailer,
             item.condition.name, if (item.isVaulted) "Yes" else "No",
             item.dateAdded.format(DATE_FMT), item.dateAcquired?.format(DATE_FMT) ?: "",

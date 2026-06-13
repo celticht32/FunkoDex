@@ -122,6 +122,24 @@ class DetailViewModel @Inject constructor(
             repository.savePriceSnapshot(snapshot)
             val resolved = repository.getResolvedPrice(itemId)
             _priceState.value = PriceUiState.Loaded(resolved)
+
+            // Persist resolved market average and retail onto the item itself —
+            // CollectionStats.totalMarketValue / totalRetailValue (Reports) sum
+            // item.marketAvg / item.effectiveRetail, which were previously never
+            // written back after a refresh. resolvedRetail is the price-waterfall
+            // fallback used when there's no catalog retailPrice (see FunkoItem.effectiveRetail).
+            val needsUpdate = resolved != ResolvedPrice.UNKNOWN &&
+                (resolved.marketAvg != item.marketAvg || resolved.retail != item.resolvedRetail)
+            if (needsUpdate) {
+                val result = repository.saveItem(
+                    item.copy(marketAvg = resolved.marketAvg, resolvedRetail = resolved.retail)
+                )
+                result.getOrNull()?.let { saved ->
+                    if (_state.value is DetailUiState.Viewing) {
+                        _state.value = DetailUiState.Viewing(saved)
+                    }
+                }
+            }
         } else if (_priceState.value is PriceUiState.Loading) {
             _priceState.value = PriceUiState.Error("No price data available")
         }
@@ -381,14 +399,14 @@ class DetailViewModel @Inject constructor(
             _fetchState.value = FetchState.Fetching
             _photoError.value = null
             // Remove existing thumbnailBlob so downloadAndStore doesn't skip
-            val doc = db.getDatabase().getDocument(itemId)?.toMutable()
+            val doc = db.getCollection().getDocument(itemId)?.toMutable()
             if (doc != null) {
                 doc.remove(com.funkodex.data.db.FunkoDexDatabase.FIELD_THUMBNAIL_BLOB)
-                db.getDatabase().save(doc)
+                db.getCollection().save(doc)
             }
             val success = imageBlobs.downloadAndStore(item.copy(id = itemId))
             if (success) {
-                val bytes = db.getDatabase().getDocument(itemId)
+                val bytes = db.getCollection().getDocument(itemId)
                     ?.getBlob(com.funkodex.data.db.FunkoDexDatabase.FIELD_THUMBNAIL_BLOB)
                     ?.content
                 _photoBytes.value = bytes

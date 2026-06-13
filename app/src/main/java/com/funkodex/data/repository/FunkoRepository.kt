@@ -183,7 +183,7 @@ class FunkoRepository @Inject constructor(
             totalOwned          = owned.size + owned.sumOf { it.variants.size },
             totalWanted         = wanted.size + owned.count { it.isMissingOriginal },
             totalPaid           = owned.sumOf { it.pricePaid + it.variants.sumOf { v -> v.pricePaid } },
-            totalRetailValue    = owned.sumOf { it.retailPrice },
+            totalRetailValue    = owned.sumOf { it.effectiveRetail },
             totalMarketValue    = owned.sumOf { it.marketAvg },
             uniqueFranchises    = franchiseMap.keys.size,
             mostExpensivePaid   = owned.maxByOrNull { it.pricePaid + it.variants.sumOf { v -> v.pricePaid } },

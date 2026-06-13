@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -231,7 +232,7 @@ fun DetailScreen(
                     }) {
                         Icon(
                             if (state is DetailUiState.Editing) Icons.Default.Close
-                            else Icons.Default.ArrowBack,
+                            else Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back"
                         )
                     }
@@ -475,7 +476,7 @@ private fun ViewContent(
 
         // Option to flag as variant-only — shown for owned items not already flagged
         if (item.isOwned && !item.isMissingOriginal) {
-            TextButton(
+            OutlinedButton(
                 onClick  = onMarkVariantOnly,
                 modifier = Modifier.align(Alignment.Start),
             ) {
@@ -513,14 +514,14 @@ private fun ViewContent(
 
 
         // Pricing card — retail and savings (paid shown in Details card above)
-        if (item.retailPrice > 0) {
+        if (item.effectiveRetail > 0) {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("Pricing", fontWeight = FontWeight.Bold)
                     HorizontalDivider()
-                    DetailRow("Retail", "\$${"%.2f".format(item.retailPrice)}")
+                    DetailRow("Retail", "\$${"%.2f".format(item.effectiveRetail)}")
                     if (item.pricePaid > 0) {
-                        val diff = item.retailPrice - item.pricePaid
+                        val diff = item.effectiveRetail - item.pricePaid
                         DetailRow(
                             "Saved",
                             "${if (diff >= 0) "+" else ""}\$${"%.2f".format(diff)}",

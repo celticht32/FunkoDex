@@ -15,6 +15,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.funkodex.data.export.ExportButton
 import com.funkodex.data.model.CollectionStats
 import com.funkodex.data.model.SeriesSummary
@@ -33,6 +36,21 @@ fun ReportsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val stats = uiState.stats
+
+    // ReportsViewModel computes stats once on creation. If the user refreshes
+    // an item's price on the Detail screen (writing marketAvg) and navigates
+    // back here, the cached ViewModel instance wouldn't otherwise recompute —
+    // re-fetch on resume so Est. Market Value / totals reflect recent writes.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refresh()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     when {
         uiState.isLoading -> {
@@ -297,9 +315,9 @@ private fun SeriesSummaryCard(
                                     style = MaterialTheme.typography.bodySmall,
                                     modifier = Modifier.weight(1f),
                                 )
-                                if (item.retailPrice > 0) {
+                                if (item.effectiveRetail > 0) {
                                     Text(
-                                        currencyFmt.format(item.retailPrice),
+                                        currencyFmt.format(item.effectiveRetail),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )

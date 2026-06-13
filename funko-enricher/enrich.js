@@ -23,6 +23,15 @@
  *   --skip-funko      Skip Pass 2 (funko.com scrape)
  *   --skip-pc         Skip Pass 3 (PriceCharting scrape)
  *   --pc-limit        Max items to look up on PriceCharting (default: 500)
+ *   --skip-hdb        Skip Pass 4 (HobbyDB Reference Numbers / series scrape)
+ *   --hdb-limit       Max HobbyDB lookups per run        (default: 200)
+ *   --hdb-delay       Milliseconds between HobbyDB requests (default: 1500)
+ *   --hdb-all         Re-check all HobbyDB records, ignoring hdbChecked
+ *   --retry-no-refs   Re-fetch hdbChecked records that have no hdbid
+ *   --retry-no-series Re-fetch hdbChecked records missing series tags
+ *                     (use this to backfill `series` via parseHobbyDbSeries
+ *                     on records already scraped before that field existed,
+ *                     without rebuilding from scratch)
  */
 
 'use strict';
@@ -52,6 +61,7 @@ function parseArgs() {
     hdbDelay:   1500,   // ms between HobbyDB requests
     hdbAll:          false,  // look up all records, not just missing
     retryNoRefs:     false,  // re-fetch records with hdbChecked but no hdbid
+    retryNoSeries:   false,  // re-fetch hdbChecked HobbyDB records missing series tags
     skipFunkoDetail:  false,
     funkoDetailDelay: 1000,  // ms between product page fetches (domcontentloaded = fast)
     popFilter:  true,   // keep only standard Pops from funko.com
@@ -74,6 +84,7 @@ function parseArgs() {
       case '--hdb-delay':   opts.hdbDelay  = parseInt(args[++i], 10); break;
       case '--hdb-all':          opts.hdbAll          = true; break;
       case '--retry-no-refs':    opts.retryNoRefs     = true; break;
+      case '--retry-no-series':  opts.retryNoSeries   = true; break;
       case '--skip-funko-detail': opts.skipFunkoDetail = true; break;
       case '--funko-detail-delay': opts.funkoDetailDelay = parseInt(args[++i], 10); break;
     }
@@ -811,6 +822,39 @@ function mapHdbField(refs, label, value) {
   else if (label.includes('amazon'))                    refs.amazonSku    = v;
 }
 
+/**
+ * Scrape HobbyDB "subject" tags from a catalog page — these are the category/
+ * franchise/event/format links shown near the top of the page, e.g.:
+ *   <a href="/marketplaces/hobbydb/subjects/pop-vinyl-series">Pop! Vinyl</a>
+ *   <a href="/marketplaces/hobbydb/subjects/saint-cloth-myth-ex-series">Saint Cloth Myth EX</a>
+ *   <a href="/marketplaces/hobbydb/subjects/new-york-comic-con-event-series">New York Comic Con</a>
+ *
+ * Verified live (sagittarius-seiya, Stitch as Baker / NYCC): the selector
+ * a[href*="/subjects/"][href$="-series"] catches both "-series" and
+ * "-event-series" hrefs since both end in "-series". There is no separate
+ * franchise-only selector — HobbyDB pages may carry zero, one, or several of
+ * these tags (format, event, product line), and some pages (e.g. Saint Cloth
+ * Myth EX) expose only one tag total with no distinct franchise tag.
+ *
+ * Returns a deduped array of tag text in document order, or null if none found.
+ * Callers should NOT assume any particular entry is "the franchise" — this is
+ * a raw tag list matching Kenny's `series` array shape, not a classified field.
+ */
+function parseHobbyDbSeries(html) {
+  const $ = cheerio.load(html);
+  const tags = [];
+  const seen = new Set();
+
+  $('a[href*="/subjects/"][href$="-series"]').each((_, el) => {
+    const text = $(el).text().trim();
+    if (!text || seen.has(text)) return;
+    seen.add(text);
+    tags.push(text);
+  });
+
+  return tags.length > 0 ? tags : null;
+}
+
 async function passHobbyDb(enriched, opts) {
   console.log('\n── Pass 4: HobbyDB Reference Numbers ─────────────────────────');
 
@@ -831,12 +875,13 @@ async function passHobbyDb(enriched, opts) {
     .filter(({ rec }) => {
       if (!rec.handle || rec.handle.endsWith('.html')) return false; // funko.com record
       if (opts.hdbAll) return true;
-      if (opts.retryNoRefs) return rec.hdbChecked && !rec.hdbid; // only retry no-refs
+      if (opts.retryNoRefs)   return rec.hdbChecked && !rec.hdbid; // only retry no-refs
+      if (opts.retryNoSeries) return rec.hdbChecked && (!rec.series || rec.series.length === 0); // only retry missing series
       return !rec.hdbid && !rec.hdbChecked; // skip if already fetched
     })
     .slice(0, opts.hdbLimit);
 
-  console.log(`  Candidates (missing UPC or Funko#): ${candidates.length} (limit: ${opts.hdbLimit})`);
+  console.log(`  Candidates: ${candidates.length} (limit: ${opts.hdbLimit})`);
   console.log(`  Estimated time: ~${Math.ceil(candidates.length * opts.hdbDelay / 60000)} minutes`);
 
   if (candidates.length === 0) {
@@ -926,27 +971,36 @@ async function passHobbyDb(enriched, opts) {
         ).catch(() => {});
 
         const html = await page.content();
-        const refs = parseHobbyDbRefs(html);
+        const refs   = parseHobbyDbRefs(html);
+        const series = parseHobbyDbSeries(html);
 
-        if (!refs) {
+        if (!refs && !series) {
           console.log('no refs found');
           enriched[idx].hdbChecked = true; // mark as fetched so restarts skip it
           notFound++;
         } else {
           // Merge into record
           const r = enriched[idx];
-          if (refs.hdbid       && !r.hdbid)       r.hdbid       = refs.hdbid;
-          if (refs.upc         && !r.upc)         r.upc         = refs.upc;
-          if (refs.funkoNumber && !r.funkoNumber) r.funkoNumber = refs.funkoNumber;
-          if (refs.hotTopicSku && !r.hotTopicSku) r.hotTopicSku = refs.hotTopicSku;
-          if (refs.gamestopSku && !r.gamestopSku) r.gamestopSku = refs.gamestopSku;
-          if (refs.targetSku   && !r.targetSku)   r.targetSku   = refs.targetSku;
-          if (refs.walmartSku  && !r.walmartSku)  r.walmartSku  = refs.walmartSku;
-          if (refs.amazonSku   && !r.amazonSku)   r.amazonSku   = refs.amazonSku;
+          if (refs) {
+            if (refs.hdbid       && !r.hdbid)       r.hdbid       = refs.hdbid;
+            if (refs.upc         && !r.upc)         r.upc         = refs.upc;
+            if (refs.funkoNumber && !r.funkoNumber) r.funkoNumber = refs.funkoNumber;
+            if (refs.hotTopicSku && !r.hotTopicSku) r.hotTopicSku = refs.hotTopicSku;
+            if (refs.gamestopSku && !r.gamestopSku) r.gamestopSku = refs.gamestopSku;
+            if (refs.targetSku   && !r.targetSku)   r.targetSku   = refs.targetSku;
+            if (refs.walmartSku  && !r.walmartSku)  r.walmartSku  = refs.walmartSku;
+            if (refs.amazonSku   && !r.amazonSku)   r.amazonSku   = refs.amazonSku;
+          }
+          // series is a raw tag list (format/event/product-line) — fill only if
+          // we don't already have one. Does not imply franchise; see Pass 5.
+          if (series && (!r.series || r.series.length === 0)) r.series = series;
 
           enriched[idx].hdbChecked = true; // mark as fetched
-          const fieldCount = Object.keys(refs).length;
-          console.log(`✓ ${Object.entries(refs).map(([k,v])=>k+':'+v).join(' | ')}`);
+          const summary = [
+            ...(refs ? Object.entries(refs).map(([k,v])=>k+':'+v) : []),
+            ...(series ? [`series:[${series.join(', ')}]`] : []),
+          ].join(' | ');
+          console.log(`✓ ${summary}`);
           found++;
         }
       } catch (err) {
@@ -1025,16 +1079,20 @@ function extractBreadcrumb(html) {
 async function passFunkoDetails(enriched, opts) {
   console.log('\n── Pass 5: funko.com product page franchise enrichment ────────');
 
-  // Only funko.com records with empty series
+  // Any record with an empty franchise that has a funko.com product page to
+  // check — previously restricted to funkoSource === 'funko.com', which
+  // excluded HobbyDB-origin records that ended up with a productUrl via the
+  // dedup/merge pass. Records without a productUrl (no funko.com page at all)
+  // genuinely have no franchise source here and are left as-is (see
+  // parseHobbyDbSeries comments — some HobbyDB pages carry no franchise tag).
   const candidates = enriched
     .map((rec, i) => ({ rec, i }))
     .filter(({ rec }) =>
-      rec.funkoSource === 'funko.com' &&
-      (!rec.series || rec.series.length === 0) &&
+      !rec.franchise &&
       rec.productUrl
     );
 
-  console.log(`  Candidates (funko.com records missing series): ${candidates.length}`);
+  console.log(`  Candidates (records missing franchise with a funko.com page): ${candidates.length}`);
   if (candidates.length === 0) { console.log('  Nothing to do.'); return { enriched: 0, notFound: 0, errors: 0 }; }
   console.log(`  Estimated time: ~${Math.ceil(candidates.length * opts.funkoDetailDelay / 60000)} minutes`);
 
@@ -1081,8 +1139,11 @@ async function passFunkoDetails(enriched, opts) {
           if (franchise) {
             enriched[idx].franchise    = franchise;
             enriched[idx].funkoSection = section;
-            // Build series array to match HobbyDB format
-            enriched[idx].series = ['Pop! Vinyl', franchise];
+            // Build series array to match HobbyDB format — only if the record
+            // doesn't already have one (e.g. from Pass 4's parseHobbyDbSeries).
+            if (!enriched[idx].series || enriched[idx].series.length === 0) {
+              enriched[idx].series = ['Pop! Vinyl', franchise];
+            }
             enrichedCount++;
             console.log(`✓ ${section} > ${franchise}`);
           } else {

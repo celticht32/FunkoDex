@@ -214,8 +214,8 @@ private fun NotOwnedResult(item: FunkoItem) {
             textAlign = TextAlign.Center, fontSize = 15.sp)
         if (item.franchise.isNotEmpty())
             Text(item.franchise, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
-        if (item.retailPrice > 0)
-            Text("Retail: $${"%.2f".format(item.retailPrice)}",
+        if (item.effectiveRetail > 0)
+            Text("Retail: $${"%.2f".format(item.effectiveRetail)}",
                 color = Color(0xFF90CAF9), fontSize = 13.sp)
         val isWanted = item.isOwned.not() && item.id.isNotEmpty()
         if (isWanted)

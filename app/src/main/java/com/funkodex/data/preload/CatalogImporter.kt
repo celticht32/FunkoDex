@@ -10,8 +10,6 @@ import com.couchbase.lite.QueryBuilder
 import com.couchbase.lite.SelectResult
 import com.couchbase.lite.UnitOfWork
 import com.funkodex.data.db.FunkoDexDatabase
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -42,8 +40,6 @@ class CatalogImporter @Inject constructor(
     private val db: FunkoDexDatabase,
 ) {
 
-    private val gson = Gson()
-
     // ── Non-Pop filter (handoff spec) ─────────────────────────────────────
     // Net-new records matching these are merchandise, not standard Pops, and
     // are skipped on insert. Merges into existing catalog docs are NOT
@@ -57,7 +53,7 @@ class CatalogImporter @Inject constructor(
 
     private fun isStandardPop(record: EnrichedRecord): Boolean {
         if (NON_POP_TITLE.containsMatchIn(record.title ?: "")) return false
-        val series = record.series?.map { it.lowercase() } ?: return true
+        val series = record.series.map { it.lowercase() }
         return listOf("pop! tees","loungefly","mystery minis","wacky wobblers",
             "vinyl soda","funkoverse","dorbz","rock candy","hikari","fabrikations")
             .none { tag -> series.any { it.contains(tag) } }
@@ -130,9 +126,20 @@ class CatalogImporter @Inject constructor(
             }
 
         // ── 2. Parse ──────────────────────────────────────────────────────
-        val type = object : TypeToken<List<EnrichedRecord>>() {}.type
+        // NOTE: We intentionally do NOT use gson.fromJson(json, TypeToken<List<
+        // EnrichedRecord>>) here. That reflective path throws
+        // "java.util.ArrayList cannot be cast to java.lang.Void" on-device for
+        // this Kotlin data class — Gson mis-resolves the generic `series:
+        // List<String>` field type under Kotlin's emitted metadata. Parsing the
+        // tree and mapping each object field explicitly sidesteps Gson's
+        // reflective TypeAdapter entirely and is fully deterministic.
         val records: List<EnrichedRecord> = try {
-            gson.fromJson(json, type)
+            val root = com.google.gson.JsonParser.parseString(json)
+            if (!root.isJsonArray) {
+                emit(ImportProgress(error = "Expected a JSON array of records"))
+                return@flow
+            }
+            root.asJsonArray.map { element -> element.asJsonObject.toEnrichedRecord() }
         } catch (e: Exception) {
             emit(ImportProgress(error = "JSON parse error: ${e.message}"))
             return@flow
@@ -225,6 +232,22 @@ class CatalogImporter @Inject constructor(
                                 mutable.setString(CatalogMapper.FIELD_PC_URL, it)
                             }
 
+                            // Repair the legacy bad category value. Earlier catalog
+                            // builds stored "Pop! Vinyl" (a format descriptor, not a
+                            // collecting category) in the category field, which the
+                            // category filter can't match and silently hides. Recompute
+                            // from the record's series and overwrite only when the stored
+                            // value is the bad one, so a re-import self-heals existing docs.
+                            val storedCategory = existing.getString(CatalogMapper.FIELD_CATEGORY)
+                            if (storedCategory.equals("Pop! Vinyl", ignoreCase = true)) {
+                                val repaired = record.series.firstOrNull { s ->
+                                    s.startsWith("Pop!", ignoreCase = true) &&
+                                    !s.equals("Pop! Vinyl", ignoreCase = true) &&
+                                    !s.equals("Pop!", ignoreCase = true)
+                                } ?: ""
+                                mutable.setString(CatalogMapper.FIELD_CATEGORY, repaired)
+                            }
+
                             mutable.setString(CatalogMapper.FIELD_LAST_UPDATED, LocalDate.now().toString())
                             collection.save(mutable)
                             enriched++
@@ -273,7 +296,7 @@ class CatalogImporter @Inject constructor(
                                 handle           = insertHandle,
                                 title            = title,
                                 imageName        = record.imageName?.trim() ?: "",
-                                seriesList       = record.series ?: emptyList(),
+                                seriesList       = record.series,
                                 upc              = record.upc?.takeIf { it.isNotBlank() },
                                 price            = parsedPrice,
                                 source           = record.funkoSource ?: "ENRICHED",
@@ -346,4 +369,46 @@ data class ImportResult(
     val skipped:    Int,
     val errors:     Int,
     val durationMs: Long,
+)
+
+// ── Explicit JSON → EnrichedRecord mapping ────────────────────────────────────
+// Hand-rolled to avoid Gson's reflective binding of List<EnrichedRecord>, which
+// throws "ArrayList cannot be cast to java.lang.Void" on-device for this Kotlin
+// data class. Every field is read defensively: missing/JsonNull → null (or
+// emptyList() for series).
+
+private fun com.google.gson.JsonObject.optString(key: String): String? {
+    val el = get(key) ?: return null
+    return if (el.isJsonNull) null else el.asString
+}
+
+private fun com.google.gson.JsonObject.optBoolean(key: String): Boolean? {
+    val el = get(key) ?: return null
+    return if (el.isJsonNull) null else el.asBoolean
+}
+
+private fun com.google.gson.JsonObject.optStringList(key: String): List<String> {
+    val el = get(key) ?: return emptyList()
+    if (!el.isJsonArray) return emptyList()
+    return el.asJsonArray.mapNotNull { if (it.isJsonNull) null else it.asString }
+}
+
+private fun com.google.gson.JsonObject.toEnrichedRecord(): EnrichedRecord = EnrichedRecord(
+    handle            = optString("handle"),
+    title             = optString("title"),
+    imageName         = optString("imageName"),
+    series            = optStringList("series"),
+    upc               = optString("upc"),
+    pid               = optString("pid"),
+    price             = optString("price"),
+    available         = optBoolean("available"),
+    productUrl        = optString("productUrl"),
+    funkoPrimaryImage = optString("funkoPrimaryImage"),
+    funkoSource       = optString("funkoSource"),
+    funkoNumber       = optString("funkoNumber"),
+    popType           = optString("popType"),
+    marketValueLoose  = optString("marketValueLoose"),
+    marketValueNew    = optString("marketValueNew"),
+    pricechartingId   = optString("pricechartingId"),
+    pricechartingUrl  = optString("pricechartingUrl"),
 )

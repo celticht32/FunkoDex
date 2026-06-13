@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -58,9 +59,11 @@ fun SettingsScreen(
         }
     }
 
-    // File picker for enriched catalog import
+    // File picker for enriched catalog import — opens directly in Downloads
+    // since that's where the enrich.js pipeline output (funko_data_enriched.json)
+    // is typically saved/transferred.
     val enrichedCatalogLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
+        OpenDocumentInDownloads()
     ) { uri ->
         uri?.let {
             context.contentResolver.takePersistableUriPermission(
@@ -378,7 +381,7 @@ fun SettingsScreen(
                             onClick  = { com.funkodex.data.backup.DriveBackupWorker.runNow(context) }
                         )
                         SettingsRow(
-                            icon     = Icons.Default.Logout,
+                            icon     = Icons.AutoMirrored.Filled.Logout,
                             title    = "Disconnect Google Drive",
                             subtitle = "Stop automatic backups · To fully revoke access, visit Google Account → Connections",
                             onClick  = {
@@ -1064,3 +1067,26 @@ private fun SourceRow(
         }
     }
 }
+
+/**
+ * [ActivityResultContracts.OpenDocument] variant that hints the system file
+ * picker to open directly in the device's Downloads folder via
+ * `EXTRA_INITIAL_URI` (API 26+, matches this app's minSdk). Most picker
+ * implementations (incl. AOSP DocumentsUI) honor this; some OEM pickers may
+ * ignore it and fall back to their own default location.
+ */
+private class OpenDocumentInDownloads : ActivityResultContracts.OpenDocument() {
+    override fun createIntent(context: android.content.Context, input: Array<String>): Intent {
+        val intent = super.createIntent(context, input)
+        // AOSP DocumentsUI convention for the Downloads root: authority +
+        // root document ID "downloads" (see DocumentsUI source / commonly
+        // documented constants — buildRootUri is NOT correct here).
+        val downloadsUri = android.provider.DocumentsContract.buildDocumentUri(
+            "com.android.providers.downloads.documents",
+            "downloads",
+        )
+        intent.putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, downloadsUri)
+        return intent
+    }
+}
+

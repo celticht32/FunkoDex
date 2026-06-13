@@ -114,8 +114,19 @@ object CatalogMapper {
             !s.equals("Chase Pieces", ignoreCase = true)
         } ?: seriesList.firstOrNull() ?: ""
 
+        // Category = the first series tag that is a real Pop! category, NOT a
+        // generic format descriptor. "Pop! Vinyl" (and bare "Pop!") describe the
+        // product format, not a collecting category, so they must not be stored
+        // as the category — doing so produces an un-matchable value that the
+        // category filter silently drops (e.g. funko.com-enriched records whose
+        // series is ["Pop! Vinyl", "Music"]). Falls back to "" (uncategorized)
+        // when no real category tag is present.
         val category = seriesList
-            .firstOrNull { it.startsWith("Pop!", ignoreCase = true) } ?: ""
+            .firstOrNull { s ->
+                s.startsWith("Pop!", ignoreCase = true) &&
+                !s.equals("Pop! Vinyl", ignoreCase = true) &&
+                !s.equals("Pop!", ignoreCase = true)
+            } ?: ""
 
         val isExclusive       = seriesList.any { isExclusiveSeries(it) }
         val exclusiveRetailer = if (isExclusive) extractRetailer(seriesList) else ""

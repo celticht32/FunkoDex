@@ -16,7 +16,7 @@ data class EnrichedRecord(
     val handle:           String?       = null,
     val title:            String?       = null,
     val imageName:        String?       = null,
-    val series:           List<String>? = null,
+    val series:           List<String>  = emptyList(),
     val upc:              String?       = null,
 
     // ── funko.com enriched fields ──────────────────────────────────────────

@@ -73,11 +73,16 @@ class FunkoLookupService @Inject constructor(
         val enabled = categoryPrefs.getEnabledCategories()
         val localResults = searchLocalByName(query)
         val results = if (localResults.isNotEmpty()) localResults else searchChannel3ByName(query)
-        // Apply category filter — only show items whose category is enabled
+        // Apply category filter — only show items whose category is enabled.
+        // `enabled` holds normalized category KEYS (e.g. "pop_music"); item.category
+        // is a display string (e.g. "Pop! Music"), so normalize via the canonical
+        // FunkoCategories.toKey() before comparing. (The previous raw substring
+        // check never matched real categories — "Pop! Music".contains("pop_music")
+        // is false — so it only passed items via the empty-category escape hatch.)
         if (enabled.isEmpty()) results
         else results.filter { item ->
             item.category.isEmpty() ||
-            enabled.any { key -> item.category.contains(key, ignoreCase = true) }
+            com.funkodex.data.model.FunkoCategories.toKey(item.category) in enabled
         }
     }
 
@@ -148,7 +153,7 @@ class FunkoLookupService @Inject constructor(
                 .allResults()
                 .mapNotNull { result ->
                     val docId = result.getString("id") ?: return@mapNotNull null
-                    val doc = db.getDatabase().getDocument(docId) ?: return@mapNotNull null
+                    val doc = db.getCollection().getDocument(docId) ?: return@mapNotNull null
                     com.funkodex.data.model.FunkoItem(
                         id           = docId,
                         upc          = doc.getString("upc") ?: "",

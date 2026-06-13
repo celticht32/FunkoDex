@@ -59,8 +59,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions { jvmTarget = "17" }
-
     buildFeatures {
         compose = true
         buildConfig = true   // retained for Phase F: BuildConfig.WORKER_URL
@@ -81,6 +79,12 @@ android {
                 "META-INF/versions/9/previous-compilation-data.bin"
             )
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
@@ -134,7 +138,6 @@ dependencies {
     implementation(libs.exifinterface)          // EXIF rotation correction for user photos (Phase C)
 
     // Accompanist — FlowRow for series filter chips, permissions helper for camera
-    implementation(libs.accompanist.flowlayout)
     implementation(libs.accompanist.permissions)
 
     // Chrome Custom Tabs — OAuth flows for HobbyDB and eBay

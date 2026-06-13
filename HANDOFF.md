@@ -1,7 +1,7 @@
 # FunkoDex — Session Handoff
 **Date:** 2026-06-12
-**Sessions completed:** 1 (initial build), 2 (enricher/catalog import), 3 (UI/variant/photo/backup), 4 (enriched catalog import implementation + handle repair), 5 (16 KB page-size compliance + Drive auth migration)
-**Next session focus:** Cloud Console OAuth client verification + device tests T-D1–T-D5 (Drive auth), then physical device testing (DEVICE_TEST_PLAN.md, incl. on-device enriched import run)
+**Sessions completed:** 1 (initial build), 2 (enricher/catalog import), 3 (UI/variant/photo/backup), 4 (enriched catalog import implementation + handle repair), 5 (16 KB page-size compliance + Drive auth migration), 6 (Photo Picker migration + P3 deprecation cleanup)
+**Next session focus:** Cloud Console OAuth client verification + device tests T-D1–T-D5 (Drive auth) + Photo Picker smoke test, then physical device testing (DEVICE_TEST_PLAN.md, incl. on-device enriched import run)
 
 ---
 
@@ -16,21 +16,22 @@ Android Funko Pop collectibles tracker.
 
 ## Current State
 
-Session 5 complete: 16 KB page-size compliance (P0) verified via Analyze APK on
-release build — all `.so` files across all ABIs report 16 KB alignment, including
-the previously-contested ML Kit barcode `libbarhopper_v3.so` (no fallback needed).
-Smoke-tested on a 16 KB-page emulator with no errors. Drive auth migration (P1)
-also complete and building/running clean — see `docs/CredentialManager_Migration_SPEC.md`.
+Sessions 5 and 6 complete. Per `docs/PlayStore_Readiness_Migration_SPEC.md`'s
+execution plan (Sessions A–C), the app is now code-complete for Play submission
+readiness: 16 KB page-size compliant, Drive auth migrated off GoogleSignIn, Photo
+Picker replaces the storage-permission gallery flow, and the P3 deprecation items
+(kotlinOptions, accompanist-flowlayout) are cleaned up. Builds and runs clean.
 
-Ready for: Cloud Console OAuth client confirmation, device tests T-D1–T-D5, then
-physical device testing per `DEVICE_TEST_PLAN.md`.
+Ready for: Cloud Console OAuth client confirmation, device tests T-D1–T-D5 (Drive
+auth), Photo Picker smoke test (API 33+ and API 26–32), then physical device
+testing per `DEVICE_TEST_PLAN.md`.
 
 ### Pre-Play Store blockers remaining
 - [ ] Cloud Console: confirm Android OAuth client ID (`com.funkodex` + signing SHA-1)
 - [ ] Device tests T-D1–T-D5 (`docs/CredentialManager_Migration_SPEC.md` §9) —
       T-D3 (lapsed grant) is the critical one
-- [ ] Photo Picker migration (P1 — `docs/PlayStore_Readiness_Migration_SPEC.md` §2.3,
-      READ_MEDIA_IMAGES policy)
+- [ ] Photo Picker smoke test — gallery pick on API 33+ and API 26–32
+      (`docs/PlayStore_Readiness_Migration_SPEC.md` §2.3)
 - [ ] Community contribution Cloudflare Worker deployment (infrastructure)
 - [ ] Device testing results (may surface new bugs) — now includes on-device enriched import run
 
@@ -43,6 +44,13 @@ physical device testing per `DEVICE_TEST_PLAN.md`.
       ResolutionSelector migration (Session 5)
 - [x] GoogleSignIn → AuthorizationClient Drive auth migration (Session 5 —
       code complete, device tests pending)
+- [x] Photo Picker migration — `PickVisualMedia`, removed READ_MEDIA_IMAGES/
+      READ_EXTERNAL_STORAGE (Session 6 — code complete, smoke test pending)
+- [x] P3 cleanup — `kotlinOptions` → `compilerOptions`, `accompanist-flowlayout`
+      → Compose Foundation `FlowRow` (Session 6). Note: `Icons.Default.ArrowBack`
+      and `Icons.Default.Logout` left as-is — `AutoMirrored` variants did not
+      resolve against the current compose-bom; not worth a BOM bump for this
+      alone (see Lessons Learned)
 
 ---
 

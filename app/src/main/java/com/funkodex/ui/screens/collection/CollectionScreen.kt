@@ -121,6 +121,7 @@ fun CollectionScreen(
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun FilterRow(
     allSeries: List<String>,
@@ -148,7 +149,7 @@ private fun FilterRow(
         if (allSeries.isNotEmpty()) {
             Text("Series", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(4.dp))
-            com.google.accompanist.flowlayout.FlowRow(mainAxisSpacing = 8.dp) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = selectedSeries == null,
                     onClick  = { onSelectSeries(null) },

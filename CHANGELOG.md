@@ -5,6 +5,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — Session 6 — 2026-06-12
+
+### Changed
+
+**Photo Picker Migration (Play P1)**
+- `DetailScreen.kt` — replaced `ActivityResultContracts.GetContent()` with
+  `ActivityResultContracts.PickVisualMedia()` + `PickVisualMediaRequest(ImageOnly)`
+  for the "Choose from gallery" flow
+- Removed the `READ_MEDIA_IMAGES`/`READ_EXTERNAL_STORAGE` runtime permission gate
+  (`storagePermission` block) — Photo Picker requires no storage permission
+- `AndroidManifest.xml` — removed `READ_MEDIA_IMAGES` and `READ_EXTERNAL_STORAGE`
+  permissions entirely (addresses Play Photo and Video Permissions policy)
+- Removed now-unused `android.os.Build` import from `DetailScreen.kt`
+
+**P3 Deprecation Cleanup**
+- `app/build.gradle.kts` — replaced deprecated `kotlinOptions { jvmTarget = "17" }`
+  with `kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }`
+- `CollectionScreen.kt` — replaced `com.google.accompanist.flowlayout.FlowRow`
+  (`mainAxisSpacing`) with Compose Foundation `FlowRow`
+  (`horizontalArrangement = Arrangement.spacedBy(8.dp)`,
+  `@OptIn(ExperimentalLayoutApi::class)`); removed `accompanist-flowlayout`
+  dependency and version-catalog entry entirely
+- `Icons.Default.ArrowBack`/`Icons.Default.Logout` — left unchanged.
+  `Icons.AutoMirrored.Filled.*` variants did not resolve against the current
+  `compose-bom` (2024.09.00); reverted after compile failure rather than bump
+  the BOM for this alone
+
+### Outstanding
+- Photo Picker smoke test: gallery pick on API 33+ and API 26–32
+- Cloud Console OAuth client + device tests T-D1–T-D5 (carried over from Session 5)
+
+---
+
 ## [Unreleased] — Session 5 — 2026-06-12
 
 ### Changed

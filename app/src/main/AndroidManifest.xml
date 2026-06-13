@@ -6,13 +6,8 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- C1: Photo capture — gallery picker permissions -->
-    <!-- READ_MEDIA_IMAGES required on Android 13+ (API 33+) -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <!-- READ_EXTERNAL_STORAGE required on Android 12 and below -->
-    <uses-permission
-        android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
+    <!-- C1: Photo capture — gallery picker uses the system Photo Picker
+         (PickVisualMedia), which requires no storage permission. -->
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />

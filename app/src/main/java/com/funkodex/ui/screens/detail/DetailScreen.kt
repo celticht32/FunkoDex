@@ -29,7 +29,6 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.isGranted
 import android.Manifest
-import android.os.Build
 import androidx.compose.ui.graphics.asImageBitmap
 import android.graphics.BitmapFactory
 import androidx.compose.material3.Switch
@@ -813,7 +812,7 @@ private fun PhotoCardEdit(
     }
 
     val galleryLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
+        ActivityResultContracts.PickVisualMedia()
     ) { uri -> uri?.let { onSavePhoto(it) } }
 
     val cameraPermission = rememberPermissionState(
@@ -825,15 +824,6 @@ private fun PhotoCardEdit(
             cameraLauncher.launch(uri)
         }
     }
-
-    val storagePermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-        rememberPermissionState(Manifest.permission.READ_MEDIA_IMAGES) { granted ->
-            if (granted) galleryLauncher.launch("image/*")
-        }
-    else
-        rememberPermissionState(Manifest.permission.READ_EXTERNAL_STORAGE) { granted ->
-            if (granted) galleryLauncher.launch("image/*")
-        }
 
     Box {
         PhotoCard(
@@ -943,11 +933,11 @@ private fun PhotoCardEdit(
                     },
                     modifier = Modifier.clickable {
                         showPhotoSheet = false
-                        if (storagePermission.status.isGranted) {
-                            galleryLauncher.launch("image/*")
-                        } else {
-                            storagePermission.launchPermissionRequest()
-                        }
+                        galleryLauncher.launch(
+                            androidx.activity.result.PickVisualMediaRequest(
+                                androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly
+                            )
+                        )
                     }
                 )
                 HorizontalDivider()

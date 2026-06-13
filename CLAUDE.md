@@ -207,11 +207,17 @@ Broadcasts restricted to own package via `setPackage(packageName)`.
 
 ## Manual steps required before first build
 
-1. `app/src/main/assets/funko_data.json` — Kenny Chan dataset; see `DOWNLOAD_FUNKO_DATA.md`
-2. `app/src/main/res/font/cinzel_decorative_bold.ttf` — from fonts.google.com
-3. Generate launcher icons via Android Studio Image Asset Studio; see `launcher-icon/ICON_INSTRUCTIONS.md`
-4. `local.properties`: add `workerUrl=https://funkodex-contrib.YOUR.workers.dev` (optional)
-5. Gradle sync — all 30 deps resolve automatically
+All bundled assets (catalog dataset, splash font, launcher icons) are
+committed to the repo — no manual download/generation needed for a clean
+clone. Remaining steps:
+
+1. `local.properties`: add `workerUrl=https://funkodex-contrib.YOUR.workers.dev` (optional)
+2. Gradle sync — all 52 deps resolve automatically
+
+**Already included in the repo:**
+- `app/src/main/assets/funko_data.json` — Kenny Chan dataset (23,940 records)
+- `app/src/main/res/font/cinzel_decorative_{regular,bold,black}.ttf`
+- Launcher icons — all mipmap densities pre-generated (`launcher-icon/` holds the SVG sources)
 
 **Channel3 API key:** entered in Settings > Data Sources (not `local.properties`).
 **HobbyDB / eBay:** one-time OAuth sign-in from Settings > Data Sources.

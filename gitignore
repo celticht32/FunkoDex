@@ -1,0 +1,40 @@
+# Android build outputs
+.gradle/
+build/
+*/build/
+*.apk
+*.aab
+*.ap_
+
+# IntelliJ / Android Studio
+.idea/
+*.iml
+*.iws
+*.ipr
+# NEVER commit — contains sdk.dir, workerUrl, and any local keys
+local.properties
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test reports
+test-results/
+reports/
+
+# Kotlin build cache
+.kotlin/
+
+# Couchbase Lite database (never commit user data)
+*.cblite2/
+*.cblite/
+
+# launcher-icon/ — SVG sources, tracked
+# Note: funko_data.json, font files, and mipmap-* launcher icons are
+# intentionally committed (bundled assets) — do not add ignore rules for them.
+
+# Sensitive
+google-services.json  # if Firebase/Google added later
+keystore.jks
+*.keystore
+release/

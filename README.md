@@ -44,8 +44,8 @@ FunkoDex/
 │   ├── network/        FunkoLookupServiceTest (record mapping)
 │   ├── security/       SecureKeyStoreTokenTest (token parsing/expiry)
 │   └── ui/screens/     ScannerViewModelStateTest (20 Mockk tests)
-├── app/src/main/assets/    funko_data.json (download separately — see Setup)
-├── app/src/main/res/font/  cinzel_decorative_bold.ttf (download separately)
+├── app/src/main/assets/    funko_data.json (bundled, 23,940 records)
+├── app/src/main/res/font/  cinzel_decorative_{regular,bold,black}.ttf (bundled)
 ├── launcher-icon/          SVG source + generation instructions
 ├── gradle/libs.versions.toml
 ├── CLAUDE.md               Full architecture guide for future Claude sessions
@@ -84,32 +84,23 @@ cd FunkoDex
 
 `File → Open → select the FunkoDex folder` — Android Studio auto-detects the Gradle project.
 
-### 3. Add the Funko dataset
+### 3. Bundled assets
 
-See `app/src/main/assets/DOWNLOAD_FUNKO_DATA.md` for the download link.
-Save the file as `app/src/main/assets/funko_data.json`.
-The app works without it — every scan just falls through to the network.
+The Funko catalog dataset (`app/src/main/assets/funko_data.json`, 23,940
+records), splash font (`cinzel_decorative_{regular,bold,black}.ttf`), and
+launcher icons (all mipmap densities) are already committed — no manual
+download or generation needed.
 
-### 4. Add the splash font
-
-Download **Cinzel Decorative Bold** from [fonts.google.com](https://fonts.google.com/specimen/Cinzel+Decorative).
-Save as `app/src/main/res/font/cinzel_decorative_bold.ttf`.
-
-### 5. Generate launcher icons
-
-SVG source files are in `launcher-icon/`. Follow `launcher-icon/ICON_INSTRUCTIONS.md`
-to generate all mipmap densities in Android Studio (90 seconds).
-
-### 6. Gradle sync
+### 4. Gradle sync
 
 `File → Sync Project with Gradle Files` — all dependencies resolve from Maven Central automatically.
 
-### 7. Git + Cloudflare setup
+### 5. Git + Cloudflare setup
 
 For pushing to GitHub and deploying the Cloudflare Worker, follow **`GITHUB_SETUP.md`** in the project root.
 It covers both repos, Cloudflare Worker deployment, eBay developer registration, and a first-build checklist.
 
-### 8. Run
+### 6. Run
 
 Connect a device (USB debugging on) or start an emulator. Press **Run ▶**.
 

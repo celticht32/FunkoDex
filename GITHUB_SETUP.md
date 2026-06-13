@@ -233,10 +233,7 @@ Before users can sign in with eBay, you need a free eBay developer account.
 
 After all repos are pushed and Cloudflare is deployed:
 
-- [ ] `git clone https://github.com/celticht32/FunkoDex.git`
-- [ ] Download `funko_data.json` — see `app/src/main/assets/DOWNLOAD_FUNKO_DATA.md`
-- [ ] Download Cinzel Decorative Bold — `app/src/main/res/font/cinzel_decorative_bold.ttf`
-- [ ] Generate launcher icons — see `launcher-icon/ICON_INSTRUCTIONS.md`
+- [ ] `git clone https://github.com/celticht32/FunkoDex.git` (catalog dataset, font, and launcher icons are bundled — no manual download needed)
 - [ ] Android Studio → File → Sync Project with Gradle Files
 - [ ] Run on device or emulator
 - [ ] Settings → Data Sources → Channel3: enter your free key from trychannel3.com

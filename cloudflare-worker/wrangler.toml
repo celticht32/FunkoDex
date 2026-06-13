@@ -1,6 +1,8 @@
 name = "funkodex-contrib"
 main = "worker.js"
-compatibility_date = "2024-01-15"
+# Per Cloudflare best practices, compatibility_date should be set to the date
+# this Worker was last reviewed/deployed and updated periodically thereafter.
+compatibility_date = "2026-06-12"
 compatibility_flags = ["nodejs_compat"]
 
 # KV namespace for rate limiting (create with: wrangler kv:namespace create RATE_LIMIT)

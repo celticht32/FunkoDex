@@ -29,11 +29,9 @@ reports/
 *.cblite2/
 *.cblite/
 
-# Generated files
-app/src/main/assets/funko_data.json  # downloaded separately — too large for git
-app/src/main/res/font/               # download from Google Fonts
-# launcher-icon/ is tracked — contains SVG source files
-app/src/main/res/mipmap-*/           # generated PNGs — re-generate via Image Asset Studio
+# launcher-icon/ — SVG sources, tracked
+# Note: funko_data.json, font files, and mipmap-* launcher icons are
+# intentionally committed (bundled assets) — do not add ignore rules for them.
 
 # Sensitive
 google-services.json  # if Firebase/Google added later

@@ -1,5 +1,20 @@
 # FunkoDex — Enriched Catalog Import Feature
 ## Session Handoff Document
+
+> **STATUS: HISTORICAL / SUPERSEDED.** This document was the pre-implementation
+> plan for the "Import Enriched Catalog" feature. The feature described below
+> is now implemented in the app (`EnrichedRecord.kt`, `CatalogImporter.kt`,
+> `CatalogMapper.kt`, and the Settings screen import flow) — see the root
+> `HANDOFF.md` and `CHANGELOG.md` for current status. The "Three passes"
+> description of the enricher below is also outdated: `enrich.js` now has
+> five passes, including a Pass 4 (HobbyDB reference numbers) that adds the
+> `upc`, `funkoNumber`, `popType`, and retailer-SKU fields referenced in
+> `EnrichedRecord.kt`'s "HobbyDB enriched fields" section but not described
+> here. See `funko-enricher/README.md` for the current, accurate pass
+> descriptions and CLI flags. This file is retained for its design rationale
+> (image field decisions, merge logic) but should not be used as a build
+> checklist.
+
 **Project:** FunkoDex Android App  
 **GitHub:** github.com/celticht32/FunkoDex  
 **License:** MIT, Copyright (c) 2026 Chris Ahrendt  

@@ -1,16 +1,16 @@
-# FunkoDex — Complete Functional Test Plan
+# FunkoDex — Complete Functional Test Plan (code-verified)
 
-Covers every feature built across all sessions to date: catalog & data layer
-(Sessions 1–4, 7, 8), variant/photo/backup system (Session 3), Play-readiness
-changes (Sessions 5–6), CBL Collection API migration (Session 7), and
-Keystore migration (Session 8).
+Every UI label, dialog title, and behavior below was verified against the
+repository source (master, verified in sync with GitHub). Items that exist in
+code but have **no call sites in the pushed repo** are flagged — they are
+likely wired in local-only files (`ReportsScreen.kt` is confirmed local-only).
 
-Recommended order: run **Part A** (core collection features) first on a
-normal emulator/device, then **Part B** (integrations — Drive, OAuth,
-community), then **Part C** (backup/restore — do this last since
-force-restore wipes the database), then **Part D** (automated/regression).
+Recommended order: **Part A** (core) → **Part B** (integrations) → **Part C**
+(backup/restore — LAST, force-restore wipes the database) → **Part D**
+(automated) → **Part E** (16 KB regression).
 
-A condensed subset for the 16 KB emulator is in Part E.
+Bottom nav tabs (left to right): **My Dex** · **Add** · **Check** · **Reports**
+· **Settings**.
 
 ---
 
@@ -19,534 +19,593 @@ A condensed subset for the 16 KB emulator is in Part E.
 ## A1. First launch & catalog preload
 
 1. Fresh install on a clean emulator/device.
-2. Launch the app — should open to **My Dex** (Collection tab), empty.
-3. No crash, no error toast.
-4. Go to the **Check** tab and search for a common franchise (e.g. "Star
-   Wars"). **Expected:** results appear — confirms the ~23,000-item Kenny
-   Chan catalog preloaded successfully (`CatalogPreloader`, `system::catalog_loaded`
-   marker written).
-5. Check logcat for `CatalogPreloader` — should show `Loaded(count)` with
-   count ≈ 23,000, no `AssetMissing`/`ParseError`.
+2. Launch. **Expected:** branded splash (navy background, spinning brass ring,
+   Celtic heart logo). On first launch the splash stays up until the catalog
+   preload finishes, then navigates to **My Dex**.
+3. **My Dex** shows the empty-collection state (no crash, no error toast).
+4. Verify preload worked: **Add** tab → **Search by name** → search "Star
+   Wars" in the **Search Catalog** sheet. **Expected:** results appear.
+5. Logcat check (filter `CatalogPreloader`): preload result `Loaded(count)`
+   with count ≈ 23,000; on subsequent launches `AlreadyLoaded`. No
+   `CouchbaseLiteException` from `ensureIndexes()`.
 
-**Pass:** App launches clean, catalog preloads, search returns results.
-
----
-
-## A2. Add item — UPC scan (live camera)
-
-1. Go to the **Add** tab (bottom nav, barcode icon — "Scanner").
-2. Tap **Start scanning**.
-3. Point the camera at a real Funko Pop barcode.
-4. **Expected:** "Looking up…" overlay appears briefly, then the
-   **FunkoPreviewSheet** bottom sheet shows the matched item (name, franchise,
-   series number, image, exclusive-retailer chip if applicable).
-5. Optionally enter a **price paid**.
-6. Tap **Add to collection**.
-7. **Expected:** "Saved!" confirmation, item appears in **My Dex** with
-   `isOwned = true`, `dateAdded = today`.
-8. Repeat, but this time tap **Want list** instead — item should appear in
-   the want list (isOwned = false) rather than the owned collection.
-
-### A2b. Unknown UPC → pending queue
-
-9. Scan a barcode that the catalog doesn't recognize (or disconnect network
-   first, then scan any code).
-10. **Expected:** "Error" sheet appears with **Retry** / **Manual** options,
-    OR (if offline) the scan is queued as a `PendingUpcScan` document
-    (`pending_scan::...`).
-11. If queued offline: reconnect network. **Expected:** `ConnectivityObserver`
-    fires, processes the pending queue, and either resolves the item (adds it
-    as a want-list item with a notification "Funko scan identified") or
-    increments its retry count (up to 5 attempts before giving up).
-
-**Pass:** Live scan → preview → add to collection/want list works; offline
-scans queue and resolve once connectivity returns.
+**Pass:** splash → preload → My Dex, search returns catalog results.
 
 ---
 
-## A3. Add item — manual search + bulk add
+## A2. Add tab — UPC scan paths
 
-1. Go to the **Check** tab ("PreScan").
-2. Type a franchise name (e.g. "Marvel").
-3. **Expected:** catalog matches appear within ~1 second
-   (`FunkoLookupService.searchLocalByName`).
-4. Select 2–3 items.
-5. Tap the bulk-add/confirm action.
-6. **Expected:** all selected items appear in **My Dex** with default values.
+The **Add** tab start screen shows: header **"Add to collection"**, subtext
+**"Scan a Funko UPC barcode or search manually"**, a **"Start scanning"**
+button and a **"Search by name"** button.
 
-### A3b. Batch scan sheet
+### A2a. Scan → found in catalog → add
 
-7. From the **Scanner** screen, open the **Batch scan** sheet (if accessible
-   via a button/icon — check for a "batch" icon near the scan button).
-8. Scan multiple items in sequence without leaving the sheet.
-9. **Expected:** each scanned item appears as a row in the batch list with a
-   running count (`Save all (N)`).
-10. Use **Want list** toggle in the batch sheet if present — confirm it
-    changes the target for newly-scanned items.
-11. Tap **Save all** — **expected:** all batched items saved to the
-    collection/want list as appropriate, sheet closes, items appear in
-    **My Dex**/want list.
+1. Tap **Start scanning**, point at a Funko Pop barcode.
+2. **Expected:** overlay **"Looking up on Funko.com…"**, then the preview
+   bottom sheet: item image, name, franchise + series number,
+   "<Retailer> Exclusive" chip if applicable, **"Price paid (optional)"**
+   field (with "$" prefix; placeholder shows "Retail: $X" when known), and two
+   buttons: **"Want list"** and **"Add to collection"**.
+3. Tap **Add to collection**.
+4. **Expected:** confirmation screen: **"Added!"** + item name, with buttons
+   **"Add another"**, **"I only have the variant — want the original"**, and
+   **"Done"**.
+5. Tap **Done** (or **Add another** to keep scanning). Item appears in
+   **My Dex** (isOwned = true, sorted to top under "Recently Added").
 
-**Pass:** Manual search returns results and bulk-adds correctly; batch scan
-accumulates multiple items and saves them all at once.
+### A2b. Scan → add to want list
+
+6. Scan another item, tap **"Want list"** instead.
+7. **Expected:** item saved with isOwned = false. It will NOT appear in
+   **My Dex** (My Dex shows owned items only — verified: `collectionFlow`
+   filters `isOwned = true`). Verify it saved by either:
+   - **Check** tab: scan the same barcode → blue **"NOT IN YOUR COLLECTION"**
+     overlay with the orange **"★ On your want list"** badge, or
+   - **Add** tab: scan the same barcode again → preview sheet reopens
+     (want-list items re-present as Preview so you can confirm you bought it).
+
+   > Note: there is no want-list browsing screen in the pushed repo — want
+   > list views likely live on the local-only `ReportsScreen.kt`.
+
+### A2c. Scan → already owned
+
+8. Scan the barcode of an item you already own.
+9. **Expected:** sheet **"Already in your collection"** with options:
+   - **"I have a variant of this"** — "Adds a variant copy to the existing
+     record — same Funko, different version"
+   - **"I have a variant but NOT the original"** — "Adds as a variant and
+     flags the original on your want list"
+   - **"Update existing record"** — "Edit condition, price, or notes on the
+     existing item"
+   - **Cancel**
+10. Test each path once: variant add (check Variants section on the detail
+    screen afterward), variant-missing-original (check the **"Got it!
+    Variant only — no original"** chip appears on the detail screen), and
+    update (lands you in the edit flow).
+
+### A2d. Scan → unknown UPC, network available
+
+11. Scan a barcode not in any source (a non-Funko product barcode works).
+12. **Expected:** sheet titled **"Barcode not in catalog"** with:
+    - **"UPC (edit if scanned incorrectly)"** field with a **Retry** action
+    - **"Search by name (e.g. Batman)"** field
+    - **"Tap to match this UPC to an item:"** results list
+13. Search and tap a catalog match. **Expected:** transitions to the normal
+    preview sheet with the scanned UPC merged onto the matched item. **A
+    community contribution (source USER_SCAN) is saved silently — there is no
+    prompt for this path** (see B5).
+
+### A2e. Scan offline → pending queue
+
+14. Enable airplane mode. Scan an unknown-to-local-catalog barcode.
+15. **Expected:** sheet **"Scan queued — no network"** showing "UPC: <upc>"
+    and a **"Scan another"** button. A `pending_scan::` doc is saved.
+16. Disable airplane mode (app can be foreground or background).
+17. **Expected:** `ConnectivityObserver` processes the queue. If resolved, the
+    item is added **to the want list** ("user can confirm ownership later")
+    and a notification posts: **"Funko scan identified"** (or "N Funko scans
+    identified"), body "<names> added to want list". Requires
+    POST_NOTIFICATIONS granted (API 33+); without it the resolution still
+    happens, just silently (logcat confirms). Unresolvable scans increment a
+    retry count and are abandoned after 5 attempts.
+
+**Pass:** all five scan outcomes (found / want-list / already-owned / unknown
+/ offline-queued) behave exactly as above.
 
 ---
 
-## A4. Edit item — fields, blob, variants, photos
+## A3. Add tab — manual search + batch scan
 
-### A4a. Basic field edit
+### A3a. "Search by name" bulk add
 
-1. Open any item in **My Dex** → tap **Edit**.
-2. Change condition, notes, and price paid.
-3. Save.
-4. Re-open — **expected:** all changed fields persisted correctly.
+1. **Add** tab → **Search by name**.
+2. **Expected:** bottom sheet **"Search Catalog"**, text field placeholder
+   **"e.g. Stitch, Batman, Mandalorian"**. Keyboard auto-hides on open.
+3. Type "Stitch", submit (keyboard Done or the search icon).
+4. **Expected:** "N results" count and a list with checkbox + image + name +
+   franchise/#. **Note:** results are filtered by your enabled categories
+   (`searchByName` applies the category filter) — if a category is disabled in
+   **Settings → Collection categories**, matching items won't appear here.
+   This is the correct place to observe the category filter working (see A6).
+5. Select 2–3 rows. **Expected:** rows highlight, "N selected" shows, bottom
+   button changes from **"Select items to add"** (disabled) to
+   **"Add N to collection"** (enabled).
+6. Tap **"Add N to collection"**. **Expected:** all selected items land in
+   **My Dex** as owned.
+7. Search gibberish ("zzzznonexistent") — **expected:** "No results found".
 
-### A4b. Photo — main photo via camera
+### A3b. Batch scan
 
-5. On an item without a photo yet, tap the photo/camera icon.
-6. **Expected:** a "Save photo as" dialog appears with three options:
-   **Main photo**, **Variation photo**, **Both**.
-7. Take a photo via camera (tests `createCameraUri` → `EXIF` rotation
-   correction via `androidx.exifinterface`).
-8. Choose **Main photo**.
-9. **Expected:** photo appears as the item's main image in both the detail
-   screen and **My Dex** grid (`userPhoto` field set, distinct from
-   `thumbnailBlob`).
+8. **Add** tab → **Start scanning** → tap the **"Batch scan"** FAB (bottom
+   right of the camera view).
+9. **Expected:** **"Batch scan"** sheet opens. Scan several items in
+   sequence; each appears as a row. A **"Want list"** toggle chooses the
+   destination; **"Save all (N)"** shows the found count.
+10. Tap **"Save all (N)"**. **Expected:** all items saved (owned, or want
+    list if toggled), sheet closes.
 
-### A4c. Photo — gallery picker (Session 6 Photo Picker)
+**Pass:** search sheet (incl. category filtering and exact button states) and
+batch scan both work.
 
-10. On another item, tap the photo icon → **Choose from gallery**.
-11. **Expected:** the system **Photo Picker** UI opens (NOT a permission
-    dialog — Session 6 removed `READ_MEDIA_IMAGES`/`READ_EXTERNAL_STORAGE`).
-    No "Allow access to photos" prompt should appear.
-12. Pick an image.
-13. **Expected:** "Save photo as" dialog appears (same as A4b), choose
-    **Main photo** — image saved correctly.
+---
 
-### A4d. Variation photo & variant system
+## A4. Detail screen — view, edit, photos, variants
 
-14. On an item, tap the photo icon → take/pick a photo → choose
-    **Variation photo**.
-15. **Expected:** a new variant entry is created (stored as base64 JSON on
-    the parent doc's `variants` field), with its own photo, separate from the
-    main item photo.
-16. Open the variants list/editor on the detail screen.
-17. **Expected:** the new variant shows with its photo, an editable **note**
-    field, and an editable **price paid** field.
-18. Edit the variant's note and price — save — re-open — **expected:**
-    changes persisted.
-19. Choose **Both** on a third photo — **expected:** sets the main photo AND
-    creates a variant in one action.
-20. **Mark variant only:** if there's a "mark as variant only" action
-    (`markVariantOnly`), use it on the base item — confirm it correctly
-    reclassifies without data loss (check what this actually does in your UI
-    — likely marks the base item as not separately owned, only its variants
-    are).
-21. **Remove a variant** (`removeVariant`) — **expected:** variant disappears
-    from the list, its photo is gone, but the **main item and other variants
-    are unaffected**.
+Open an item from **My Dex** (tap its card).
 
-### A4e. Delete photo
+### A4a. View mode
 
-22. On an item with a main photo, use **delete photo**
-    (`viewModel::deletePhoto`).
-23. **Expected:** photo removed, item reverts to placeholder/no-image state
-    in My Dex; other fields (variants, text fields) unaffected.
+1. **Expected layout:** hero photo card; name; franchise · series number row;
+   chips as applicable ("<Retailer> Exclusive", "Vaulted", **"Got it!
+   Variant only — no original"**); an **"In collection"** (or **"On want
+   list"**) status card with **"Tap to move"**; a **Details** card (Category,
+   UPC — shows "—" when empty, etc.); **Notes** if set; a **Pricing** card and
+   a **"Market Price"** card showing **"Tap refresh to load prices"** until
+   refreshed; a **Variants** section if variants exist ("Variants", "N
+   total", per-variant photo or "No photo", note, "Paid: $X", and "Edit this
+   item to add a photo" hint).
+2. Top bar: back arrow, **Edit** (pencil) and **Delete** (trash) icons.
+3. Tap the status card — **expected:** item toggles owned ↔ want list
+   immediately ("Tap to move"). Toggle it back.
+4. For an **owned** item not variant-flagged: a text button **"I only have
+   the variant — want the original"** is visible. Tapping it flags the item
+   (`isMissingOriginal`); the **"Got it!  Variant only — no original"** chip
+   appears. Tapping that chip opens **"Do you now own the original?"** with
+   **"Yes — I have the original"** / **"No — still looking"**.
 
-### A4f. Critical regression check — edit doesn't wipe blobs
+### A4b. Edit mode — fields
 
-24. **This is the key Session 7 regression check** (Test 3 from the prior
-    Session-D-specific plan): on an item WITH a thumbnail/photo/variants from
-    steps above, edit only a text field (e.g. notes) and save.
-25. **Expected:** thumbnail, user photo, AND all variants (with their photos)
-    are still present after the save — `FunkoMapper.toDocument` using
-    `existing?.toMutable()` correctly preserves blobs through
-    `collection.getDocument`/`collection.save`.
+5. Tap the pencil. **Expected:** title becomes **"Edit Funko"**; top-bar
+   actions become **"Save"** (text button) and a Close (X) icon that cancels.
+6. Fields: **Name**, **Series**, **#**, **Price paid** ($ prefix),
+   **Condition** chips, **Notes**, **UPC** (with a camera icon).
+7. Edit Notes and Price paid → **Save** → re-open → values persisted.
 
-**Pass:** All photo/variant operations (camera, gallery picker, main/variation/both,
-variant note/price edit, remove variant, delete photo) work correctly, and an
-unrelated field edit never wipes existing blobs or variants.
+### A4c. Edit mode — UPC scan + community prompt
+
+8. In edit mode, tap the UPC field's camera icon.
+9. **Expected:** camera permission prompt if not yet granted, then a
+   full-screen scan dialog: **"Point at the UPC barcode on the box"**. Scans
+   one barcode and closes, filling the UPC field.
+10. **Save** with a new/changed UPC. **Expected:** dialog **"Share UPC with
+    community?"** ("You added UPC <upc> for "<name>"… No personal data is
+    shared…") with **"Share"** / **"No thanks"**.
+    - **Share** → contribution saved (source USER_EDIT).
+    - Clearing a UPC and saving deletes any pending contribution for the old
+      UPC (verify via B5 if desired).
+
+### A4d. Photos — camera, gallery, catalog fetch
+
+11. In edit mode, tap the camera FAB on the photo card. **Expected:** options:
+    - **"Take a photo"** — "Use your camera to photograph this item"
+    - **"Choose from gallery"** — "Pick an existing photo from your phone"
+    - **"Fetch from catalog"** — "Download the official image from the Funko
+      catalog"
+12. **Take a photo** → camera permission if needed → shoot. **Expected:**
+    the **"Save photo as"** dialog appears:
+    - **"Main photo"** — "Replaces the primary image in your collection"
+    - **"Variation photo"** — "Stores as a variant — same item, different
+      version"
+    - **"Both"** — "Saves as main photo and adds a variation record"
+    - **Cancel**
+13. Choose **Main photo** — photo becomes the hero image and the My Dex
+    thumbnail.
+14. **Choose from gallery** — **expected:** the system **Photo Picker** opens
+    with **no storage-permission prompt** (Session 6 removed
+    READ_MEDIA_IMAGES/READ_EXTERNAL_STORAGE). Pick an image → same "Save
+    photo as" dialog → choose **Variation photo** — **expected:** a new
+    variant appears in the Variants section with that photo.
+15. **Both** on a third image — sets main photo AND adds a variant.
+16. **Fetch from catalog** — **expected:** dialog **"Fetching image"**
+    ("Downloading image from the Funko catalog…") then **"Image downloaded"**
+    ("The catalog image has been saved to this item.") — or **"Image not
+    available"** if the catalog has none for this item.
+
+### A4e. Variants editing
+
+17. In edit mode with variants present: each shows **"Variant N"**, a remove
+    icon, **"Description (e.g. Metallic paint)"**, and **"Price paid"** ($).
+18. Edit a description and price → Save → re-open → persisted.
+19. Remove a variant → Save. **Expected:** that variant (and its photo) gone;
+    main item and other variants untouched.
+
+### A4f. CRITICAL blob-preservation regression (Session 7)
+
+20. On an item with a main photo AND variants: edit ONLY the Notes field →
+    **Save**.
+21. **Expected:** hero photo, My Dex thumbnail, and ALL variants with their
+    photos still intact. (`FunkoMapper.toDocument` must reuse
+    `existing?.toMutable()` through `collection.getDocument`/`collection.save`.)
+
+**Pass:** every flow above with exact dialogs/labels; A4f shows zero blob or
+variant loss.
 
 ---
 
 ## A5. Delete item
 
-1. Pick a test item in **My Dex**.
-2. Delete it (swipe or detail-screen delete action).
-3. **Expected:** disappears immediately from My Dex (live query listener).
-4. If it had a price alert (Part A7) or variants, confirm no crash on
-   Reports/alerts screens afterward.
+Two delete paths — test both:
 
-**Pass:** Delete removes the item and all its data with no crash.
+1. **My Dex card:** tap the **⋮** (kebab) icon at the top-left of a grid card
+   → **"Delete"** menu item. **Expected:** item disappears immediately (live
+   query listener). There is **no swipe-to-delete**.
+2. **Detail screen:** trash icon → dialog **"Remove from collection?"**
+   ("This will permanently delete <name>.") → **"Delete"**. **Expected:**
+   navigates back, item gone from My Dex.
 
----
-
-## A6. Collection screen — sort, filter, category filter
-
-1. In **My Dex**, cycle through all **sort options**:
-   - **Recently Added** (date added, descending)
-   - **Name A–Z**
-   - **Series** (franchise, ascending)
-   - **Price Paid** (descending)
-2. **Expected:** list re-orders correctly for each, no crash.
-3. Use the **series/franchise filter chips** — select a specific franchise,
-   confirm only matching items show; tap **All** to clear.
-4. **Live category filter:** go to **Settings → Collection categories**
-   (Part A8), disable a category containing one of your items, return to
-   **My Dex** — **expected:** items in that category disappear immediately
-   (live `combine()` of `enabledCategoryKeysFlow` + collection flow). Re-enable
-   — items reappear.
-5. Use the **search box** (if present on this screen) — type a partial item
-   name, confirm filtering works alongside the franchise filter
-   (`state.searchQuery` + `state.filterFranchise` combined filter logic).
-
-**Pass:** All four sort options, franchise filtering, search, and live
-category filtering all work correctly together.
+**Pass:** both paths delete cleanly, no crash.
 
 ---
 
-## A7. Price alerts
+## A6. My Dex — search, sort, filter
 
-1. Open a **want-list** item.
-2. Tap the price-alert bell icon, set a target price, save.
-3. **Expected:** bell shows "enabled" immediately; persists across
+1. **Search field** at top, placeholder **"Search collection…"**; matches
+   name OR franchise, live. A clear (X) icon appears when non-empty.
+2. Tap the **filter icon** at the right of the search field (tinted when a
+   franchise filter is active). **Expected:** reveals a filter row.
+3. **Sort:** a segmented button row with the four options — **"Recently
+   Added"**, **"Name A–Z"**, **"Series"**, **"Price Paid"**. Cycle through
+   all; verify ordering (Recently Added = newest first; Price Paid =
+   highest first; Series = franchise then series number).
+4. **Franchise chips:** **"All"** plus one chip per franchise in your
+   collection. Select one → only that franchise shows; **All** → everything.
+5. Combine: search text + franchise chip together — both filters apply.
+6. Header shows **"N items"** and **"Paid: $X"** (when > 0). "EXCL" badge on
+   exclusive items' cards.
+
+> **Category preferences do NOT filter My Dex** — verified in code: "Always
+> show owned items — category filter applies to browsing only." The
+> observable effect of disabling categories is in **Add → Search by name**
+> results (A3a step 4) instead. Do not expect owned items to disappear from
+> My Dex when toggling categories.
+
+**Pass:** search/sort/filter behave exactly as above.
+
+---
+
+## A7. Price alerts (want-list items only)
+
+The alert bell is shown **only for want-list items** (verified: rendered only
+when `!item.isOwned`).
+
+1. Open a want-list item's detail screen (e.g. via toggling an item with
+   "Tap to move", or after A2b).
+2. **Expected:** a **"Price alert"** row with a bell icon and **"Set alert"**.
+3. Tap it. **Expected:** bottom sheet with **"Target price (USD)"** field
+   ($ prefix), **"Save alert"**, and — when an alert exists — **"Remove
+   alert"**.
+4. Save a target. **Expected:** bell row reflects the enabled alert
+   immediately and persists across navigation.
+5. **Remove alert** → reverts to "Set alert".
+6. **Worker (optional):** `PriceAlertWorker` is scheduled daily at app start.
+   On trigger it posts **"Price drop: <item name>"** (requires
+   POST_NOTIFICATIONS on API 33+) and updates the alert's `lastTriggeredAt`.
+   No manual trigger exists in the UI; verify on schedule or skip with a note.
+
+**Pass:** alert create/persist/remove on a want-list item; bell absent on
+owned items.
+
+---
+
+## A8. Category preferences
+
+1. **Settings → Database → "Collection categories"** ("Choose which Funko
+   categories you collect").
+2. **Expected screen:** title **"My collection categories"**, a **"Reset"**
+   text button in the top bar, and categories grouped under expandable genre
+   headers (Entertainment/Music/Sports/Icons/etc., each with an icon).
+3. Expand a genre; toggle a single category off/on — persists across
    navigation.
-4. Disable the alert — bell flips back to disabled immediately.
-5. **Worker check (optional):** set an alert with a target above the item's
-   cached market price (should trigger). If there's a manual "run worker"
-   debug option, use it; otherwise note this for the next scheduled run.
-   **Expected on trigger:** notification appears, and re-opening the alert
-   shows `lastTriggeredAt` = today.
+4. Use the **genre-level toggle** on a header — all categories in the genre
+   flip together.
+5. Tap **Reset** — all categories return to enabled.
+6. Force-close + relaunch — settings persist (no silent re-seed).
+7. Verify the filter's actual effect: disable a category, then **Add →
+   Search by name** for an item in it — **expected:** filtered out of
+   results (see A3a/A6 notes).
 
-**Pass:** Alerts save/load/toggle correctly with live UI updates; trigger
-path (if exercised) updates `lastTriggeredAt` and posts a notification.
-
----
-
-## A8. Category preference toggles
-
-1. Go to **Settings → Collection categories**.
-2. Toggle a single category off, then on — state updates immediately and
-   persists across navigation.
-3. If a "toggle whole genre" control exists, use it — all categories in that
-   genre flip together.
-4. If a "reset to defaults" option exists, use it — all categories return to
-   enabled, no crash.
-5. **Restart the app entirely** (force-close + relaunch).
-6. **Expected:** preferences from steps 2–4 persist correctly — no re-seed
-   silently overwrites user choices.
-
-**Pass:** Individual/genre toggles and reset all work and survive a full
-restart.
+**Pass:** toggles, genre toggle, Reset, restart persistence, and the
+search-results effect.
 
 ---
 
-## A9. Reports screen
+## A9. Reports tab + export
 
-> Note: `ReportsScreen.kt` exists locally (referenced by
-> `FunkoDexNavHost.kt`) but is **not present in the GitHub repo** — likely an
-> uncommitted local file. Test against your actual local screen; the items
-> below describe what the underlying data (`CollectionStats`/`SeriesSummary`)
-> should produce regardless of exact UI layout.
+> **Caveat (verified):** `ReportsScreen.kt` is referenced by
+> `FunkoDexNavHost.kt` but does **not exist in the pushed repo** — it lives
+> only in your local working tree (uncommitted). Likewise `ExportButton`
+> (the .xlsx/.csv export UI) and `CatalogDataSection` have **no call sites**
+> in the pushed repo. Test against your actual local screens; the data-layer
+> expectations below are verified.
 
-1. Go to the **Reports** tab.
-2. **Expected, derived from `CollectionStats`:**
-   - Total owned count (including variant counts)
-   - Total wanted count
-   - Total paid (sum of `pricePaid` across owned items + variants)
-   - Total retail value
-   - Total market value
-   - Number of unique franchises
-   - "Most expensive item paid" and "highest market value item"
-   - "Recently added" list (last 10 by date)
-   - Breakdown by genre (`byGenre` map)
-3. **Series completion:** per-franchise/category summaries showing
-   `ownedCount` / `totalInCatalog` and a completion percentage
-   (`completionPct`). Missing items (want-list + "missing original" flagged
-   items) should be listed per series.
-4. Add/remove an item, return to Reports — numbers should update (recomputed
-   each time, not cached).
+1. **Reports** tab loads without crash.
+2. Data available to it (`CollectionStats`): totalOwned, totalWanted,
+   totalPaid, totalRetailValue, totalMarketValue, uniqueFranchises,
+   mostExpensivePaid, highestMarketValue, recentlyAdded, byGenre, and
+   per-series `SeriesSummary` (ownedCount/totalInCatalog, completionPct,
+   missingItems, totalCostPaid, marketValue).
+3. Add/remove an item → return → numbers update.
 
-### A9b. Export from Reports (if `ExportButton` is wired in)
+### A9b. Export (if wired into your local Reports screen)
 
-5. If there's an **Export collection** button, tap it.
-6. **Expected:** a sheet with two options — **Excel workbook (.xlsx)** and
-   **CSV spreadsheet (.csv)**.
-7. Choose **.xlsx** — **expected:** "Building spreadsheet…" then "Opening
-   share sheet…", and the share sheet opens with `FunkoDex_<date>.xlsx`
-   containing **4 sheets**: Collection, Series Report, Want List, and Summary.
-8. Choose **.csv** — **expected:** share sheet opens with
-   `FunkoDex_<date>.csv` containing one row per owned item with columns:
-   Name, Series, #, Category, Retail Price, Exclusive, Retailer, Vaulted.
-9. Open both files (e.g. in Excel/Sheets after AirDrop/email to yourself) and
-   spot-check that the data matches your collection.
+4. **"Export collection"** button → sheet with **"Excel workbook (.xlsx)"**
+   and **"CSV spreadsheet (.csv)"**, states "Building spreadsheet…" /
+   "Opening share sheet…", **Cancel**.
+5. **.xlsx** → share sheet with `FunkoDex_<date>.xlsx` containing **4
+   sheets**: Collection, Series Report, Want List, Summary.
+6. **.csv** → `FunkoDex_<date>.csv`, one row per owned item, columns: Name,
+   Series, #, Category, Retail Price, Exclusive, Retailer, Vaulted.
 
-**Pass:** Reports show correct, live-updating stats and series completion;
-export (if present) produces correct .xlsx (4 sheets) and .csv files.
+**Pass:** Reports loads with correct live stats; export (if present) produces
+both files correctly.
+
+---
+
+## A10. Check tab — Pre-Purchase Check
+
+A read-only, camera-only "do I already own this?" screen for use in stores.
+
+1. Go to the **Check** tab (cart icon). First time: **"Camera permission
+   needed"** + **"Grant permission"** button.
+2. **Expected when scanning-ready:** live camera, white corner-bracket scan
+   frame, top pill label **"Pre-Purchase Check"**, bottom hint **"Scan the
+   barcode on a Funko box"**.
+3. Scan an **owned** item. **Expected:** green overlay — big check, **"YOU
+   HAVE THIS ONE"**, item image/name/franchise, **"You paid: $X"** if a price
+   was recorded, and "auto-resetting…". Returns to scanning after **4
+   seconds** automatically.
+4. Scan a **want-list** item. **Expected:** blue overlay — cart icon, **"NOT
+   IN YOUR COLLECTION"**, item details, **"Retail: $X"** if known, and the
+   orange **"★ On your want list"** badge.
+5. Scan a catalog item you neither own nor want. **Expected:** blue "NOT IN
+   YOUR COLLECTION" without the want-list badge. (Lookup falls back through
+   local catalog → Channel3 → UPCItemDB → BarcodeSpider, so this can hit the
+   network; **"Checking your collection…"** shows while looking up.)
+6. Scan a completely unknown barcode. **Expected:** grey **"Unknown Funko"**
+   / "Not in local database".
+7. Scan a second item while a result is showing. **Expected:** the previous
+   result is replaced immediately (re-scan cancels the pending auto-reset).
+8. Confirm this screen never adds anything — it is read-only.
+
+**Pass:** all four result overlays, the 4-second auto-reset, and immediate
+re-scan all work.
+
+---
+
+## A11. Appearance + Diagnostics (Settings, quick checks)
+
+1. **Settings → Appearance → "App theme"** → dialog with six radio options:
+   **Follow system / Light / Dark / Funko Orange / Cool Blue / Gold
+   Edition**. Pick each of Light/Dark/one Funko theme — applies immediately
+   and persists across restart.
+2. **Settings → Diagnostics** row ("Log level · share logs") → dialog
+   **"Diagnostics"** with **Log level** selection and **Log file** section
+   with a **"Share log"** button (opens a share sheet with the log file).
+
+**Pass:** theme switching persists; log share sheet opens.
 
 ---
 
 # PART B — Integrations
 
+> **Caveat (verified):** the connection UI for B1–B3 and the "Refresh now"
+> button in B6 live in `CatalogDataSection` (SettingsScreen.kt line ~830),
+> which has **no call sites in the pushed repo**. If you cannot find these
+> rows in your build's Settings, that section isn't wired in — flag it as a
+> gap rather than a test failure, and test the underlying behavior where
+> reachable. The descriptions below match the composable's verified content.
+
 ## B1. Channel3 API key
 
-1. Go to **Settings → Diagnostics → Channel3 API** (in the "Lookup sources"
-   list).
-2. Tap it — dialog opens for entering the API key.
-3. Enter a test key, save.
-4. **Expected:** row now shows "Connected · UPC lookup · pricing".
-5. **Force-close + relaunch** — confirm it still shows connected (Session 8
-   AES/GCM round-trip via `SecureKeyStore.getChannel3Key()`/`hasChannel3Key()`).
-6. Clear the key (if a clear option exists) — row reverts to "Not configured".
+1. Locate the **"Lookup sources"** card (CatalogDataSection — see caveat).
+   Rows: **"Kenny Chan dataset"** ("~23,000 items · free · offline ·
+   auto-updates", locked on), **"Channel3 API"**, **"HobbyDB / Pop Price
+   Guide"**, **"eBay sold listings"**.
+2. Tap **Channel3 API** ("Not configured · tap to add API key") →
+   **"Channel3 API key"** dialog → enter a key → save.
+3. **Expected:** row shows "Connected · UPC lookup · pricing".
+4. Force-close + relaunch → still connected (Session 8 AES/GCM round-trip
+   through `SecureKeyStore.getChannel3Key()`).
 
-**Pass:** Channel3 key saves, persists across restart, and clears correctly.
+**Pass:** key saves, persists across process death, no
+`Cipher`/`KeyStore` exceptions in logcat.
 
----
+## B2. HobbyDB OAuth
 
-## B2. HobbyDB OAuth link
+1. Tap **"HobbyDB / Pop Price Guide"** ("Not connected · tap to sign in with
+   your HobbyDB account") → browser OAuth flow → complete sign-in.
+2. **Expected:** `OAuthCallbackActivity` handles the redirect; row becomes
+   "Connected · market pricing · vaulted status enabled".
+3. Force-close + relaunch → still connected (`isHobbyDbTokenValid()`
+   decrypts `"accessToken|expireAtMs|refreshToken"` via the new Keystore
+   wrapper).
+4. Tap again to disconnect → "Not connected".
+5. Token refresh (`TokenRefreshManager`/`TokenKeeperWorker`, scheduled at app
+   start) should be transparent — watch logcat for crypto exceptions during
+   any refresh; there should be none.
 
-1. Go to **Settings → Diagnostics → HobbyDB / Pop Price Guide**.
-2. Tap to sign in — `OAuthLauncher.launch(context, OAuthProvider.HOBBYDB)`
-   opens a browser/webview for HobbyDB OAuth.
-3. Complete sign-in.
-4. **Expected:** `OAuthCallbackActivity` receives the redirect, exchanges the
-   code via `TokenRefreshManager`/`PkceHelper`, and `SecureKeyStore.setHobbyDbToken`
-   stores `"accessToken|expireAtMs|refreshToken"`. Row updates to "Connected ·
-   market pricing · vaulted status enabled".
-5. **Force-close + relaunch** — confirm still connected
-   (`isHobbyDbTokenValid()`/`getHobbyDbAccessToken()` decrypt correctly via
-   the new AES/GCM `SecureKeyStore`).
-6. Tap to disconnect (`viewModel.disconnectHobbyDb()`).
-7. **Expected:** row reverts to "Not connected".
+**Pass:** connect / persist / disconnect; no crypto exceptions.
 
-### B2b. Token refresh
+## B3. eBay OAuth
 
-8. If the access token is short-lived, wait for (or simulate) expiry and
-   trigger a lookup that needs HobbyDB pricing.
-9. **Expected:** `TokenRefreshManager` transparently refreshes the token
-   (re-encrypts and re-saves via `setHobbyDbToken`) — no user-visible error,
-   no `Cipher`/`KeyStore` exception in logcat.
+Same as B2 for **"eBay sold listings"** ("Not connected · optional · tap to
+sign in with eBay" → "Connected · real sold prices (higher quality than RSS
+feed)"). Note: eBay tokens are ~2 h with a 5-minute refresh buffer (per
+`SecureKeyStoreTokenTest`).
 
-**Pass:** HobbyDB OAuth connect/disconnect/persist-across-restart all work;
-token refresh is transparent.
+## B4. Google Drive backup (Session 5)
 
----
+All rows verified in **Settings → Database**:
 
-## B3. eBay OAuth link
+1. **"Connect Google Drive"** ("Automatic daily backups of your collection")
+   → AuthorizationClient flow (authorization-only — no account-picker
+   sign-in screen; a consent sheet may appear). Grant.
+2. **Expected:** row becomes **"Backup to Google Drive"** / subtitle
+   **"Connected · Tap to back up now"**, and the periodic
+   `DriveBackupWorker` is (re)armed (`ExistingPeriodicWorkPolicy.UPDATE`).
+3. Tap the row → immediate backup. Verify a FunkoDex backup file appears in
+   your Drive (drive.google.com).
+4. Force-close + relaunch → still "Connected" (plain boolean in
+   `funkodex_secure_prefs_v2`).
+5. **Lapsed grant (T-D3, critical):** revoke FunkoDex's access in Google
+   Account → Security → Third-party access, then trigger a backup.
+   **Expected:** worker catches the auth failure, does NOT retry-spin, and
+   posts notification id 3002 — text "Reconnect in Settings to resume
+   automatic backups." Reconnect and confirm backups resume.
+6. **"Disconnect Google Drive"** ("Stop automatic backups · To fully revoke
+   access, visit Google Account → Connections") → worker cancelled, row
+   reverts to "Connect Google Drive".
 
-1. Repeat B2 steps 1–7 for **eBay sold listings**
-   (`OAuthProvider.EBAY`, `setEbayOAuthToken`/`getEbayOAuthToken`/
-   `isEbayTokenValid`/`getEbayAccessToken`/`disconnectEbay`).
-2. **Token timing note:** per `SecureKeyStoreTokenTest`, eBay tokens are
-   ~2-hour lifetime with a 5-minute refresh buffer — if you can keep a session
-   open that long, verify a lookup near the 5-minute mark triggers a refresh
-   rather than failing.
+**Pass:** connect / back-up-now / restart persistence / lapsed-grant
+notification / disconnect.
 
-**Pass:** eBay OAuth connect/disconnect/persist-across-restart all work.
+## B5. Community contributions
 
----
+Verified mechanics — read before testing:
+- **Two creation paths:** (a) **Scanner**: unknown UPC → "Barcode not in
+  catalog" sheet → pick a match → contribution saved **silently**, source
+  USER_SCAN (no prompt); (b) **Detail edit**: UPC added or changed → **"Share
+  UPC with community?"** prompt, source USER_EDIT; clearing a UPC deletes the
+  pending contribution.
+- The **"Contribute to community database"** switch (Settings → Database)
+  gates the **daily `GitHubUploadWorker` schedule** (on = schedule, off =
+  cancel). It does **not** prevent local contribution saves.
+- If `WORKER_URL` is blank in the build config, the worker logs "WORKER_URL
+  not configured — skipping upload" and succeeds without uploading (the
+  Cloudflare Worker is not yet deployed, so this is the expected state).
 
-## B4. Google Drive backup connection (Session 5)
+1. Ensure the toggle is **on** ("Anonymously share UPC data you scan. No
+   personal data is ever uploaded.").
+2. Run path (a) via A2d, and path (b) via A4c. **Expected:** both create
+   `contrib::<upc>` docs without error; (b) shows the prompt, (a) doesn't.
+3. Logcat: `HmacKeyStore`/`SecureKeyStore` show no crypto exceptions when the
+   upload worker runs (HMAC signing uses `getInstallId()` — Session 8 path).
+4. Worker behavior: with WORKER_URL unset, expect the "skipping upload" log.
+   On HTTP 400 it marks contributions uploaded to avoid loops; on 429 it
+   retries with backoff.
 
-1. Go to **Settings → Database → Connect Google Drive**.
-2. Tap — `DriveAuthManager.authorize()` requests `DRIVE_FILE` scope via
-   `AuthorizationClient` (NOT a sign-in screen — per the
-   `CredentialManager_Migration_SPEC.md` decision, this is
-   authorization-only).
-3. **Expected:** either an immediate "Authorized" result, or a consent screen
-   (`NeedsConsent` → launches a `PendingIntent` via
-   `ActivityResultContracts.StartIntentSenderForResult`). Grant access.
-4. **Expected:** row updates to "Connected · Tap to back up now", and
-   `DriveBackupWorker.schedule(context)` is called (periodic worker armed via
-   `LaunchedEffect(driveConnected)`, `ExistingPeriodicWorkPolicy.UPDATE`).
-5. Tap the row again ("back up now") — **expected:** triggers an immediate
-   backup-and-upload cycle. Check Google Drive (drive.google.com) for a new
-   FunkoDex backup file in the app's Drive folder.
-6. **Force-close + relaunch** — confirm still shows "Connected" (`isDriveConnected()`
-   reads a plain boolean from `funkodex_secure_prefs_v2`, Session 8's new file).
+**Pass:** both creation paths behave as specified; toggle arms/cancels the
+worker; no crypto errors.
 
-### B4b. Lapsed grant (T-D3 — critical, from CredentialManager spec §9)
+## B6. Catalog refresh worker
 
-7. Revoke FunkoDex's access via your Google Account → Security → Third-party
-   access (or wait for a natural token lapse).
-8. Trigger a backup (manually or via the worker).
-9. **Expected:** `DriveBackupWorker` catches the
-   `GoogleJsonResponseException` 401/403, calls `clearToken()`, and posts a
-   **"Reconnect" notification** (notification id 3002). Tapping it should lead
-   back to the Drive connection flow in Settings.
-10. **Expected:** the backup is retried after reconnection, OR skipped with
-    no-retry if `NeedsConsent` and the user hasn't re-consented yet (per the
-    worker's auth-state handling).
+`CatalogRefreshWorker` is scheduled at app start (KEEP policy) and runs
+periodically. The manual **"Refresh now"** button is in `CatalogDataSection`
+(see Part B caveat).
 
-### B4c. Disconnect
+1. Trigger via "Refresh now" if reachable; otherwise rely on the scheduled
+   run (note it in results rather than skipping silently).
+2. Logcat (filter `CatalogRefreshWorker`) expected sequence:
+   - "Starting catalog refresh…"
+   - "Refresh complete: N new catalog records added" (N may be 0)
+   - "Community UPC file: N UPCs merged into catalog"
+   - With HobbyDB connected: "Vaulted status updated: N items"
+3. **Expected:** no `CouchbaseLiteException`/type errors (worker builds its
+   own `FunkoDexDatabase` and calls `db.getCollection()` in each of its three
+   functions — Session 7 conversion).
 
-11. Go to **Settings → Disconnect Google Drive**.
-12. **Expected:** `DriveBackupWorker.cancel(context)` runs, `disconnectDrive()`
-    clears the connected flag (no token to clear per spec §5.5 — Drive auth
-    is authorization-only, no persisted token). Row reverts to "Connect Google
-    Drive".
-
-**Pass:** Drive connect/backup-now/disconnect work; lapsed-grant produces a
-reconnect notification and graceful retry/skip; connection state persists
-across restart via the new Session 8 prefs file.
-
----
-
-## B5. Community contribution flow
-
-1. Go to **Settings → Contribute to community database**, ensure toggle is
-   **on**.
-2. Scan or look up a UPC **not** in the local catalog.
-3. If prompted to contribute, accept.
-4. **Expected:** `ContributionRepository.saveContribution` creates a
-   `contrib::<upc>` document (local save via Collection API, no error).
-5. **HMAC signing check:** `HmacKeyStore.sign()` is called when
-   `GitHubUploadWorker` runs — this depends on `getInstallId()`
-   (Session 8 AES/GCM). Check logcat for `HmacKeyStore`/`SecureKeyStore` — no
-   crypto exceptions, `getInstallId()` returns a stable UUID.
-6. **Upload note:** per `HANDOFF.md`, the Cloudflare Worker isn't deployed
-   yet — `GitHubUploadWorker`'s network call may fail. That's expected; what
-   matters is the **local save** and **HMAC signing** both succeed without
-   exceptions.
-7. **Mark uploaded / delete pending:** if there's a manual "retry upload" or
-   "discard" action for pending contributions, test
-   `markUploaded`/`deletePendingContribution` — confirm `hasPendingContribution`
-   correctly reflects the state afterward.
-
-**Pass:** Contribution saves locally, HMAC signs without error using the new
-Keystore-backed install ID; upload failure (Worker not deployed) doesn't crash
-the app.
+**Pass:** clean run (or graceful early-return offline) with the log sequence.
 
 ---
 
-## B6. Catalog refresh worker (background)
+# PART C — Backup & Restore (run LAST)
 
-1. Look for a manual "Check for updates"/"Refresh now" action in
-   **Settings → Diagnostics** (the "Refresh now" button seen near the lookup
-   sources section).
-2. Tap it.
-3. Watch logcat filtered on `CatalogRefreshWorker`:
-   - `"Starting catalog refresh…"`
-   - `"Refresh complete: N new catalog records added"` (N may be 0)
-   - `"Community UPC file: N UPCs merged into catalog"`
-   - If HobbyDB connected: `"Vaulted status updated: N items"`
-4. **Expected:** no exceptions, especially no `Collection`/`Database` type
-   errors (this worker creates its own `FunkoDexDatabase` instance per
-   Session 7's conversion — 3 separate `db.getCollection()` calls across
-   `refreshKennyChan`, `refreshCommunityUpcFile`, `refreshVaultedStatus`).
-5. After it completes, search for a known recently-added Pop in **Check** to
-   confirm new catalog data is queryable.
+## C1. Backup (export)
 
-**Pass:** Refresh worker runs to completion (or graceful early-return on
-network failure) with no Collection-API exceptions.
+Two entry points, both verified to call the same `exportDatabase()`:
+**Settings → Database → "Send to another phone"** and **Settings → Backup →
+"Backup database"** ("Saves a .zip to your phone's Downloads folder and lets
+you share to another device").
 
----
+1. With a populated collection (photos, variants, an alert):
+   tap **Backup database**.
+2. **Expected:** the zip is written to **Downloads** via MediaStore AND a
+   share chooser opens titled **"Share backup via…"**. Filename:
+   `FunkoDex_backup_YYYYMMDD_HHmmss.zip`.
+3. Verify on-device: `adb shell ls /sdcard/Download/ | findstr FunkoDex_backup`
+4. Pull and inspect: `adb pull /sdcard/Download/FunkoDex_backup_<ts>.zip .`
+   **Expected zip contents:** single `funkodex_backup.json`, a JSON array
+   where every entry has `"_id"` (`funko::<uuid>` etc.); **no** entries of
+   type `catalog` or `system`; blobs encoded as
+   `{"_type":"blob","contentType":…,"data":"<base64>"}`.
 
-# PART C — Backup & Restore (do this LAST)
-
-These tests modify/wipe your collection. Complete Parts A and B first so you
-have meaningful data to back up.
-
-## C1. Backup (export) — two paths
-
-FunkoDex has **two** export entry points that both call
-`dbTransferViewModel.exportDatabase()`:
-- **Settings → Database → "Send to another phone"**
-- **Settings → Backup → "Backup database"**
-
-Both produce the same `FunkoDex_backup_<timestamp>.zip`.
-
-1. Ensure My Dex has several items including ones with photos, variants, and
-   a price alert.
-2. Tap **Backup database**.
-3. **Expected:** share sheet opens with `FunkoDex_backup_YYYYMMDD_HHmmss.zip`.
-4. Verify the file landed in Downloads:
-   ```
-   adb shell ls /sdcard/Download/ | findstr FunkoDex_backup
-   ```
-5. Pull and inspect:
-   ```
-   adb pull /sdcard/Download/FunkoDex_backup_<timestamp>.zip .
-   ```
-   Open the zip — **expected:** single file `funkodex_backup.json`, a JSON
-   array where:
-   - Every entry has `"_id"` like `"funko::<uuid>"`.
-   - No entries have `type: "catalog"` or `type: "system"`.
-   - Items with thumbnails/photos have nested `{"_type":"blob", "contentType":
-     ..., "data": "<base64>"}` objects.
-   - Items with variants have the variants JSON string embedded as a field
-     value.
-
-**Pass:** Both backup entry points produce a correctly-structured zip with
-all user data, correctly excluding catalog/system docs.
-
----
+**Pass:** Downloads file + share sheet + correct JSON structure.
 
 ## C2. Restore (normal)
 
-1. Add one throwaway item to My Dex (so post-restore state differs from the
-   backup in C1).
-2. Go to **Settings → Backup → Restore backup**.
-3. Confirm the "Replace your collection?" warning.
-4. Select the C1 backup zip.
-5. **Expected:** "Importing…" → "Import successful!"
-6. **My Dex now matches the C1 backup exactly** — the throwaway item from
-   step 1 is gone; all C1 items (with photos/variants/alerts) are back.
-7. **Catalog untouched:** search **Check** tab — catalog results still
-   present (type="catalog" excluded from delete/restore).
-8. **Category preferences untouched:** Settings → Collection categories — your
-   A8 settings are unchanged (type="cat_pref" excluded).
-9. **Price alerts restored:** re-open the item from A7 — alert state should
-   match what was in the C1 backup.
+1. Add one throwaway item (so current state differs from the C1 backup).
+2. **Settings → Backup → "Restore backup"** ("Restore from a FunkoDex .zip
+   backup file"). **Expected dialog:** **"Replace your collection?"** —
+   "This will permanently replace everything… cannot be undone." + note that
+   backups are in Downloads named `FunkoDex_backup_YYYYMMDD_HHmmss.zip`.
+   Confirm with **"Replace collection"**.
+3. Pick the C1 zip. **Expected:** "Importing…" subtitle → "Import
+   successful!".
+4. **Verify:** throwaway item gone; all C1 items back **including photos,
+   variants, and the price alert**; catalog intact (Add → Search by name
+   still returns results); category preferences unchanged.
+5. Error path (optional): pick a non-backup zip → **"Restore failed"** dialog
+   with "Your existing collection data has not been changed."
 
-**Pass:** Restore replaces user data exactly per backup; catalog and
-category-preference docs untouched; alerts restored correctly.
+**Pass:** exact restore to backup state; catalog/cat-prefs untouched.
 
----
+## C3. Force restore — HIGHEST PRIORITY (Session 7 risk)
 
-## C3. Force restore — CRITICAL, highest priority
+Wipes the entire database **including catalog**, then rebuilds. The core
+Session 7 risk: `forceRestoreDatabase` must obtain its `Collection` AFTER
+`db.reopen()` — stale-reference bugs appear here first.
 
-This wipes the **entire database including catalog**, then rebuilds from the
-backup. Do this only after C1/C2 pass — you have the C1 backup as a safety
-net.
+1. **Settings → Backup → "Force restore (corrupt database)"** ("Wipes
+   everything and rebuilds from backup — use if the app is behaving
+   incorrectly"). **Expected dialog:** **"Wipe and rebuild from backup?"** —
+   notes the catalog will re-download on next start. Confirm with **"Wipe
+   and restore"**.
+2. Pick the C1 zip. **Expected:** success dialog **"Database rebuilt"** —
+   "Your collection has been restored. The catalog (23,000+ items) will
+   reload in the background on next start… Restart the app now for best
+   results." Logcat: `Force restore: inserted N user documents. Catalog will
+   reload on next start.` (N = C1 item count).
+3. **Force-close and relaunch.**
+4. **Expected on restart:**
+   - Splash stays up longer (full catalog re-preload — the
+     `system::catalog_loaded` marker was wiped).
+   - **My Dex** shows exactly the C1 items with photos/variants intact.
+   - **Add → Search by name** works (post-reopen Collection queryable).
+   - **Settings → Collection categories**: all categories enabled
+     (cat-prefs were wiped and re-seeded to defaults).
+   - No empty, duplicated, or stale items.
 
-1. Ensure the C1 backup zip is still available.
-2. Go to **Settings → Backup → Force restore (corrupt database)**.
-3. Read and confirm the "Wipe and rebuild from backup?" warning.
-4. Select the C1 backup zip.
-5. **Expected:** "Importing…" → success state. Logcat shows:
-   `"Force restore: inserted N user documents. Catalog will reload on next
-   start."` (N = item count in C1 backup).
-6. **Force-close and relaunch the app** (not just background).
-7. **Expected on restart:**
-   - Catalog re-preloads from scratch (may take noticeably longer than
-     normal — the `system::catalog_loaded` marker was wiped).
-   - **My Dex shows exactly the items from the C1 backup** — same items,
-     thumbnails, user photos, and variants as in C2's verification.
-   - **Check** tab catalog search works again (post-reopen `Collection` is
-     queryable).
-   - **Settings → Collection categories** — all categories show **enabled**
-     (re-seeded to defaults; `cat_pref` docs were wiped too).
-   - Price alerts from C1 are restored (alert docs are user data, included
-     in the backup).
-8. **This is the core Session 7 risk check:** confirm no items are empty,
-   duplicated, or showing stale pre-restore data — this validates that
-   `liveCollection = db.getCollection()` obtained *after* `db.reopen()`
-   correctly derives from the new `Database` instance
-   (`getDatabase().defaultCollection`), not a stale reference.
-
-**Pass:** Force restore wipes and rebuilds successfully; on restart, catalog
-re-preloads, all user data from the backup is present and correct, category
-preferences re-seed to defaults. **This is the single most important test in
-the entire plan.**
+**Pass:** the single most important test in this plan — full wipe, rebuild,
+re-preload, and a correct collection afterward.
 
 ---
 
-# PART D — Automated / Code-Level Tests
+# PART D — Automated / Code-Level
 
 ## D1. Enriched catalog import
 
-### D1a. Small test file (all code paths in one file)
+### D1a. Small test file (exercises five code paths)
 
 Create `test_enriched.json`:
 
@@ -603,169 +662,136 @@ Create `test_enriched.json`:
 ]
 ```
 
-This exercises five paths in one import:
-- **Record 1**: if `spider-man-no-way-home-pop` exists in the catalog →
-  **merge path** (enriches with pricing/image/popType fields, never overwrites
-  title/handle/imageUrl/seriesList). If not found → inserted as new.
-- **Record 2**: guaranteed-new handle → **insert path**, new
-  `catalog::totally-new-test-item-2026` doc.
-- **Record 3**: funko.com page-filename handle (`92345.html`) → exercises
-  `FUNKO_PAGE_HANDLE` regex repair, slugified to
-  `catalog::page-handle-repair-test-item`.
-- **Record 4**: title contains "shirt" → `isStandardPop`/`NON_POP_TITLE`
-  filter should **skip** it.
-- **Record 5**: blank title → skipped.
+Path coverage (all verified against `CatalogImporter`):
+- **1** — merge if `spider-man-no-way-home-pop` exists in the catalog
+  (enrich-only: pricing/image/popType/funkoNumber; identity fields
+  title/handle/imageUrl/seriesList never overwritten; UPC only set when
+  previously blank); otherwise inserted as new.
+- **2** — guaranteed insert → `catalog::totally-new-test-item-2026`.
+- **3** — `92345.html` matches `FUNKO_PAGE_HANDLE` (`^\d+\.html$`) → slug
+  repair → `catalog::page-handle-repair-test-item`.
+- **4** — "T-Shirt" matches `NON_POP_TITLE` (`\bshirt\b`, case-insensitive)
+  → **skipped**.
+- **5** — handle present but blank title → **skipped**.
 
-Push to device:
-```
-adb push test_enriched.json /sdcard/Download/test_enriched.json
-```
+Push: `adb push test_enriched.json /sdcard/Download/test_enriched.json`
 
-1. Go to **Settings → Catalog → Import Enriched Catalog**.
-2. Select `test_enriched.json` from Downloads.
-3. **Expected:** "Importing catalog…" progress dialog, finishes almost
-   instantly for 5 records.
-4. **Expected result dialog ("Import complete"):**
-   - "**X** existing records updated" — **1** if record 1 matched an existing
-     catalog doc, else **0**.
-   - "**X** new records added" — **2** (records 2 + 3) if record 1 matched,
-     or **3** (records 1 + 2 + 3) if record 1 didn't match.
-   - "**2** records skipped (non-Pop or missing handle/title)" — records 4 + 5.
-   - **0 errors**.
-
-5. **Verify in app:**
-   - Search "Totally New Test Item" in **Check** — found (insert path,
-     `collection.save`).
-   - Search "Page-Handle Repair Test Item" — found (slug repair worked).
-   - Search "Test Branded T-Shirt" — **not found** (non-Pop filter worked).
-   - If record 1 matched: open "Spider-Man (No Way Home)" — confirm enriched
-     fields (funkoNumber 1118, popType, market values, PriceCharting IDs)
-     appear, and **title/image were NOT overwritten**.
+1. **Settings → Catalog → "Import Enriched Catalog"** ("Load enriched
+   funko.com and pricing data from a JSON file") → pick the file (JSON file
+   picker).
+2. **Expected:** non-dismissable **"Importing catalog…"** dialog ("Reading
+   file…" then a progress bar "N / M records"); near-instant for 5 records.
+3. **Expected result dialog "Import complete":**
+   - "X existing records updated" — 1 if record 1 matched, else 0
+   - "X new records added" — 2 if record 1 matched, else 3
+   - "2 records skipped (non-Pop or missing handle/title)"
+   - errors line only if errors > 0 (expect absent)
+   - "Completed in Xs" → **Done**
+4. **Verify via Add → Search by name:** "Totally New Test Item" found;
+   "Page-Handle Repair Test Item" found; "Test Branded T-Shirt" **not**
+   found. If record 1 merged: its detail shows enriched pricing fields and
+   the original title/image are unchanged.
 
 ### D1b. Full enriched file (optional)
 
-6. If you have the real `funko_data_enriched.json` (~17,500 records) from the
-   enricher pipeline, push and import it the same way.
-7. **Expected:** progress bar advances in batches of 500, completes with a
-   plausible enriched/added/skipped breakdown and **0 errors**.
-8. Spot-check a few well-known Pops afterward for enriched pricing data.
+Push the real `funko_data_enriched.json` (~17,500 records) the same way.
+**Expected:** progress advances in batches of 500 (verified chunk size),
+plausible enriched/added/skipped split, 0 errors.
 
-**Pass:** Small test file produces exactly the expected counts; merge/insert/
-slug-repair/non-Pop-filter/blank-title paths all behave correctly. Large file
-(if tested) completes with 0 errors.
+**Pass:** exact counts on the 5-record file; clean full-file run if tested.
 
----
-
-## D2. Unit test suites
+## D2. Unit tests
 
 ```
 gradlew test
 ```
 
-**Expected — `BUILD SUCCESSFUL`, all green:**
+All under `app/src/test` (JVM — no device needed). Verified counts:
+- `FunkoMapperTest` — **9** tests (document round-trip; would catch
+  Session 7 type regressions)
+- `CollectionStatsTest` — **11** tests
+- `FunkoLookupServiceTest` — **8** tests
+- `SecureKeyStoreTokenTest` — **15** tests (token string parsing — storage
+  change in Session 8 does not affect these)
+- `ScannerViewModelStateTest` — **20** tests (scan state machine)
+- `PkceHelperTest` — **9** tests (OAuth PKCE)
 
-- **`FunkoMapperTest`** (9 tests) — `FunkoMapper.toDocument`/`fromDocument`
-  round-trip. A regression here would indicate a type mismatch from the
-  Collection API migration (Session 7).
-- **`CollectionStatsTest`** (11 tests) — `CollectionStats`/`SeriesSummary`
-  computation. Confirms `getCollectionStats()`'s output shape is unchanged.
-- **`FunkoLookupServiceTest`** (8 tests) — catalog search logic
-  (`searchLocalByName`, `DataSource.collection` conversion).
-- **`SecureKeyStoreTokenTest`** — pure string-parsing for
-  `"accessToken|expireAtMs|refreshToken"`. Unaffected by Session 8's storage
-  change (parsing-only), should still pass.
-- **`ScannerViewModelStateTest`** — scanner state machine (manual selection,
-  bulk add confirm flow, `ScanState.Saved`).
-- **`PkceHelperTest`** — PKCE code-verifier/challenge generation for OAuth.
+**Pass:** `BUILD SUCCESSFUL`, 72 tests green.
 
-If any of these require an actual Couchbase Lite instance (instrumented test
-under `app/src/androidTest` rather than `app/src/test`), run:
-```
-gradlew connectedAndroidTest
-```
-on a connected device. Per the current file layout, all six are under
-`app/src/test`, so `gradlew test` (JVM) should cover everything.
+## D3. SecureKeyStore file-level check (Session 8)
 
-**Pass:** `gradlew test` → `BUILD SUCCESSFUL`, all tests green.
+1. After B1 (or any secret saved): force-close + relaunch → secret still
+   readable; logcat free of `AEADBadTagException` /
+   `KeyPermanentlyInvalidatedException` / `KeyStoreException`.
+2. Optional (debug build / root): `/data/data/com.funkodex/shared_prefs/`
+   contains `funkodex_secure_prefs_v2.xml` with values in
+   `base64(iv):base64(ciphertext)` form, and the old
+   `funkodex_secure_prefs.xml` still present but untouched (abandoned by
+   design — no migration).
 
----
-
-## D3. SecureKeyStore — direct round-trip verification (Session 8)
-
-This is covered indirectly by B1–B3, but if you want an isolated check
-without going through full OAuth flows:
-
-1. After completing B1 (Channel3 key set), force-close and relaunch.
-2. Confirm `hasChannel3Key()` still returns true (UI shows "Connected").
-3. Check logcat for any `javax.crypto.AEADBadTagException`,
-   `KeyPermanentlyInvalidatedException`, or `KeyStoreException` — none should
-   appear.
-4. **Optional adb-level check** (requires root or a debug build with
-   file access): confirm `funkodex_secure_prefs_v2.xml` exists under
-   `/data/data/com.funkodex/shared_prefs/` and contains values in
-   `base64:base64` format (not plaintext, not the old EncryptedSharedPreferences
-   format). The old `funkodex_secure_prefs.xml` should also still exist
-   (abandoned, untouched, still encrypted with the old scheme) — confirming
-   no migration/deletion occurred, per the Session 8 design decision.
-
-**Pass:** New prefs file uses the `iv:ciphertext` base64 format; old prefs
-file is present but unused; no crypto exceptions across restart.
+**Pass:** new-format file in use; old file inert; no crypto exceptions.
 
 ---
 
 # PART E — 16 KB Emulator Regression
 
-Using the **16 KB Page Size Google Play Intel x86_64 Atom** emulator (Pixel
-10, API 37.0) from Session A:
+On the **16 KB Page Size** emulator (Pixel 10, API 37.0) from Session A:
 
 1. Install the current build.
-2. **A1** — first launch / catalog preload.
-3. **A3** — manual search + add an item.
-4. **A4b/A4f** — add a photo, edit an unrelated field, confirm photo
-   preserved.
-5. **C1** — one backup export (don't need the full restore cycle here).
-6. **Expected:** no crashes, no `SIGSEGV`/`SIGBUS` in logcat, performance
-   acceptable (may be slightly slower per Session A's notes).
+2. Run: A1 (preload) → A3a (search + add) → A4d step 12–13 + A4f (photo +
+   blob preservation) → C1 (one backup export only).
+3. **Expected:** no crashes, no `SIGSEGV`/`SIGBUS` in logcat.
 
-**Pass:** Condensed smoke test passes with no new crashes vs. Session A's
-baseline.
+**Pass:** condensed smoke test clean vs. Session A baseline.
 
 ---
 
 # Summary Checklist
 
 ## Part A — Core
-- [ ] A1. First launch & catalog preload
-- [ ] A2. UPC scan add (collection + want list) + offline pending queue
-- [ ] A3. Manual search bulk-add + batch scan sheet
-- [ ] A4. Edit: fields, main photo (camera), gallery picker, variation/both
-      photo, variant note/price edit, remove variant, delete photo, and the
-      critical "edit doesn't wipe blobs" regression check
-- [ ] A5. Delete item
-- [ ] A6. Sort (4 options) + franchise filter + search + live category filter
-- [ ] A7. Price alerts (create/disable/persist; trigger optional)
-- [ ] A8. Category preferences (toggle/genre/reset, restart-persist)
-- [ ] A9. Reports screen stats + series completion + export (.xlsx 4-sheet, .csv)
+- [ ] A1. First launch, splash-gated preload, search proves catalog
+- [ ] A2a. Scan → found → "Added!" flow
+- [ ] A2b. Scan → want list (verify via Check badge / re-scan)
+- [ ] A2c. Scan → "Already in your collection" (all 3 options)
+- [ ] A2d. Scan → "Barcode not in catalog" → match (silent contribution)
+- [ ] A2e. Offline scan → "Scan queued — no network" → auto-resolve + notification
+- [ ] A3a. "Search Catalog" bulk add (incl. category-filtered results)
+- [ ] A3b. Batch scan FAB → "Save all (N)"
+- [ ] A4a. View mode (status card "Tap to move", chips, Market Price)
+- [ ] A4b. Edit fields ("Edit Funko" / "Save")
+- [ ] A4c. UPC scan dialog + "Share UPC with community?" prompt
+- [ ] A4d. Photos: camera / gallery (Photo Picker, no permission) / "Fetch
+      from catalog"; "Save photo as" Main/Variation/Both
+- [ ] A4e. Variant edit: description, price, remove
+- [ ] A4f. **Blob-preservation regression (critical)**
+- [ ] A5. Delete via card kebab menu AND detail trash → "Remove from collection?"
+- [ ] A6. Search / segmented sort (4 options) / "All"+franchise chips
+- [ ] A7. Price alerts (want-list only; "Target price (USD)")
+- [ ] A8. "My collection categories": toggles, genre toggle, Reset, restart
+- [ ] A9. Reports (local-only file — caveat) + export .xlsx (4 sheets) / .csv
+- [ ] A10. **Check tab — Pre-Purchase Check (all 4 overlays, 4 s auto-reset)**
+- [ ] A11. App theme (6 options) + Diagnostics log share
 
-## Part B — Integrations
-- [ ] B1. Channel3 API key (set/persist/clear)
-- [ ] B2. HobbyDB OAuth (connect/disconnect/persist/refresh)
-- [ ] B3. eBay OAuth (connect/disconnect/persist)
-- [ ] B4. Google Drive (connect/backup-now/disconnect, lapsed-grant T-D3,
-      persist across restart)
-- [ ] B5. Community contribution (local save + HMAC sign)
-- [ ] B6. Catalog refresh worker (manual trigger, 3-function log sequence)
+## Part B — Integrations (CatalogDataSection caveat applies to B1–B3, B6)
+- [ ] B1. Channel3 key set/persist
+- [ ] B2. HobbyDB OAuth connect/persist/disconnect
+- [ ] B3. eBay OAuth connect/persist/disconnect
+- [ ] B4. Drive connect / back up now / **lapsed grant (notif 3002)** / disconnect
+- [ ] B5. Contributions: silent USER_SCAN path + USER_EDIT prompt path;
+      toggle arms/cancels upload worker; WORKER_URL-unset skip
+- [ ] B6. Catalog refresh worker log sequence
 
-## Part C — Backup/Restore (run last)
-- [ ] C1. Backup export (both entry points) + zip content verification
-- [ ] C2. Restore (normal)
-- [ ] C3. **Force restore — highest priority overall**
+## Part C — Backup/Restore (LAST)
+- [ ] C1. Backup: Downloads file + "Share backup via…" + JSON structure
+- [ ] C2. Restore: "Replace your collection?" → exact state, catalog intact
+- [ ] C3. **Force restore: "Database rebuilt" → restart → re-preload →
+      correct collection (HIGHEST PRIORITY)**
 
 ## Part D — Automated
-- [ ] D1a. Enriched import — small test file (all 5 paths)
-- [ ] D1b. Enriched import — full file (optional)
-- [ ] D2. `gradlew test` — all unit suites green
-- [ ] D3. SecureKeyStore format/exception check
+- [ ] D1a. Enriched import 5-record file (exact counts)
+- [ ] D1b. Full enriched file (optional)
+- [ ] D2. `gradlew test` — 72 tests green
+- [ ] D3. SecureKeyStore v2 prefs format / no crypto exceptions
 
-## Part E — 16 KB regression
-- [ ] E1. Condensed smoke test on 16 KB emulator
+## Part E
+- [ ] E1. 16 KB emulator condensed smoke test

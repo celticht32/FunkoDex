@@ -6,7 +6,32 @@ FunkoDex is an Android Kotlin/Jetpack Compose app for managing a Funko Pop colle
 Built entirely in Claude across multiple sessions. This file gives Claude the full
 context needed to work on the codebase without re-explaining architecture.
 
-**66 Kotlin source files. 6 test files (72 tests). Feature-complete; pre-Play-Store hardening in progress (see Migration specs below).**
+**67 Kotlin source files. 6 test files (72 tests). Feature-complete at the
+code level through Sessions 1–8 (incl. Session 7 CBL Collection API migration
+and Session 8 Keystore/security-crypto migration); full functional/device test
+pass is the current focus — see Testing below.**
+
+---
+
+## Testing — current focus
+
+A full, code-verified functional test plan covering every feature built to
+date lives in **`COMPLETE_TEST_PLAN.md`** (Parts A–E: core collection, OAuth/
+Drive/community integrations, backup/restore/force-restore, automated/unit
+tests, 16 KB regression — every UI label and dialog title verified against
+source). Progress is tracked in **`TEST_TRACKER.md`** — check items off there
+as they run, with one-line results in its log section.
+
+**Highest priority:** Part C3, force restore — exercises the Session 7
+`db.reopen()` → fresh `Collection` accessor path, the biggest regression risk
+from the Collection API migration. Run Part C last (it wipes the database).
+
+**Two known wiring gaps** (both confirmed against the pushed repo, flagged in
+the plan/tracker on the items they affect):
+- `ReportsScreen.kt` is imported by `FunkoDexNavHost.kt` but is not present in
+  the repo (local-only/uncommitted). Affects A9 (Reports + export).
+- `CatalogDataSection` (Channel3/HobbyDB/eBay "Lookup sources" rows + "Refresh
+  now") exists in `SettingsScreen.kt` but has no call sites. Affects B1–B3, B6.
 
 ---
 
@@ -16,7 +41,7 @@ context needed to work on the codebase without re-explaining architecture.
 |---|---|
 | Language | Kotlin 2.0, coroutines |
 | UI | Jetpack Compose + Material 3 |
-| Database | Couchbase Lite 3.2.x (Community — free, no server, offline-first; ≥3.2.3 required for 16 KB page-size compliance) |
+| Database | Couchbase Lite 3.2.4 (Community — free, no server, offline-first; ≥3.2.3 required for 16 KB page-size compliance). All data access goes through `database.defaultCollection` via the Collection API (`DataSource.collection`, `collection.save/getDocument/delete/createQuery/createIndex`) — Session 7. `inBatch()` remains database-level. |
 | DI | Hilt (KSP processor) |
 | Background | WorkManager + HiltWorker |
 | Networking | OkHttp 4.12 + Gson |
@@ -24,7 +49,7 @@ context needed to work on the codebase without re-explaining architecture.
 | Images | Coil 2.7 |
 | Export | Apache POI (Excel) |
 | Widget | Jetpack Glance 1.1.0 |
-| Security | EncryptedSharedPreferences + Android Keystore HMAC |
+| Security | AES-256-GCM via AndroidKeyStore (SecureKeyStore, Session 8) + Android Keystore HMAC |
 | OAuth | Chrome Custom Tabs + PKCE (HobbyDB, eBay) |
 | Browser | androidx.browser 1.8.0 (Chrome Custom Tabs for OAuth) |
 | Logging | FunkoDexLogger (rotating file, configurable level, crash handler) |
@@ -69,8 +94,10 @@ com.funkodex/
 ├── network/                    ConnectivityObserver (+POST_NOTIF guard), FunkoLookupService,
 │                               PriceService (5-tier: retail → eBay RSS → UPCitemdb →
 │                               Channel3 free/premium → HobbyDB via TokenRefreshManager)
-├── security/                   SecureKeyStore (EncryptedSharedPrefs — Channel3, HobbyDB,
-│                               eBay tokens, install ID), HmacKeyStore (Keystore HMAC)
+├── security/                   SecureKeyStore (AES-256-GCM via AndroidKeyStore,
+│                               Session 8 — Channel3, HobbyDB, eBay tokens,
+│                               install ID; prefs file funkodex_secure_prefs_v2),
+│                               HmacKeyStore (Keystore HMAC)
 ├── util/                       FunkoDexLogger (rotating file, async queue),
 │                               CrashHandler, LogLevel enum
 └── ui/
@@ -79,11 +106,17 @@ com.funkodex/
     └── screens/
         ├── SplashScreen.kt
         ├── collection/         CollectionScreen + CollectionViewModel
-        │                       (live category filter via combine())
-        ├── detail/             DetailScreen + DetailViewModel (2-phase price, photo, alerts)
-        ├── prescan/            PreScanScreen + PreScanViewModel
-        ├── reports/            ReportsScreen + ReportsViewModel (empty-state guard)
-        ├── scanner/            ScannerScreen (all 10 ScanState branches + POST_NOTIF),
+        │                       (My Dex — owned items only; search/sort/franchise
+        │                       filter; category prefs do NOT filter this screen)
+        ├── detail/             DetailScreen + DetailViewModel (2-phase price, photo,
+        │                       alerts, variants, UPC scan + community contribution prompt)
+        ├── prescan/            PreScanScreen + PreScanViewModel — "Check" tab:
+        │                       read-only camera "do I already own this?" duplicate
+        │                       checker (4s auto-reset, no add flow)
+        ├── reports/            ReportsScreen — imported by FunkoDexNavHost but NOT
+        │                       present in the repo (local-only/uncommitted; see
+        │                       TEST_TRACKER.md gaps)
+        ├── scanner/            ScannerScreen (all ScanState branches + POST_NOTIF),
         │                       ScannerViewModel (ConnectivityObserver, no deprecated API),
         │                       BatchScanScreen/VM, BarcodeAnalyzer
         └── settings/           SettingsScreen (Drive sign-in/out, import file picker,
@@ -93,6 +126,11 @@ com.funkodex/
                                 CatalogSettingsViewModel (+OAuth helpers),
                                 CategoryFilterScreen/VM, DatabaseTransferViewModel,
                                 SettingsViewModel (+logLevel StateFlow + setLogLevel)
+
+  > **Note:** `CatalogDataSection` (Channel3/HobbyDB/eBay "Lookup sources"
+  > rows + "Refresh now") exists in `SettingsScreen.kt` but has NO call sites
+  > in the repo — same local-only situation as `ReportsScreen.kt`. See
+  > `TEST_TRACKER.md` gaps.
 ```
 
 ---
@@ -133,9 +171,14 @@ Broadcasts restricted to own package via `setPackage(packageName)`.
 
 ### Security model (all implemented)
 - `allowBackup=false`, HTTPS-only, 10-domain allowlist
-- No secrets in APK — all keys in `EncryptedSharedPreferences`
+- No secrets in APK — Channel3 key, HobbyDB/eBay tokens, and install ID stored
+  in `funkodex_secure_prefs_v2`, each value AES-256-GCM encrypted directly via
+  `AndroidKeyStore` (alias `funkodex_secure_key`) — `SecureKeyStore.kt`
+  (Session 8; replaced the deprecated `androidx.security:security-crypto`
+  EncryptedSharedPreferences). Old `funkodex_secure_prefs` file abandoned on
+  disk, not migrated — upgrading users re-enter Channel3 key and re-link
+  HobbyDB/eBay once.
 - HMAC key in hardware-backed Android Keystore
-- Install ID (anon UUID) in `EncryptedSharedPreferences` (SEC-A fix)
 - Deep-link `itemId` validated against `funko::` prefix (SEC-B fix)
 - VERBOSE log shows data-privacy warning (SEC-C fix)
 - OkHttp `writeTimeout(30s)` (SEC-D fix)
@@ -198,9 +241,11 @@ Test files:
 
 - **`docs/PlayStore_Readiness_Migration_SPEC.md`** — 16 KB page-size compliance and
   deprecation cleanup. Hard rules from it: Couchbase Lite must stay ≥3.2.3, CameraX
-  ≥1.4.x; **do NOT migrate to Couchbase Lite 4.0.x** — it removed the database-level
-  APIs this codebase calls 107 times (Collection-API migration is its own scheduled
-  session); do NOT add extractNativeLibs/useLegacyPackaging workarounds.
+  ≥1.4.x; **do NOT migrate to Couchbase Lite 4.0.x** — it removes APIs and changes
+  semantics beyond the 3.2.x Collection API this codebase now uses; do NOT add
+  extractNativeLibs/useLegacyPackaging workarounds. (The database-level → Collection
+  API migration that this spec scheduled was completed in Session 7 — all data
+  access already uses `database.defaultCollection`.)
 - **`docs/CredentialManager_Migration_SPEC.md`** — Google Drive auth migration off the
   deprecated GoogleSignIn API. Uses AuthorizationClient only (authorization), NOT
   Credential Manager (authentication) — read §1 before assuming otherwise.

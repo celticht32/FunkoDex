@@ -204,6 +204,36 @@
 
 ---
 
+## 9. Enriched Catalog Import
+
+**What to test:** Settings → Import Enriched Catalog merges `funko_data_enriched.json` into the live catalog.
+
+**Steps:**
+1. Copy `funko_data_enriched.json` onto the device (e.g. Downloads)
+2. Go to Settings → Catalog → Import Enriched Catalog
+3. Pick the file from the file picker
+4. Wait for the progress dialog (record counter) to complete
+5. Review the result summary dialog
+
+**Pass criteria:**
+- Progress dialog shows live `processed / total` counts (14,314 total)
+- Result summary shows approximately: 13,583 enriched, ~725 added, ~4 skipped, 0 errors
+- Spot-check a known existing item (e.g. search "Twinkie the Kid") — detail screen should
+  now show enriched data without `imageUrl`, `title`, or `seriesList` having changed
+- Spot-check a net-new item (e.g. search "Peacemaker on Peacecycle") — should appear as
+  a new catalog entry with handle `peacemaker-on-peacecycle`, not `91991.html`
+- Re-running the import on the same file should produce 0 added (no duplicates), all
+  records re-enriched or skipped
+
+**Fail indicators:**
+- App crash or ANR during import
+- Result summary shows nonzero `errors`
+- Existing item's `imageUrl`/`title`/`seriesList` changed
+- Any catalog entry with a `.html` handle
+- Re-running creates duplicate entries
+
+---
+
 ## Results Log
 
 | Test | Result | Notes |
@@ -216,3 +246,4 @@
 | 6. Fetch from catalog | | |
 | 7. App performance | | |
 | 8. Send to another phone | | |
+| 9. Enriched catalog import | | |

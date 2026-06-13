@@ -32,9 +32,9 @@ FunkoDex/
 ├── app/src/main/java/com/funkodex/
 │   ├── auth/           OAuth 2.0 PKCE flows, TokenRefreshManager, TokenKeeperWorker
 │   ├── data/           Models, database, repositories, workers, export
-│   ├── di/             Hilt dependency injection (12 providers)
+│   ├── di/             Hilt dependency injection (13 providers)
 │   ├── network/        5-tier lookup + price waterfall services
-│   ├── security/       EncryptedSharedPreferences + Keystore HMAC
+│   ├── security/       SecureKeyStore (AES-256-GCM via AndroidKeyStore) + Keystore HMAC
 │   ├── util/           FunkoDexLogger, CrashHandler, LogLevel
 │   └── ui/             Compose screens, NavHost, themes, widget
 ├── app/src/test/java/com/funkodex/
@@ -63,9 +63,9 @@ FunkoDex/
 
 | Tool | Version |
 |------|---------|
-| Android Studio | Hedgehog (2023.1.1) or newer |
+| Android Studio | Ladybug (2024.2.1) or newer (required for AGP 8.13.x) |
 | JDK | 17 |
-| Android SDK | API 26 min, API 35 target |
+| Android SDK | API 26 min, API 36 target/compile |
 | Device or emulator | Camera required for scanning |
 
 ---
@@ -167,8 +167,9 @@ Two document types per item:
 }
 ```
 
-Indexes: `idx_owned`, `idx_upc`, `idx_franchise`, `idx_type`,
-`idx_alert_enabled`, `idx_alert_item`, `idx_contrib_uploaded`, `idx_cat_pref`, `idx_date_added`
+Indexes: `idx_owned`, `idx_upc`, `idx_franchise`, `idx_category`, `idx_genre`,
+`idx_date_added`, `idx_franchise_owned`, `idx_catalog_name`, `idx_catalog_franchise`,
+`idx_cat_pref`, `idx_type`, `idx_alert_enabled`, `idx_alert_item`, `idx_contrib_uploaded`
 
 ---
 

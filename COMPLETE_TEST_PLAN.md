@@ -694,9 +694,10 @@ Push: `adb push test_enriched.json /sdcard/Download/test_enriched.json`
 
 ### D1b. Full enriched file (optional)
 
-Push the real `funko_data_enriched.json` (~17,500 records) the same way.
-**Expected:** progress advances in batches of 500 (verified chunk size),
-plausible enriched/added/skipped split, 0 errors.
+Push the real `funko_data_enriched.json` (14,314 records) the same way.
+**Expected:** progress advances in batches of 500 (verified chunk size);
+approximately 13,583 enriched, ~725 added, ~4 skipped, 0 errors (per
+HANDOFF.md's 2026-06-12 run).
 
 **Pass:** exact counts on the 5-record file; clean full-file run if tested.
 

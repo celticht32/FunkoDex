@@ -63,7 +63,7 @@ Sessions 7/8.
 ## Part D — Automated
 
 - [ ] D1a. Enriched import — 5-record test file, exact counts (1 or 0 enriched / 2 or 3 added / 2 skipped / 0 errors)
-- [ ] D1b. Enriched import — full ~17,500-record file (optional)
+- [ ] D1b. Enriched import — full 14,314-record file (optional)
 - [ ] D2. `gradlew test` — 72 tests green (9+11+8+15+20+9)
 - [ ] D3. SecureKeyStore v2 prefs format / no Cipher/KeyStore exceptions across restart
 

@@ -20,9 +20,11 @@ If you add Hilt injection to a Worker later, you must also add `HiltWorkerFactor
 injection failure at runtime. Add it when you write the first Worker.
 
 ### 3. Couchbase inBatch{} for all bulk writes
-Individual `database.save(doc)` calls inside a loop are extremely slow — each one
+Individual `collection.save(doc)` calls inside a loop are extremely slow — each one
 acquires and releases the write lock. Wrap any loop that writes multiple documents in
-`database.inBatch { }`. For the 23,940-record Kenny Chan preload, this is the
+`database.inBatch { }` (the batch wrapper stays on `database` even after the Session 7
+Collection API migration — only per-document calls like `save`/`getDocument`/`delete`
+moved to `collection`). For the 23,940-record Kenny Chan preload, this is the
 difference between 3 seconds and 3 minutes on first launch.
 
 ### 4. Phase ordering matters
@@ -38,7 +40,9 @@ fixing the refresh worker stub meant testing against stale catalog data.
 ### 5. Never put secrets in BuildConfig — enforce this from day one
 `buildConfigField` values end up as plaintext string constants in `classes.dex`.
 JADX finds them in under 60 seconds. The correct approach from the first commit:
-- API keys → user-entered, stored in `EncryptedSharedPreferences` (AndroidX security-crypto)
+- API keys → user-entered, stored via `SecureKeyStore` (direct AES-256-GCM
+  AndroidKeyStore wrapper — see lesson 20 below for why this replaced
+  AndroidX security-crypto's `EncryptedSharedPreferences`)
 - Tokens → Android Keystore for hardware-backed storage
 - `allowBackup="false"` in manifest from day one (prevents adb backup extraction)
 - `network_security_config.xml` from day one (HTTPS-only, no cleartext traffic)
@@ -160,13 +164,19 @@ provider verifies the challenge without needing a static secret. Implementation:
 `PkceHelper.generateVerifier()` → `PkceHelper.challenge(verifier)` → include challenge
 in auth URL → receive auth code → exchange code+verifier for token.
 
-### 20. Store the OAuth install ID in EncryptedSharedPreferences, not plain prefs
+### 20. Store the OAuth install ID via Keystore-backed encryption, not plain prefs
 The community contribution rate-limit uses an anonymous install UUID sent as X-Device-ID.
 Original implementation used `context.getSharedPreferences("funkodex_meta", MODE_PRIVATE)`
 which writes a plaintext XML file readable via `adb shell`. Even though the UUID is not
-a credential, consistency with the rest of the security model demands EncryptedSharedPreferences.
-The docstring said "EncryptedSharedPreferences" but the code used plain prefs — a comment
-mismatch that the security audit caught. Keep code and comments consistent.
+a credential, consistency with the rest of the security model demands encrypted storage.
+At the time this was written, that meant `EncryptedSharedPreferences` (AndroidX
+security-crypto) — the docstring said "EncryptedSharedPreferences" but the code used
+plain prefs, a comment mismatch that the security audit caught. Session 8 later
+replaced `security-crypto` entirely with `SecureKeyStore` (direct AES-256-GCM
+AndroidKeyStore wrapper); the install ID now lives there
+(`SecureKeyStore.getInstallId()`, key `community_install_id`). The underlying lesson
+stands regardless of mechanism: keep code and comments consistent, and never store
+even non-credential identifiers in plaintext SharedPreferences.
 
 ### 21. Validate deep-link extras before navigating
 `intent?.getStringExtra("NAVIGATE_TO_ITEM")` can be sent by any app. Without validation,

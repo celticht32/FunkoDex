@@ -18,6 +18,7 @@ class CategoryPreferenceRepository @Inject constructor(
     private val db: FunkoDexDatabase,
 ) {
     private val database get() = db.getDatabase()
+    private val collection get() = db.getCollection()
 
     /**
      * Live flow of all category preferences.
@@ -27,7 +28,7 @@ class CategoryPreferenceRepository @Inject constructor(
         ensureDefaults()
         val query = QueryBuilder
             .select(SelectResult.expression(Meta.id).`as`("id"), SelectResult.all())
-            .from(DataSource.database(database))
+            .from(DataSource.collection(collection))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)
                     .equalTo(Expression.string(FunkoDexDatabase.TYPE_CATEGORY_PREF))
@@ -39,7 +40,7 @@ class CategoryPreferenceRepository @Inject constructor(
             change.results?.let { rs ->
                 val prefs = rs.allResults().mapNotNull { result ->
                     val docId = result.getString("id") ?: return@mapNotNull null
-                    database.getDocument(docId)?.let { fromDoc(it) }
+                    collection.getDocument(docId)?.let { fromDoc(it) }
                 }
                 trySend(prefs)
             }
@@ -56,7 +57,7 @@ class CategoryPreferenceRepository @Inject constructor(
     suspend fun getEnabledCategories(): Set<String> = withContext(Dispatchers.IO) {
         val query = QueryBuilder
             .select(SelectResult.expression(Meta.id).`as`("id"))
-            .from(DataSource.database(database))
+            .from(DataSource.collection(collection))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)
                     .equalTo(Expression.string(FunkoDexDatabase.TYPE_CATEGORY_PREF))
@@ -66,7 +67,7 @@ class CategoryPreferenceRepository @Inject constructor(
         query.execute().use { rs ->
             rs.allResults().mapNotNull { result ->
                 val docId = result.getString("id") ?: return@mapNotNull null
-                database.getDocument(docId)
+                collection.getDocument(docId)
                     ?.getString(FunkoDexDatabase.FIELD_CAT_NAME)
             }.toSet()
         }
@@ -74,10 +75,10 @@ class CategoryPreferenceRepository @Inject constructor(
 
     suspend fun setEnabled(categoryKey: String, enabled: Boolean) = withContext(Dispatchers.IO) {
         val docId = "cat_pref::$categoryKey"
-        val doc   = database.getDocument(docId)?.toMutable()
+        val doc   = collection.getDocument(docId)?.toMutable()
             ?: MutableDocument(docId)
         doc.setBoolean(FunkoDexDatabase.FIELD_CAT_ENABLED, enabled)
-        database.save(doc)
+        collection.save(doc)
     }
 
     /** Enable or disable every category in a genre at once */
@@ -86,10 +87,10 @@ class CategoryPreferenceRepository @Inject constructor(
         database.inBatch(UnitOfWork {
             defs.forEach { def ->
                 val docId = "cat_pref::${def.key}"
-                val doc   = database.getDocument(docId)?.toMutable()
+                val doc   = collection.getDocument(docId)?.toMutable()
                     ?: MutableDocument(docId)
                 doc.setBoolean(FunkoDexDatabase.FIELD_CAT_ENABLED, enabled)
-                database.save(doc)
+                collection.save(doc)
             }
         })
     }
@@ -103,12 +104,12 @@ class CategoryPreferenceRepository @Inject constructor(
     }
 
     private fun ensureDefaults() {
-        val marker = database.getDocument("system::cat_prefs_seeded_v3")
+        val marker = collection.getDocument("system::cat_prefs_seeded_v3")
         // Re-seed if marker missing OR if category docs were wiped (e.g. after restore)
         val hasCategories = marker != null && run {
             val q = QueryBuilder
                 .select(SelectResult.expression(Meta.id).`as`("id"))
-                .from(DataSource.database(database))
+                .from(DataSource.collection(collection))
                 .where(Expression.property(FunkoDexDatabase.FIELD_TYPE)
                     .equalTo(Expression.string(FunkoDexDatabase.TYPE_CATEGORY_PREF)))
                 .limit(Expression.intValue(1))
@@ -119,23 +120,23 @@ class CategoryPreferenceRepository @Inject constructor(
         database.inBatch(UnitOfWork {
             FunkoCategories.defaultPreferences().forEach { pref ->
                 val docId = "cat_pref::${pref.categoryKey}"
-                val doc = database.getDocument(docId)?.toMutable() ?: MutableDocument(docId)
+                val doc = collection.getDocument(docId)?.toMutable() ?: MutableDocument(docId)
                 doc.setString(FunkoDexDatabase.FIELD_TYPE,      FunkoDexDatabase.TYPE_CATEGORY_PREF)
                 doc.setString(FunkoDexDatabase.FIELD_CAT_NAME,  pref.categoryName)
                 doc.setString(FunkoDexDatabase.FIELD_CAT_GENRE, pref.genreName)
                 doc.setBoolean(FunkoDexDatabase.FIELD_CAT_ENABLED, true)  // force all on
-                database.save(doc)
+                collection.save(doc)
             }
             val m = MutableDocument("system::cat_prefs_seeded_v3")
             m.setString("type", "system")
             m.setString("seededAt", java.time.LocalDate.now().toString())
-            database.save(m)
+            collection.save(m)
         })
     }
 
     private fun savePreference(pref: CategoryPreference) {
         val docId = "cat_pref::${pref.categoryKey}"
-        val doc   = database.getDocument(docId)?.toMutable() ?: MutableDocument(docId)
+        val doc   = collection.getDocument(docId)?.toMutable() ?: MutableDocument(docId)
         doc.setString(FunkoDexDatabase.FIELD_TYPE,        FunkoDexDatabase.TYPE_CATEGORY_PREF)
         doc.setString(FunkoDexDatabase.FIELD_CAT_NAME,    pref.categoryName)
         doc.setString(FunkoDexDatabase.FIELD_CAT_GENRE,   pref.genreName)
@@ -143,7 +144,7 @@ class CategoryPreferenceRepository @Inject constructor(
         if (!doc.contains(FunkoDexDatabase.FIELD_CAT_ENABLED)) {
             doc.setBoolean(FunkoDexDatabase.FIELD_CAT_ENABLED, pref.isEnabled)
         }
-        database.save(doc)
+        collection.save(doc)
     }
 
     private fun fromDoc(doc: com.couchbase.lite.Document): CategoryPreference {

@@ -53,7 +53,7 @@ class DatabaseTransferViewModel @Inject constructor(
             _state.value = DatabaseTransferState.Exporting
             runCatching {
                 withContext(Dispatchers.IO) {
-                    val liveDb   = db.getDatabase()
+                    val liveCollection = db.getCollection()
                     val dateStr  = LocalDateTime.now()
                         .format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
                     val fileName = "FunkoDex_backup_$dateStr.zip"
@@ -62,7 +62,7 @@ class DatabaseTransferViewModel @Inject constructor(
                     // Query all non-catalog, non-system documents
                     val query = QueryBuilder
                         .select(SelectResult.expression(Meta.id).`as`("id"))
-                        .from(DataSource.database(liveDb))
+                        .from(DataSource.collection(liveCollection))
                         .where(
                             Expression.property("type")
                                 .notEqualTo(Expression.string("catalog"))
@@ -74,7 +74,7 @@ class DatabaseTransferViewModel @Inject constructor(
                     query.execute().use { rs ->
                         rs.allResults().forEach { result ->
                             val docId = result.getString("id") ?: return@forEach
-                            val doc   = liveDb.getDocument(docId) ?: return@forEach
+                            val doc   = liveCollection.getDocument(docId) ?: return@forEach
                             val obj   = docToJson(doc)
                             jsonArray.put(obj)
                         }
@@ -111,6 +111,7 @@ class DatabaseTransferViewModel @Inject constructor(
             runCatching {
                 withContext(Dispatchers.IO) {
                     val liveDb = db.getDatabase()
+                    val liveCollection = db.getCollection()
 
                     // 1. Extract JSON from zip
                     val jsonText = StringBuilder()
@@ -135,7 +136,7 @@ class DatabaseTransferViewModel @Inject constructor(
                     val toDelete = mutableListOf<String>()
                     QueryBuilder
                         .select(SelectResult.expression(Meta.id).`as`("id"))
-                        .from(DataSource.database(liveDb))
+                        .from(DataSource.collection(liveCollection))
                         .where(
                             Expression.property("type")
                                 .notEqualTo(Expression.string("catalog"))
@@ -150,7 +151,7 @@ class DatabaseTransferViewModel @Inject constructor(
 
                     liveDb.inBatch(UnitOfWork {
                         toDelete.forEach { docId ->
-                            liveDb.getDocument(docId)?.let { liveDb.delete(it) }
+                            liveCollection.getDocument(docId)?.let { liveCollection.delete(it) }
                         }
                     })
 
@@ -161,7 +162,7 @@ class DatabaseTransferViewModel @Inject constructor(
                             val obj   = jsonArray.getJSONObject(i)
                             val docId = obj.getString("_id")
                             val doc   = jsonToDoc(docId, obj)
-                            liveDb.save(doc)
+                            liveCollection.save(doc)
                             count++
                         }
                     })
@@ -217,6 +218,7 @@ class DatabaseTransferViewModel @Inject constructor(
                     db.reopen()
 
                     val liveDb = db.getDatabase()
+                    val liveCollection = db.getCollection()
 
                     // 4. Insert user documents from backup
                     var count = 0
@@ -225,7 +227,7 @@ class DatabaseTransferViewModel @Inject constructor(
                             val obj   = jsonArray.getJSONObject(i)
                             val docId = obj.getString("_id")
                             val doc   = jsonToDoc(docId, obj)
-                            liveDb.save(doc)
+                            liveCollection.save(doc)
                             count++
                         }
                     })

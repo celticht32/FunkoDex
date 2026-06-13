@@ -56,9 +56,10 @@ class CatalogPreloader @Inject constructor(
     /** Call from FunkoDexApp.onCreate() after CouchbaseLite.init() */
     suspend fun preloadIfNeeded(): PreloadResult = withContext(Dispatchers.IO) {
         val database = db.getDatabase()
+        val collection = db.getCollection()
 
         // Check version marker
-        val marker = database.getDocument(MARKER_DOC)
+        val marker = collection.getDocument(MARKER_DOC)
         if (marker?.getString("version") == CATALOG_VER) {
             val count = marker.getInt("count")
             return@withContext PreloadResult.AlreadyLoaded(count)
@@ -88,10 +89,10 @@ class CatalogPreloader @Inject constructor(
                 chunk.forEach { record ->
                     val docId  = "catalog::${record.handle ?: return@forEach}"
                     // Skip if already exists — avoids conflict on partial re-run
-                    if (database.getDocument(docId) != null) return@forEach
+                    if (collection.getDocument(docId) != null) return@forEach
                     val mapped = mapRecord(record) ?: return@forEach
                     val doc    = MutableDocument(docId, mapped)
-                    database.save(doc)
+                    collection.save(doc)
                     imported++
                 }
             }
@@ -104,10 +105,10 @@ class CatalogPreloader @Inject constructor(
             setInt("count", imported)
             setString("loadedAt", java.time.LocalDate.now().toString())
         }
-        database.save(markerDoc)
+        collection.save(markerDoc)
 
         // Ensure catalog indexes
-        ensureCatalogIndexes(database)
+        ensureCatalogIndexes(collection)
 
         PreloadResult.Loaded(imported)
     }
@@ -127,12 +128,12 @@ class CatalogPreloader @Inject constructor(
         )
     }
 
-    private fun ensureCatalogIndexes(database: Database) {
-        database.createIndex("idx_catalog_title",
+    private fun ensureCatalogIndexes(collection: com.couchbase.lite.Collection) {
+        collection.createIndex("idx_catalog_title",
             IndexBuilder.valueIndex(ValueIndexItem.property(FIELD_TITLE)))
-        database.createIndex("idx_catalog_series",
+        collection.createIndex("idx_catalog_series",
             IndexBuilder.valueIndex(ValueIndexItem.property(FIELD_PRIMARY_SERIES)))
-        database.createIndex("idx_catalog_type",
+        collection.createIndex("idx_catalog_type",
             IndexBuilder.valueIndex(ValueIndexItem.property(FIELD_TYPE)))
     }
 

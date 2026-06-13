@@ -26,7 +26,7 @@ import javax.inject.Singleton
 class AlertRepository @Inject constructor(
     private val db: FunkoDexDatabase,
 ) {
-    private val database get() = db.getDatabase()
+    private val collection get() = db.getCollection()
 
     // ─── Write ────────────────────────────────────────────────────────────────
 
@@ -42,41 +42,41 @@ class AlertRepository @Inject constructor(
                 setString(FunkoDexDatabase.FIELD_ALERT_TRIGGERED, it.toString())
             }
         }
-        database.save(doc)
+        collection.save(doc)
     }
 
     suspend fun deleteAlert(itemId: String) = withContext(Dispatchers.IO) {
-        database.getDocument("${PriceAlert.DOC_PREFIX}$itemId")
-            ?.let { database.delete(it) }
+        collection.getDocument("${PriceAlert.DOC_PREFIX}$itemId")
+            ?.let { collection.delete(it) }
     }
 
     suspend fun disableAlert(itemId: String) = withContext(Dispatchers.IO) {
         val docId = "${PriceAlert.DOC_PREFIX}$itemId"
-        database.getDocument(docId)?.toMutable()?.also { doc ->
+        collection.getDocument(docId)?.toMutable()?.also { doc ->
             doc.setBoolean(FunkoDexDatabase.FIELD_ALERT_ENABLED, false)
-            database.save(doc)
+            collection.save(doc)
         }
     }
 
     suspend fun markTriggered(itemId: String) = withContext(Dispatchers.IO) {
         val docId = "${PriceAlert.DOC_PREFIX}$itemId"
-        database.getDocument(docId)?.toMutable()?.also { doc ->
+        collection.getDocument(docId)?.toMutable()?.also { doc ->
             doc.setString(FunkoDexDatabase.FIELD_ALERT_TRIGGERED, LocalDate.now().toString())
-            database.save(doc)
+            collection.save(doc)
         }
     }
 
     // ─── Read ─────────────────────────────────────────────────────────────────
 
     suspend fun getAlert(itemId: String): PriceAlert? = withContext(Dispatchers.IO) {
-        database.getDocument("${PriceAlert.DOC_PREFIX}$itemId")?.let { docToAlert(it) }
+        collection.getDocument("${PriceAlert.DOC_PREFIX}$itemId")?.let { docToAlert(it) }
     }
 
     /** All currently enabled price alerts — used by PriceAlertWorker. */
     suspend fun getActiveAlerts(): List<PriceAlert> = withContext(Dispatchers.IO) {
         val query = QueryBuilder
             .select(SelectResult.all(), SelectResult.expression(Meta.id).`as`("id"))
-            .from(DataSource.database(database))
+            .from(DataSource.collection(collection))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)
                     .equalTo(Expression.string(FunkoDexDatabase.TYPE_PRICE_ALERT))
@@ -97,7 +97,7 @@ class AlertRepository @Inject constructor(
         val docId = "${PriceAlert.DOC_PREFIX}$itemId"
         val query = QueryBuilder
             .select(SelectResult.all())
-            .from(DataSource.database(database))
+            .from(DataSource.collection(collection))
             .where(Expression.property(FunkoDexDatabase.FIELD_ALERT_ITEM_ID)
                 .equalTo(Expression.string(itemId)))
             .limit(Expression.intValue(1))

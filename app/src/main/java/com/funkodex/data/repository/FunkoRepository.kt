@@ -27,16 +27,16 @@ class FunkoRepository @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context,
     private val categoryPrefs: CategoryPreferenceRepository,
 ) {
-    private val database get() = db.getDatabase()
+    private val collection get() = db.getCollection()
 
     // ─── Write operations ─────────────────────────────────────────────────────
 
     suspend fun saveItem(item: FunkoItem): kotlin.Result<FunkoItem> = withContext(Dispatchers.IO) {
         runCatching {
             val id       = if (item.id.isEmpty()) "funko::${UUID.randomUUID()}" else item.id
-            val existing = database.getDocument(id)
+            val existing = collection.getDocument(id)
             val doc      = FunkoMapper.toDocument(item.copy(id = id), existing)
-            database.save(doc)
+            collection.save(doc)
             val saved = item.copy(id = id)
             updateWidget()
             saved
@@ -45,7 +45,7 @@ class FunkoRepository @Inject constructor(
 
     suspend fun deleteItem(id: String): kotlin.Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            database.getDocument(id)?.let { database.delete(it) }
+            collection.getDocument(id)?.let { collection.delete(it) }
             updateWidget()
         }
     }
@@ -53,13 +53,13 @@ class FunkoRepository @Inject constructor(
     // ─── Read operations ──────────────────────────────────────────────────────
 
     suspend fun getItem(id: String): FunkoItem? = withContext(Dispatchers.IO) {
-        database.getDocument(id)?.let { FunkoMapper.fromDocument(it) }
+        collection.getDocument(id)?.let { FunkoMapper.fromDocument(it) }
     }
 
     suspend fun getItemByUpc(upc: String): FunkoItem? = withContext(Dispatchers.IO) {
         val query = QueryBuilder
             .select(SelectResult.expression(Meta.id).`as`("id"))
-            .from(DataSource.database(database))
+            .from(DataSource.collection(collection))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)
                     .equalTo(Expression.string(FunkoDexDatabase.TYPE_FUNKO))
@@ -70,7 +70,7 @@ class FunkoRepository @Inject constructor(
 
         query.execute().use { rs ->
             val docId = rs.next()?.getString("id") ?: return@use null
-            database.getDocument(docId)?.let { FunkoMapper.fromDocument(it) }
+            collection.getDocument(docId)?.let { FunkoMapper.fromDocument(it) }
         }
     }
 
@@ -79,7 +79,7 @@ class FunkoRepository @Inject constructor(
         withContext(Dispatchers.IO) {
             val query = QueryBuilder
                 .select(SelectResult.expression(Meta.id).`as`("id"))
-                .from(DataSource.database(database))
+                .from(DataSource.collection(collection))
                 .where(
                     Expression.property(FunkoDexDatabase.FIELD_TYPE)
                         .equalTo(Expression.string(FunkoDexDatabase.TYPE_FUNKO))
@@ -94,7 +94,7 @@ class FunkoRepository @Inject constructor(
 
             query.execute().use { rs ->
                 val docId = rs.next()?.getString("id") ?: return@use null
-                database.getDocument(docId)?.let { FunkoMapper.fromDocument(it) }
+                collection.getDocument(docId)?.let { FunkoMapper.fromDocument(it) }
             }
         }
 
@@ -102,7 +102,7 @@ class FunkoRepository @Inject constructor(
     fun collectionFlow(): Flow<List<FunkoItem>> = callbackFlow {
         val query = QueryBuilder
             .select(SelectResult.expression(Meta.id).`as`("id"), SelectResult.all())
-            .from(DataSource.database(database))
+            .from(DataSource.collection(collection))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)
                     .equalTo(Expression.string(FunkoDexDatabase.TYPE_FUNKO))
@@ -114,7 +114,7 @@ class FunkoRepository @Inject constructor(
         val token = query.addChangeListener { change ->
             val items = change.results?.allResults()?.mapNotNull { result ->
                 val docId = result.getString("id") ?: return@mapNotNull null
-                database.getDocument(docId)?.let { FunkoMapper.fromDocument(it) }
+                collection.getDocument(docId)?.let { FunkoMapper.fromDocument(it) }
             } ?: emptyList()
             trySend(items)
         }
@@ -127,7 +127,7 @@ class FunkoRepository @Inject constructor(
     fun wantListFlow(): Flow<List<FunkoItem>> = callbackFlow {
         val query = QueryBuilder
             .select(SelectResult.expression(Meta.id).`as`("id"), SelectResult.all())
-            .from(DataSource.database(database))
+            .from(DataSource.collection(collection))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)
                     .equalTo(Expression.string(FunkoDexDatabase.TYPE_FUNKO))
@@ -139,7 +139,7 @@ class FunkoRepository @Inject constructor(
         val token = query.addChangeListener { change ->
             val items = change.results?.allResults()?.mapNotNull { result ->
                 val docId = result.getString("id") ?: return@mapNotNull null
-                database.getDocument(docId)?.let { FunkoMapper.fromDocument(it) }
+                collection.getDocument(docId)?.let { FunkoMapper.fromDocument(it) }
             } ?: emptyList()
             trySend(items)
         }
@@ -215,7 +215,7 @@ class FunkoRepository @Inject constructor(
                 setString(FunkoDexDatabase.FIELD_PRICE_FETCHED, snapshot.fetchedAt.toString())
                 setInt("saleCount", snapshot.saleCount)
             }
-            database.save(doc)
+            collection.save(doc)
         }
     }
 
@@ -227,7 +227,7 @@ class FunkoRepository @Inject constructor(
     suspend fun getResolvedPrice(itemId: String): ResolvedPrice = withContext(Dispatchers.IO) {
         val query = QueryBuilder
             .select(SelectResult.all(), SelectResult.expression(Meta.id).`as`("id"))
-            .from(DataSource.database(database))
+            .from(DataSource.collection(collection))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)
                     .equalTo(Expression.string(FunkoDexDatabase.TYPE_PRICE_CACHE))
@@ -295,7 +295,7 @@ class FunkoRepository @Inject constructor(
                 setString(PendingUpcScan.FIELD_DATE,  scan.scannedAt.toString())
                 setInt(PendingUpcScan.FIELD_RETRY,    scan.retryCount)
             }
-            database.save(doc)
+            collection.save(doc)
         }
     }
 
@@ -315,7 +315,7 @@ class FunkoRepository @Inject constructor(
             // COUNT owned items — far cheaper than getAllItems().filter { it.isOwned }
             val ownedQuery = QueryBuilder
                 .select(SelectResult.expression(Function.count(Expression.string("*"))).`as`("cnt"))
-                .from(DataSource.database(database))
+                .from(DataSource.collection(collection))
                 .where(
                     Expression.property(FunkoDexDatabase.FIELD_TYPE)
                         .equalTo(Expression.string(FunkoDexDatabase.TYPE_FUNKO))
@@ -329,7 +329,7 @@ class FunkoRepository @Inject constructor(
             // Top wanted: just the first item from the want list (ordered by dateAdded)
             val wantedQuery = QueryBuilder
                 .select(SelectResult.expression(Expression.property(FunkoDexDatabase.FIELD_NAME)))
-                .from(DataSource.database(database))
+                .from(DataSource.collection(collection))
                 .where(
                     Expression.property(FunkoDexDatabase.FIELD_TYPE)
                         .equalTo(Expression.string(FunkoDexDatabase.TYPE_FUNKO))
@@ -346,7 +346,7 @@ class FunkoRepository @Inject constructor(
             // Kept as a targeted query rather than loading all items
             val marketVal = QueryBuilder
                 .select(SelectResult.expression(Expression.property(FunkoDexDatabase.FIELD_MARKET_AVG)))
-                .from(DataSource.database(database))
+                .from(DataSource.collection(collection))
                 .where(
                     Expression.property(FunkoDexDatabase.FIELD_TYPE)
                         .equalTo(Expression.string(FunkoDexDatabase.TYPE_FUNKO))
@@ -371,7 +371,7 @@ class FunkoRepository @Inject constructor(
     private suspend fun getAllItems(): List<FunkoItem> = withContext(Dispatchers.IO) {
         val query = QueryBuilder
             .select(SelectResult.expression(Meta.id).`as`("id"))
-            .from(DataSource.database(database))
+            .from(DataSource.collection(collection))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)
                     .equalTo(Expression.string(FunkoDexDatabase.TYPE_FUNKO))
@@ -379,7 +379,7 @@ class FunkoRepository @Inject constructor(
         query.execute().use { rs ->
             rs.allResults().mapNotNull { result ->
                 val id = result.getString("id") ?: return@mapNotNull null
-                database.getDocument(id)?.let { FunkoMapper.fromDocument(it) }
+                collection.getDocument(id)?.let { FunkoMapper.fromDocument(it) }
             }
         }
     }

@@ -102,9 +102,9 @@ class ConnectivityObserver @Inject constructor(
 
                     if (item != null) {
                         // Save as a want-list item — user can confirm ownership later
-                        val database = db.getDatabase()
+                        val collection = db.getCollection()
                         val docId    = "funko::${scan.upc}"
-                        if (database.getDocument(docId) == null) {
+                        if (collection.getDocument(docId) == null) {
                             val doc = MutableDocument(docId).apply {
                                 setString("type",      FunkoDexDatabase.TYPE_FUNKO)
                                 setString("upc",       scan.upc)
@@ -114,23 +114,23 @@ class ConnectivityObserver @Inject constructor(
                                 setBoolean("isOwned",  false) // want list — user confirms later
                                 setString("dateAdded", java.time.LocalDate.now().toString())
                             }
-                            database.save(doc)
+                            collection.save(doc)
                         }
                         // Remove the pending doc
-                        database.getDocument(scan.docId)?.let { database.delete(it) }
+                        collection.getDocument(scan.docId)?.let { collection.delete(it) }
                         resolvedItems.add(item.name)
                         resolved++
                     } else {
                         // Increment retry count — give up after 5 attempts
-                        val database = db.getDatabase()
-                        val pendingDoc = database.getDocument(scan.docId)?.toMutable()
+                        val collection = db.getCollection()
+                        val pendingDoc = collection.getDocument(scan.docId)?.toMutable()
                         if (pendingDoc != null) {
                             val retries = pendingDoc.getInt(PendingUpcScan.FIELD_RETRY)
                             if (retries >= 5) {
-                                database.delete(pendingDoc) // give up
+                                collection.delete(pendingDoc) // give up
                             } else {
                                 pendingDoc.setInt(PendingUpcScan.FIELD_RETRY, retries + 1)
-                                database.save(pendingDoc)
+                                collection.save(pendingDoc)
                             }
                         }
                     }
@@ -148,7 +148,7 @@ class ConnectivityObserver @Inject constructor(
     }
 
     private fun loadPendingScans(): List<PendingUpcScan> {
-        val database = db.getDatabase()
+        val collection = db.getCollection()
         val query = com.couchbase.lite.QueryBuilder
             .select(
                 com.couchbase.lite.SelectResult.expression(com.couchbase.lite.Meta.id),
@@ -156,7 +156,7 @@ class ConnectivityObserver @Inject constructor(
                 com.couchbase.lite.SelectResult.property(PendingUpcScan.FIELD_DATE),
                 com.couchbase.lite.SelectResult.property(PendingUpcScan.FIELD_RETRY),
             )
-            .from(com.couchbase.lite.DataSource.database(database))
+            .from(com.couchbase.lite.DataSource.collection(collection))
             .where(
                 com.couchbase.lite.Expression.property(PendingUpcScan.FIELD_TYPE)
                     .equalTo(com.couchbase.lite.Expression.string(PendingUpcScan.TYPE_VAL))

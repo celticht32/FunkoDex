@@ -118,7 +118,7 @@ class FunkoLookupService @Inject constructor(
             // Diagnostic: count total catalog documents
             val totalCount = com.couchbase.lite.QueryBuilder
                 .select(com.couchbase.lite.SelectResult.expression(com.couchbase.lite.Meta.id).`as`("id"))
-                .from(com.couchbase.lite.DataSource.database(db.getDatabase()))
+                .from(com.couchbase.lite.DataSource.collection(db.getCollection()))
                 .where(com.couchbase.lite.Expression.property("type")
                     .equalTo(com.couchbase.lite.Expression.string("catalog")))
                 .execute().use { it.allResults().size }
@@ -127,7 +127,7 @@ class FunkoLookupService @Inject constructor(
                     com.couchbase.lite.SelectResult.expression(com.couchbase.lite.Meta.id).`as`("id"),
                     com.couchbase.lite.SelectResult.all()
                 )
-                .from(com.couchbase.lite.DataSource.database(db.getDatabase()))
+                .from(com.couchbase.lite.DataSource.collection(db.getCollection()))
                 .where(
                     com.couchbase.lite.Expression.property("type")
                         .equalTo(com.couchbase.lite.Expression.string(

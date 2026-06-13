@@ -1,7 +1,7 @@
 # FunkoDex — Session Handoff
 **Date:** 2026-06-12
-**Sessions completed:** 1 (initial build), 2 (enricher/catalog import), 3 (UI/variant/photo/backup), 4 (enriched catalog import implementation + handle repair), 5 (16 KB page-size compliance + Drive auth migration), 6 (Photo Picker migration + P3 deprecation cleanup)
-**Next session focus:** Cloud Console OAuth client verification + device tests T-D1–T-D5 (Drive auth) + Photo Picker smoke test, then physical device testing (DEVICE_TEST_PLAN.md, incl. on-device enriched import run)
+**Sessions completed:** 1 (initial build), 2 (enricher/catalog import), 3 (UI/variant/photo/backup), 4 (enriched catalog import implementation + handle repair), 5 (16 KB page-size compliance + Drive auth migration), 6 (Photo Picker migration + P3 deprecation cleanup), 7 (CBL Collection API migration)
+**Next session focus:** Full functional/device test pass for Session 7 (see `SESSION_D_TRACKER.md` checklist — backup/restore/force-restore highest priority), plus carried-over Cloud Console OAuth client verification, device tests T-D1–T-D5, and Photo Picker smoke test
 
 ---
 
@@ -16,23 +16,39 @@ Android Funko Pop collectibles tracker.
 
 ## Current State
 
-Sessions 5 and 6 complete. Per `docs/PlayStore_Readiness_Migration_SPEC.md`'s
-execution plan (Sessions A–C), the app is now code-complete for Play submission
+Sessions 5, 6, and 7 complete. Per `docs/PlayStore_Readiness_Migration_SPEC.md`'s
+execution plan (Sessions A–C), the app is code-complete for Play submission
 readiness: 16 KB page-size compliant, Drive auth migrated off GoogleSignIn, Photo
 Picker replaces the storage-permission gallery flow, and the P3 deprecation items
-(kotlinOptions, accompanist-flowlayout) are cleaned up. Builds and runs clean.
+(kotlinOptions, accompanist-flowlayout) are cleaned up.
 
-Ready for: Cloud Console OAuth client confirmation, device tests T-D1–T-D5 (Drive
-auth), Photo Picker smoke test (API 33+ and API 26–32), then physical device
-testing per `DEVICE_TEST_PLAN.md`.
+Session 7 (Session D from the spec, P2) converted all database-level Couchbase
+Lite calls to the Collection API (`database.defaultCollection`) across 12 files
+— `database.getDocument/save/delete/createQuery/createIndex` and
+`DataSource.database(db)` → `collection.X` / `DataSource.collection(col)`.
+`inBatch()` correctly remains database-level (transaction wrapper, not
+deprecated, not moved to Collection). Builds and runs clean. Full functional
+test pass (see `SESSION_D_TRACKER.md`) is deferred — code-only checkpoint per
+session instructions.
+
+Ready for: full Session 7 functional/device test pass, then Cloud Console OAuth
+client confirmation, device tests T-D1–T-D5 (Drive auth), Photo Picker smoke
+test (API 33+ and API 26–32), then physical device testing per
+`DEVICE_TEST_PLAN.md`.
 
 ### Pre-Play Store blockers remaining
+- [ ] Session 7 functional/device test pass — `SESSION_D_TRACKER.md` checklist.
+      **Highest priority: backup, restore, and force-restore** (force-restore
+      involves `db.close()` → wipe → `db.reopen()` → fresh `Collection` accessor)
+- [ ] All unit test suites (FunkoMapperTest, CollectionStatsTest,
+      FunkoLookupServiceTest, full `./gradlew test`)
 - [ ] Cloud Console: confirm Android OAuth client ID (`com.funkodex` + signing SHA-1)
 - [ ] Device tests T-D1–T-D5 (`docs/CredentialManager_Migration_SPEC.md` §9) —
       T-D3 (lapsed grant) is the critical one
 - [ ] Photo Picker smoke test — gallery pick on API 33+ and API 26–32
       (`docs/PlayStore_Readiness_Migration_SPEC.md` §2.3)
 - [ ] Community contribution Cloudflare Worker deployment (infrastructure)
+- [ ] 16 KB emulator regression — re-run smoke test (CBL access patterns changed)
 - [ ] Device testing results (may surface new bugs) — now includes on-device enriched import run
 
 ### Already resolved
@@ -51,6 +67,13 @@ testing per `DEVICE_TEST_PLAN.md`.
       and `Icons.Default.Logout` left as-is — `AutoMirrored` variants did not
       resolve against the current compose-bom; not worth a BOM bump for this
       alone (see Lessons Learned)
+- [x] CBL Collection API migration — Session 7 (Session D, P2). 12 files
+      converted: `FunkoDexDatabase`, `FunkoRepository`, `AlertRepository`,
+      `ContributionRepository`, `CategoryPreferenceRepository`,
+      `ImageBlobRepository`, `CatalogPreloader`, `CatalogImporter`,
+      `CatalogRefreshWorker`, `FunkoLookupService`, `ConnectivityObserver`,
+      `DatabaseTransferViewModel`. Code complete and compiling/running clean;
+      full functional test pass pending (see `SESSION_D_TRACKER.md`)
 
 ---
 

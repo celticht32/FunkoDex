@@ -150,6 +150,7 @@ class CatalogRefreshWorker(
         val db       = FunkoDexDatabase(applicationContext)
         db.ensureIndexes()
         val database = db.getDatabase()
+        val collection = db.getCollection()
 
         var newCount = 0
 
@@ -158,7 +159,7 @@ class CatalogRefreshWorker(
                 val handle = record.handle?.trim() ?: return@forEach
                 val docId  = "catalog::$handle"
 
-                if (database.getDocument(docId) != null) return@forEach
+                if (collection.getDocument(docId) != null) return@forEach
 
                 val mapped = CatalogMapper.mapRecord(
                     handle     = handle,
@@ -168,16 +169,16 @@ class CatalogRefreshWorker(
                     source     = "KENNY_CHAN",
                 )
 
-                database.save(MutableDocument(docId, mapped))
+                collection.save(MutableDocument(docId, mapped))
                 newCount++
             }
         })
 
-        val marker = database.getDocument(CatalogPreloader.MARKER_DOC)?.toMutable()
+        val marker = collection.getDocument(CatalogPreloader.MARKER_DOC)?.toMutable()
             ?: MutableDocument(CatalogPreloader.MARKER_DOC)
         marker.setString("lastRefreshed", LocalDate.now().toString())
         marker.setInt("totalRecords", records.size)
-        database.save(marker)
+        collection.save(marker)
 
         newCount
     }
@@ -207,6 +208,7 @@ class CatalogRefreshWorker(
 
             val db       = FunkoDexDatabase(applicationContext)
             val database = db.getDatabase()
+            val collection = db.getCollection()
             var merged   = 0
 
             database.inBatch(UnitOfWork {
@@ -218,7 +220,7 @@ class CatalogRefreshWorker(
                     val docId  = "catalog::$handle"
                     val source = record["source"] as? String ?: "USER_SCAN"
 
-                    val existing = database.getDocument(docId)
+                    val existing = collection.getDocument(docId)
                     if (existing != null) {
                         val existingUpc    = existing.getString("upc") ?: ""
                         val existingSource = existing.getString(CatalogMapper.FIELD_SOURCE) ?: "KENNY_CHAN"
@@ -228,7 +230,7 @@ class CatalogRefreshWorker(
                             val mut = existing.toMutable()
                             mut.setString("upc", upc)
                             if (betterSource) mut.setString(CatalogMapper.FIELD_SOURCE, source)
-                            database.save(mut)
+                            collection.save(mut)
                             merged++
                         }
                     } else {
@@ -243,7 +245,7 @@ class CatalogRefreshWorker(
                             vaulted    = record["isVaulted"] as? Boolean ?: false,
                             source     = source,
                         )
-                        database.save(MutableDocument(docId, mapped))
+                        collection.save(MutableDocument(docId, mapped))
                         merged++
                     }
                 }
@@ -266,6 +268,7 @@ class CatalogRefreshWorker(
 
             val db       = FunkoDexDatabase(applicationContext)
             val database = db.getDatabase()
+            val collection = db.getCollection()
             var page     = 1
             var hasMore  = true
 
@@ -295,9 +298,9 @@ class CatalogRefreshWorker(
                         val obj    = el.asJsonObject
                         val handle = obj.optString("handle") ?: return@forEach
                         val docId  = "${FunkoDexDatabase.TYPE_CATALOG}::$handle"
-                        val doc    = database.getDocument(docId) ?: return@forEach
+                        val doc    = collection.getDocument(docId) ?: return@forEach
                         if (!doc.getBoolean(FunkoDexDatabase.FIELD_IS_VAULTED)) {
-                            database.save(doc.toMutable().apply {
+                            collection.save(doc.toMutable().apply {
                                 setBoolean(FunkoDexDatabase.FIELD_IS_VAULTED, true)
                             })
                             updatedCount++

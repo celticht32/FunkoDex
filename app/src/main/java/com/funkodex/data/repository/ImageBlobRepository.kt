@@ -46,10 +46,10 @@ class ImageBlobRepository @Inject constructor(
         if (item.imageUrl.isEmpty()) return@withContext false
         if (item.id.isEmpty())       return@withContext false
 
-        val database = db.getDatabase()
+        val collection = db.getCollection()
 
         // Skip if blob already stored
-        val existing = database.getDocument(item.id)
+        val existing = collection.getDocument(item.id)
         if (existing?.getBlob(FunkoDexDatabase.FIELD_THUMBNAIL_BLOB) != null) {
             return@withContext true
         }
@@ -86,9 +86,9 @@ class ImageBlobRepository @Inject constructor(
             }
 
             // Upsert the blob onto the existing document
-            val doc = database.getDocument(item.id)?.toMutable() ?: return@runCatching false
+            val doc = collection.getDocument(item.id)?.toMutable() ?: return@runCatching false
             doc.setBlob(FunkoDexDatabase.FIELD_THUMBNAIL_BLOB, Blob(mimeType, bytes))
-            database.save(doc)
+            collection.save(doc)
 
             FunkoDexLogger.d(TAG, "Stored ${bytes.size}B image for ${item.name}")
             true

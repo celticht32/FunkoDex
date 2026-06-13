@@ -87,7 +87,7 @@ class CatalogImporter @Inject constructor(
      * title-fallback match. Titles shared by more than one catalog doc are
      * ambiguous and removed — a fallback merge must be unambiguous.
      */
-    private fun buildTitleIndex(database: com.couchbase.lite.Database): Map<String, String> {
+    private fun buildTitleIndex(collection: com.couchbase.lite.Collection): Map<String, String> {
         val index     = HashMap<String, String>(32_768)
         val ambiguous = HashSet<String>()
         val query = QueryBuilder
@@ -95,7 +95,7 @@ class CatalogImporter @Inject constructor(
                 SelectResult.expression(Meta.id).`as`("id"),
                 SelectResult.property(CatalogMapper.FIELD_TITLE).`as`("title"),
             )
-            .from(DataSource.database(database))
+            .from(DataSource.collection(collection))
             .where(
                 Expression.property(CatalogMapper.FIELD_TYPE)
                     .equalTo(Expression.string(CatalogMapper.TYPE_CATALOG))
@@ -146,12 +146,13 @@ class CatalogImporter @Inject constructor(
         var processed = 0
 
         val database = db.getDatabase()
+        val collection = db.getCollection()
 
         // Normalized title → docId, for the fallback match when handle misses.
         // Built once up front; ~23k entries. Wrapped so an index failure
         // degrades to handle-only matching instead of failing the import.
         val titleIndex: Map<String, String> = try {
-            buildTitleIndex(database)
+            buildTitleIndex(collection)
         } catch (e: Exception) {
             emptyMap()
         }
@@ -172,10 +173,10 @@ class CatalogImporter @Inject constructor(
                         // Match by handle first; fall back to unambiguous
                         // normalized-title match (low hit rate expected —
                         // funko.com vs HobbyDB prefix formats differ).
-                        val existing = database.getDocument(docId)
+                        val existing = collection.getDocument(docId)
                             ?: normalizeTitle(record.title)
                                 ?.let { titleIndex[it] }
-                                ?.let { database.getDocument(it) }
+                                ?.let { collection.getDocument(it) }
 
                         if (existing != null) {
                             // ── Merge: only write new fields, never overwrite identity ──
@@ -225,7 +226,7 @@ class CatalogImporter @Inject constructor(
                             }
 
                             mutable.setString(CatalogMapper.FIELD_LAST_UPDATED, LocalDate.now().toString())
-                            database.save(mutable)
+                            collection.save(mutable)
                             enriched++
 
                         } else {
@@ -262,7 +263,7 @@ class CatalogImporter @Inject constructor(
                             // Never clobber: if a doc already exists at the target ID
                             // (ambiguous-title doc, or a duplicate earlier in this
                             // import), skip rather than replace its content.
-                            if (database.getDocument(insertDocId) != null) {
+                            if (collection.getDocument(insertDocId) != null) {
                                 skipped++
                                 processed++
                                 return@forEach
@@ -287,7 +288,7 @@ class CatalogImporter @Inject constructor(
                                 pricechartingId  = record.pricechartingId,
                                 pricechartingUrl = record.pricechartingUrl,
                             )
-                            database.save(MutableDocument(insertDocId, mapped))
+                            collection.save(MutableDocument(insertDocId, mapped))
                             added++
                         }
                     } catch (e: Exception) {

@@ -21,7 +21,7 @@ import javax.inject.Singleton
 class ContributionRepository @Inject constructor(
     private val db: FunkoDexDatabase,
 ) {
-    private val database get() = db.getDatabase()
+    private val collection get() = db.getCollection()
 
     // ─── Write ────────────────────────────────────────────────────────────────
 
@@ -45,31 +45,31 @@ class ContributionRepository @Inject constructor(
             setString(FunkoDexDatabase.FIELD_CONTRIB_DATE,     contrib.contributedAt.toString())
             setBoolean(FunkoDexDatabase.FIELD_CONTRIB_UPLOADED,contrib.isUploaded)
         }
-        database.save(doc)
+        collection.save(doc)
     }
 
     suspend fun markUploaded(upc: String) = withContext(Dispatchers.IO) {
         val docId = "${CatalogContribution.DOC_PREFIX}$upc"
-        database.getDocument(docId)?.toMutable()?.also { doc ->
+        collection.getDocument(docId)?.toMutable()?.also { doc ->
             doc.setBoolean(FunkoDexDatabase.FIELD_CONTRIB_UPLOADED, true)
-            database.save(doc)
+            collection.save(doc)
         }
     }
 
     /** Delete a pending (not yet uploaded) contribution by UPC. */
     suspend fun deletePendingContribution(upc: String) = withContext(Dispatchers.IO) {
         val docId = "${CatalogContribution.DOC_PREFIX}$upc"
-        val doc   = database.getDocument(docId) ?: return@withContext
+        val doc   = collection.getDocument(docId) ?: return@withContext
         // Only delete if not yet uploaded — uploaded contributions are kept for audit
         if (!doc.getBoolean(FunkoDexDatabase.FIELD_CONTRIB_UPLOADED)) {
-            database.delete(doc)
+            collection.delete(doc)
         }
     }
 
     /** Check if a pending contribution exists for a given UPC. */
     suspend fun hasPendingContribution(upc: String): Boolean = withContext(Dispatchers.IO) {
         val docId = "${CatalogContribution.DOC_PREFIX}$upc"
-        val doc   = database.getDocument(docId) ?: return@withContext false
+        val doc   = collection.getDocument(docId) ?: return@withContext false
         !doc.getBoolean(FunkoDexDatabase.FIELD_CONTRIB_UPLOADED)
     }
 
@@ -79,7 +79,7 @@ class ContributionRepository @Inject constructor(
     suspend fun getPendingContributions(): List<CatalogContribution> = withContext(Dispatchers.IO) {
         val query = QueryBuilder
             .select(SelectResult.all(), SelectResult.expression(Meta.id).`as`("id"))
-            .from(DataSource.database(database))
+            .from(DataSource.collection(collection))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)
                     .equalTo(Expression.string(FunkoDexDatabase.TYPE_CONTRIBUTION))
@@ -96,7 +96,7 @@ class ContributionRepository @Inject constructor(
     suspend fun getContributionCount(): Int = withContext(Dispatchers.IO) {
         val query = QueryBuilder
             .select(SelectResult.expression(Function.count(Expression.string("*"))))
-            .from(DataSource.database(database))
+            .from(DataSource.collection(collection))
             .where(
                 Expression.property(FunkoDexDatabase.FIELD_TYPE)
                     .equalTo(Expression.string(FunkoDexDatabase.TYPE_CONTRIBUTION))

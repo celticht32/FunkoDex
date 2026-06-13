@@ -5,6 +5,70 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — Session 7 — 2026-06-12
+
+### Changed
+
+**CBL Collection API Migration (Play P2 — Session D)**
+
+Migrated all database-level Couchbase Lite calls to the Collection API ahead
+of CBL 4.x. `database.defaultCollection` (non-null — the default collection
+always exists and cannot be deleted) replaces direct `Database` access for
+document and query operations:
+
+- `database.getDocument/save/delete` → `collection.getDocument/save/delete`
+- `database.createQuery(...)`, `DataSource.database(db)` → `DataSource.collection(col)`
+- `database.createIndex(name, index)` → `collection.createIndex(name, index)`
+  (same `IndexBuilder`/`ValueIndexItem` signature)
+- `database.inBatch(UnitOfWork {...})` — **unchanged**, remains
+  database-level (transaction wrapper, not deprecated, not moved to
+  Collection in 3.2.x). Operations inside the lambda convert to `collection.X`.
+
+`FunkoDexDatabase.kt` — added `fun getCollection(): com.couchbase.lite.Collection
+= getDatabase().defaultCollection`. Return type is fully-qualified to avoid
+`kotlin.collections.Collection<T>` shadowing from the implicit Kotlin
+collections import (this caused a cascade of ~50 "Unresolved reference"
+errors on first attempt — see Lessons Learned below).
+
+12 files converted (~98 call sites):
+- `data/db/FunkoDexDatabase.kt` — added `getCollection()`; `ensureIndexes()` (12 sites)
+- `data/repository/FunkoRepository.kt` (21 sites)
+- `data/repository/AlertRepository.kt` (10 sites)
+- `data/repository/ContributionRepository.kt` (8 sites)
+- `data/repository/CategoryPreferenceRepository.kt` (16 sites; `inBatch` × 3 stays on `database`)
+- `data/repository/ImageBlobRepository.kt` (3 sites)
+- `data/preload/CatalogPreloader.kt` (8 sites; `ensureCatalogIndexes` now takes a `Collection` param)
+- `data/preload/CatalogImporter.kt` (8 sites; `buildTitleIndex` now takes a `Collection` param)
+- `data/preload/CatalogRefreshWorker.kt` (12 sites across 3 functions; `inBatch` × 3 stays on `database`)
+- `network/FunkoLookupService.kt` (2 sites)
+- `network/ConnectivityObserver.kt` (7 sites)
+- `ui/screens/settings/DatabaseTransferViewModel.kt` (export/import/force-restore)
+
+**Force-restore care (`DatabaseTransferViewModel.forceRestoreDatabase`)** —
+`db.close()` → wipe `funkodex.cblite2` directory → `db.reopen()` → `liveCollection
+= db.getCollection()` obtained AFTER reopen, so it derives from the fresh
+`Database` instance via `getDatabase().defaultCollection` rather than a stale
+reference.
+
+### Lessons Learned
+- `fun getCollection(): Collection` (unqualified) resolves to
+  `kotlin.collections.Collection<T>` in files with `import com.couchbase.lite.*`
+  — Kotlin's implicit `kotlin.collections.*` import wins. Always fully-qualify
+  as `com.couchbase.lite.Collection` for any function/parameter signature named
+  `Collection`. One bad declaration cascaded into ~50 compiler errors across
+  3 files on first attempt.
+
+### Outstanding
+- Full functional/device test pass — see `SESSION_D_TRACKER.md` checklist.
+  Backup/restore/force-restore is highest priority given the `inBatch`/
+  `reopen()` interaction above.
+- All unit test suites (FunkoMapperTest, CollectionStatsTest, FunkoLookupServiceTest, `./gradlew test`)
+- 16 KB emulator regression re-run (CBL access patterns changed)
+- Carried over from Sessions 5–6: Cloud Console OAuth client, device tests
+  T-D1–T-D5, Photo Picker smoke test
+
+---
+
 ## [Unreleased] — Session 6 — 2026-06-12
 
 ### Changed

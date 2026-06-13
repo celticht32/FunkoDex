@@ -604,6 +604,10 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(8.dp))
 
+            CatalogDataSection(viewModel = catalogSettingsViewModel)
+
+            Spacer(Modifier.height(8.dp))
+
             // ── Diagnostics ──────────────────────────────────────────────────
             SectionHeader("Diagnostics")
 

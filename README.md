@@ -46,7 +46,7 @@ FunkoDex/
 │   └── ui/screens/     ScannerViewModelStateTest (20 Mockk tests)
 ├── app/src/main/assets/    funko_data.json (bundled, 23,940 records)
 ├── app/src/main/res/font/  cinzel_decorative_{regular,bold,black}.ttf (bundled)
-├── launcher-icon/          SVG source + generation instructions
+├── launcher-icon/          Launcher icon SVG/PNG source files
 ├── gradle/libs.versions.toml
 ├── CLAUDE.md               Full architecture guide for future Claude sessions
 ├── LESSONS_LEARNED.md      Practical lessons from the build
@@ -63,7 +63,7 @@ FunkoDex/
 
 | Tool | Version |
 |------|---------|
-| Android Studio | Ladybug (2024.2.1) or newer (required for AGP 8.13.x) |
+| Android Studio | Narwhal 3 Feature Drop or newer (recommended for AGP 8.13.x) |
 | JDK | 17 |
 | Android SDK | API 26 min, API 36 target/compile |
 | Device or emulator | Camera required for scanning |

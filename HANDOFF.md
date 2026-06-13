@@ -1,7 +1,7 @@
 # FunkoDex — Session Handoff
 **Date:** 2026-06-12
-**Sessions completed:** 1 (initial build), 2 (enricher/catalog import), 3 (UI/variant/photo/backup), 4 (enriched catalog import implementation + handle repair), 5 (16 KB page-size compliance + Drive auth migration), 6 (Photo Picker migration + P3 deprecation cleanup), 7 (CBL Collection API migration)
-**Next session focus:** Full functional/device test pass for Session 7 (see `SESSION_D_TRACKER.md` checklist — backup/restore/force-restore highest priority), plus carried-over Cloud Console OAuth client verification, device tests T-D1–T-D5, and Photo Picker smoke test
+**Sessions completed:** 1 (initial build), 2 (enricher/catalog import), 3 (UI/variant/photo/backup), 4 (enriched catalog import implementation + handle repair), 5 (16 KB page-size compliance + Drive auth migration), 6 (Photo Picker migration + P3 deprecation cleanup), 7 (CBL Collection API migration), 8 (Keystore/security-crypto migration)
+**Next session focus:** Full functional/device test pass for Sessions 7 and 8 (see `SESSION_D_TRACKER.md` checklist — backup/restore/force-restore highest priority for Session 7; for Session 8, verify Channel3/HobbyDB/eBay re-entry flows on a real device since the old encrypted prefs are abandoned), plus carried-over Cloud Console OAuth client verification, device tests T-D1–T-D5, and Photo Picker smoke test
 
 ---
 
@@ -16,7 +16,7 @@ Android Funko Pop collectibles tracker.
 
 ## Current State
 
-Sessions 5, 6, and 7 complete. Per `docs/PlayStore_Readiness_Migration_SPEC.md`'s
+Sessions 5–8 complete. Per `docs/PlayStore_Readiness_Migration_SPEC.md`'s
 execution plan (Sessions A–C), the app is code-complete for Play submission
 readiness: 16 KB page-size compliant, Drive auth migrated off GoogleSignIn, Photo
 Picker replaces the storage-permission gallery flow, and the P3 deprecation items
@@ -27,19 +27,33 @@ Lite calls to the Collection API (`database.defaultCollection`) across 12 files
 — `database.getDocument/save/delete/createQuery/createIndex` and
 `DataSource.database(db)` → `collection.X` / `DataSource.collection(col)`.
 `inBatch()` correctly remains database-level (transaction wrapper, not
-deprecated, not moved to Collection). Builds and runs clean. Full functional
-test pass (see `SESSION_D_TRACKER.md`) is deferred — code-only checkpoint per
-session instructions.
+deprecated, not moved to Collection). Full functional test pass (see
+`SESSION_D_TRACKER.md`) is deferred — code-only checkpoint per session
+instructions.
 
-Ready for: full Session 7 functional/device test pass, then Cloud Console OAuth
-client confirmation, device tests T-D1–T-D5 (Drive auth), Photo Picker smoke
-test (API 33+ and API 26–32), then physical device testing per
+Session 8 (Session E from the spec, P2) replaced `androidx.security:security-crypto`
+(pinned at deprecated `1.1.0-alpha06`, no stable 1.1.0 exists) with a direct
+AES-256-GCM `AndroidKeyStore` wrapper in `SecureKeyStore.kt`. Public API
+unchanged (12 calling files untouched). The old `funkodex_secure_prefs`
+(EncryptedSharedPreferences) file is abandoned on disk, not migrated — users
+re-enter Channel3 key and re-link HobbyDB/eBay once on upgrade. `security-crypto`
+dependency removed entirely from `libs.versions.toml`/`build.gradle.kts`.
+
+Both sessions build and run clean.
+
+Ready for: full Session 7 + 8 functional/device test pass, then Cloud Console
+OAuth client confirmation, device tests T-D1–T-D5 (Drive auth), Photo Picker
+smoke test (API 33+ and API 26–32), then physical device testing per
 `DEVICE_TEST_PLAN.md`.
 
 ### Pre-Play Store blockers remaining
 - [ ] Session 7 functional/device test pass — `SESSION_D_TRACKER.md` checklist.
       **Highest priority: backup, restore, and force-restore** (force-restore
       involves `db.close()` → wipe → `db.reopen()` → fresh `Collection` accessor)
+- [ ] Session 8 device verification — confirm Channel3 API key entry,
+      HobbyDB OAuth link, and eBay OAuth link all save/read correctly through
+      the new AES/GCM `SecureKeyStore` on a real device (encrypt/decrypt
+      round-trip via the hardware Keystore has not been device-tested)
 - [ ] All unit test suites (FunkoMapperTest, CollectionStatsTest,
       FunkoLookupServiceTest, full `./gradlew test`)
 - [ ] Cloud Console: confirm Android OAuth client ID (`com.funkodex` + signing SHA-1)
@@ -74,6 +88,11 @@ test (API 33+ and API 26–32), then physical device testing per
       `CatalogRefreshWorker`, `FunkoLookupService`, `ConnectivityObserver`,
       `DatabaseTransferViewModel`. Code complete and compiling/running clean;
       full functional test pass pending (see `SESSION_D_TRACKER.md`)
+- [x] Keystore/security-crypto migration — Session 8 (Session E, P2).
+      `SecureKeyStore` rewritten as a direct AES-256-GCM `AndroidKeyStore`
+      wrapper (alias `funkodex_secure_key`); `security-crypto` dependency
+      removed entirely. Code complete and compiling/running clean; device
+      verification of encrypt/decrypt round-trip pending
 
 ---
 

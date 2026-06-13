@@ -39,7 +39,7 @@ import javax.inject.Singleton
  *   4a. HobbyDB price API — uses TokenRefreshManager for silent token refresh.
  *       Token is valid for 2h (eBay) or provider-specific. Refreshed automatically.
  *
- * SECURITY: Channel3 key read from SecureKeyStore (EncryptedSharedPreferences).
+ * SECURITY: Channel3 key read from SecureKeyStore (AES/GCM, Android Keystore-backed).
  *           Never from BuildConfig or local.properties.
  */
 @Singleton

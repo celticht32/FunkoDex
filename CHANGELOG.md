@@ -5,6 +5,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — Session 8 — 2026-06-12
+
+### Changed
+
+**Keystore / security-crypto Migration (Play P2 — Session E)**
+
+`SecureKeyStore.kt` rewritten to remove the dependency on
+`androidx.security:security-crypto`, which was pinned at `1.1.0-alpha06` —
+verified via web search to be the latest available release with no stable
+1.1.0 ever published (open Google issue tracker requests for a stable release
+and for clearer deprecation signaling).
+
+- New implementation: AES-256-GCM key generated directly in `AndroidKeyStore`
+  (alias `funkodex_secure_key`, `PURPOSE_ENCRYPT or PURPOSE_DECRYPT`,
+  `BLOCK_MODE_GCM`, `ENCRYPTION_PADDING_NONE`, 256-bit, randomized).
+- Ciphertext stored as `base64(iv):base64(ciphertext)` strings in a plain
+  `SharedPreferences` file `funkodex_secure_prefs_v2`.
+- Public API of `SecureKeyStore` is unchanged — all 12 calling files
+  (`OAuthCallbackActivity`, `OAuthConfig`, `OAuthLauncher`,
+  `TokenRefreshManager`, `DriveBackupWorker`, `CatalogRefreshWorker`,
+  `AppModule`, `FunkoLookupService`, `PriceService`, `HmacKeyStore`,
+  `CatalogSettingsViewModel`, `SettingsViewModel`) required no edits.
+- `app/build.gradle.kts` and `gradle/libs.versions.toml` — removed
+  `security-crypto` dependency and version entry entirely.
+- `HmacKeyStore.kt`, `TokenRefreshManager.kt`, `PriceService.kt`,
+  `FunkoLookupService.kt`, `app/build.gradle.kts` — updated stale doc
+  comments referencing "EncryptedSharedPreferences" to describe the new
+  AES/GCM Keystore wrapper.
+
+**No migration from old encrypted prefs (deliberate, user-approved tradeoff):**
+The old `funkodex_secure_prefs` (EncryptedSharedPreferences) file is abandoned
+on disk — still encrypted, inert, never read or deleted. On upgrade, users
+will need to re-enter their Channel3 API key and re-link HobbyDB/eBay accounts
+once. A migration shim was drafted but rejected because it would have required
+keeping `security-crypto` as a dependency solely to read the old file once,
+defeating the purpose of the migration.
+
+### Outstanding
+- Device verification: confirm Channel3 key entry, HobbyDB link, and eBay
+  link all round-trip correctly through the new AES/GCM wrapper on a real
+  device (hardware Keystore behavior not verified by compile/run alone)
+- Carried over from Sessions 5–7: full Session 7 functional/device test pass
+  (`SESSION_D_TRACKER.md`), unit test suites, Cloud Console OAuth client,
+  device tests T-D1–T-D5, Photo Picker smoke test, 16 KB emulator regression
+
+---
+
 ## [Unreleased] — Session 7 — 2026-06-12
 
 ### Changed

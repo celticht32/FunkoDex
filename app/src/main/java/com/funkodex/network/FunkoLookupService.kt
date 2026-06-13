@@ -22,7 +22,7 @@ import javax.inject.Singleton
  *  Layer 4 — null (caller shows not-found lookup sheet)
  *
  * SECURITY: Channel3 API key is user-entered in Settings and stored in
- * EncryptedSharedPreferences via SecureKeyStore. It is never hardcoded,
+ * SecureKeyStore (AES/GCM, Android Keystore-backed). It is never hardcoded,
  * never in BuildConfig, and never in local.properties. If the key is absent
  * the service silently skips Channel3 and falls through to UPCitemdb.
  *

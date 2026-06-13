@@ -20,8 +20,8 @@ import javax.inject.Singleton
  * - The HMAC key is generated once at first launch and stored in the
  *   hardware-backed Android Keystore — it cannot be extracted even on
  *   rooted devices.
- * - The install ID (UUID) is stored in EncryptedSharedPreferences
- *   (SecureKeyStore) and used only for rate-limiting on the Worker side.
+ * - The install ID (UUID) is stored via SecureKeyStore (AES/GCM, Android
+ *   Keystore-backed) and used only for rate-limiting on the Worker side.
  *   It is not linkable to a user identity.
  * - Even if the HMAC key were extracted (theoretically impossible from
  *   hardware Keystore), the Cloudflare Worker only accepts schema-valid
@@ -44,11 +44,9 @@ class HmacKeyStore @Inject constructor(
 
     /**
      * Returns the stable install UUID used as X-Device-ID header.
-     * Generated once and stored in EncryptedSharedPreferences (SecureKeyStore).
-     * Not linked to any user identity — used only for rate-limiting on the Worker.
-     *
-     * SEC-A fix: moved from plain SharedPreferences to EncryptedSharedPreferences
-     * for consistency with the rest of the security model.
+     * Generated once and stored via SecureKeyStore (AES/GCM, Android
+     * Keystore-backed). Not linked to any user identity — used only for
+     * rate-limiting on the Worker.
      */
     fun getInstallId(): String = secureKeyStore.getInstallId()
 

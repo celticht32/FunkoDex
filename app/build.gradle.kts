@@ -29,7 +29,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Channel3 API key: user-entered in Settings > Data Sources
-        // Stored in EncryptedSharedPreferences via SecureKeyStore (never in BuildConfig)
+        // Stored via SecureKeyStore (AES/GCM, Android Keystore-backed; never in BuildConfig)
 
         // Phase F: Cloudflare Worker URL — not secret, safe in BuildConfig.
         // Set in local.properties: workerUrl=https://funkodex-contrib.YOUR_ACCOUNT.workers.dev
@@ -134,7 +134,6 @@ dependencies {
     // DataStore — persisted preferences (theme selection)
     implementation(libs.workmanager)      // Periodic catalog refresh
     implementation(libs.datastore.prefs)
-    implementation(libs.security.crypto)       // EncryptedSharedPreferences for Channel3 key
     implementation(libs.exifinterface)          // EXIF rotation correction for user photos (Phase C)
 
     // Accompanist — FlowRow for series filter chips, permissions helper for camera

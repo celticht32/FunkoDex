@@ -31,7 +31,7 @@ import javax.inject.Singleton
  * If two coroutines both find the token expired simultaneously, only one
  * performs the refresh; the other waits and uses the fresh token.
  *
- * SECURITY: refresh_token is read from EncryptedSharedPreferences, never logged.
+ * SECURITY: refresh_token is read via SecureKeyStore (AES/GCM, Android Keystore-backed), never logged.
  * The refresh POST contains only the refresh_token, client_id, and grant_type —
  * no client_secret is sent (PKCE public client flow).
  */

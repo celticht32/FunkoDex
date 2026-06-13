@@ -754,49 +754,49 @@ On the **16 KB Page Size** emulator (Pixel 10, API 37.0) from Session A:
 # Summary Checklist
 
 ## Part A — Core
-- [ ] A1. First launch, splash-gated preload, search proves catalog
+- [x] A1. First launch, splash-gated preload, search proves catalog
 - [ ] A2a. Scan → found → "Added!" flow
 - [ ] A2b. Scan → want list (verify via Check badge / re-scan)
 - [ ] A2c. Scan → "Already in your collection" (all 3 options)
 - [ ] A2d. Scan → "Barcode not in catalog" → match (silent contribution)
 - [ ] A2e. Offline scan → "Scan queued — no network" → auto-resolve + notification
-- [ ] A3a. "Search Catalog" bulk add (incl. category-filtered results)
+- [x] A3a. "Search Catalog" bulk add (incl. category-filtered results)
 - [ ] A3b. Batch scan FAB → "Save all (N)"
-- [ ] A4a. View mode (status card "Tap to move", chips, Market Price)
-- [ ] A4b. Edit fields ("Edit Funko" / "Save")
+- [x] A4a. View mode (status card "Tap to move", chips, Market Price)
+- [x] A4b. Edit fields ("Edit Funko" / "Save")
 - [ ] A4c. UPC scan dialog + "Share UPC with community?" prompt
 - [ ] A4d. Photos: camera / gallery (Photo Picker, no permission) / "Fetch
       from catalog"; "Save photo as" Main/Variation/Both
-- [ ] A4e. Variant edit: description, price, remove
-- [ ] A4f. **Blob-preservation regression (critical)**
-- [ ] A5. Delete via card kebab menu AND detail trash → "Remove from collection?"
-- [ ] A6. Search / segmented sort (4 options) / "All"+franchise chips
-- [ ] A7. Price alerts (want-list only; "Target price (USD)")
-- [ ] A8. "My collection categories": toggles, genre toggle, Reset, restart
-- [ ] A9. Reports + export .xlsx (4 sheets) / .csv
+- [x] A4e. Variant edit: description, price, remove
+- [x] A4f. **Blob-preservation regression (critical)**
+- [x] A5. Delete via card kebab menu AND detail trash → "Remove from collection?"
+- [x] A6. Search / segmented sort (4 options) / "All"+franchise chips
+- [x] A7. Price alerts (want-list only; "Target price (USD)")
+- [x] A8. "My collection categories": toggles, genre toggle, Reset, restart
+- [x] A9. Reports + export .xlsx (4 sheets) / .csv
 - [ ] A10. **Check tab — Pre-Purchase Check (all 4 overlays, 4 s auto-reset)**
-- [ ] A11. App theme (6 options) + Diagnostics log share
+- [x] A11. App theme (6 options) + Diagnostics log share
 
 ## Part B — Integrations
-- [ ] B1. Channel3 key set/persist
-- [ ] B2. HobbyDB OAuth connect/persist/disconnect
-- [ ] B3. eBay OAuth connect/persist/disconnect
-- [ ] B4. Drive connect / back up now / **lapsed grant (notif 3002)** / disconnect
+- [x] B1. Channel3 key set/persist
+- [x] B2. HobbyDB OAuth connect/persist/disconnect
+- [x] B3. eBay OAuth connect/persist/disconnect
+- [x] B4. Drive connect / back up now / **lapsed grant (notif 3002)** / disconnect
 - [ ] B5. Contributions: silent USER_SCAN path + USER_EDIT prompt path;
       toggle arms/cancels upload worker; WORKER_URL-unset skip
-- [ ] B6. Catalog refresh worker log sequence
+- [x] B6. Catalog refresh worker log sequence
 
 ## Part C — Backup/Restore (LAST)
-- [ ] C1. Backup: Downloads file + "Share backup via…" + JSON structure
-- [ ] C2. Restore: "Replace your collection?" → exact state, catalog intact
-- [ ] C3. **Force restore: "Database rebuilt" → restart → re-preload →
+- [x] C1. Backup: Downloads file + "Share backup via…" + JSON structure
+- [x] C2. Restore: "Replace your collection?" → exact state, catalog intact
+- [x] C3. **Force restore: "Database rebuilt" → restart → re-preload →
       correct collection (HIGHEST PRIORITY)**
 
 ## Part D — Automated
-- [ ] D1a. Enriched import 5-record file (exact counts)
+- [x] D1a. Enriched import 5-record file (exact counts)
 - [x] D1b. Full enriched file — PASS (2026-06-13, see above)
-- [ ] D2. `gradlew test` — 72 tests green
-- [ ] D3. SecureKeyStore v2 prefs format / no crypto exceptions
+- [x] D2. `gradlew test` — 72 tests green
+- [x] D3. SecureKeyStore v2 prefs format / no crypto exceptions
 
 ## Part E
-- [ ] E1. 16 KB emulator condensed smoke test
+- [x] E1. 16 KB emulator condensed smoke test

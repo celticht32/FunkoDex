@@ -239,10 +239,10 @@
 
 | Test | Result | Notes |
 |------|--------|-------|
-| 1. First launch / catalog preload | | |
+| 1. First launch / catalog preload | PASS (VM) | Verified on emulator — splash-gated preload completes, Collection loads, manual search returns catalog results. No physical-device dependency. |
 | 2. UPC scan — add screen | | |
 | 3. UPC scan — edit screen | | |
-| 4. Manual search keyboard dismiss | | |
+| 4. Manual search keyboard dismiss | PASS (VM) | Verified on emulator — keyboard dismisses on Done, results render, list selectable. No physical-device dependency. |
 | 5. Check screen | | |
 | 6. Fetch from catalog | | |
 | 7. App performance | | |

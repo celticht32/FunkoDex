@@ -4,20 +4,19 @@ Tracks execution of `COMPLETE_TEST_PLAN.md` (code-verified against the repo).
 Update this file as each item is run — check the box and add a one-line
 result/note in the log at the bottom.
 
-## Known wiring gaps (verified against the repo)
+## Known wiring gaps — RESOLVED 2026-06-12
 
-Two composables are referenced/defined but have no reachable call sites in the
-pushed repo — they live in local-only/uncommitted files:
+Both gaps below were fixed and merged (commits `74c5616`, `6f2c523`). Build
+compiles and runs clean on device. A9 and B1/B2/B3/B6 are no longer blocked —
+they're untested like everything else in this tracker.
 
-- **`ReportsScreen.kt`** — imported by `FunkoDexNavHost.kt` but absent from the
-  repo. Affects **A9** (Reports + export).
-- **`CatalogDataSection`** — defined in `SettingsScreen.kt` but never invoked.
-  Provides the Channel3/HobbyDB/eBay "Lookup sources" rows and the "Refresh
-  now" button. Affects **B1, B2, B3, B6**.
-
-If either gap blocks a test, mark it `BLOCKED (gap)` rather than pass/fail and
-note it — these are pre-existing local-file issues, not regressions from
-Sessions 7/8.
+- **`ReportsScreen.kt`** — created at
+  `ui/screens/reports/ReportsScreen.kt` + `ReportsViewModel.kt`. Wired into
+  `FunkoDexNavHost.kt` (import/call site were already present). Was previously
+  affecting **A9**.
+- **`CatalogDataSection`** — now invoked from the "Catalog" section of
+  `SettingsScreen.kt`, reusing the existing `catalogSettingsViewModel`
+  instance. Was previously affecting **B1, B2, B3, B6**.
 
 ---
 
@@ -41,18 +40,18 @@ Sessions 7/8.
 - [ ] A6. Search / segmented sort (4 options) / "All" + franchise chips; confirm category prefs do NOT filter My Dex
 - [ ] A7. Price alerts (want-list only; "Target price (USD)")
 - [ ] A8. "My collection categories": toggles, genre toggle, Reset, restart persistence
-- [ ] A9. Reports + export .xlsx (4 sheets) / .csv — BLOCKED (ReportsScreen.kt gap) unless local file present
+- [ ] A9. Reports + export .xlsx (4 sheets) / .csv
 - [ ] A10. **Check tab — Pre-Purchase Check (4 overlays, 4s auto-reset, re-scan cancel)**
 - [ ] A11. App theme (6 options) + Diagnostics log share
 
 ## Part B — Integrations
 
-- [ ] B1. Channel3 key set/persist — BLOCKED (CatalogDataSection gap) unless reachable
-- [ ] B2. HobbyDB OAuth connect/persist/disconnect — BLOCKED (CatalogDataSection gap) unless reachable
-- [ ] B3. eBay OAuth connect/persist/disconnect — BLOCKED (CatalogDataSection gap) unless reachable
+- [ ] B1. Channel3 key set/persist
+- [ ] B2. HobbyDB OAuth connect/persist/disconnect
+- [ ] B3. eBay OAuth connect/persist/disconnect
 - [ ] B4. Drive connect / back up now / **lapsed grant (notif id 3002)** / disconnect
 - [ ] B5. Contributions: silent USER_SCAN + USER_EDIT prompt; toggle arms/cancels GitHubUploadWorker; WORKER_URL-unset skip log
-- [ ] B6. Catalog refresh worker log sequence — "Refresh now" BLOCKED (CatalogDataSection gap), test via scheduled run
+- [ ] B6. Catalog refresh worker log sequence — "Refresh now" + scheduled run
 
 ## Part C — Backup/Restore (run LAST)
 

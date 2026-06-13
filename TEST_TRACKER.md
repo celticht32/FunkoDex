@@ -18,6 +18,27 @@ they're untested like everything else in this tracker.
   `SettingsScreen.kt`, reusing the existing `catalogSettingsViewModel`
   instance. Was previously affecting **B1, B2, B3, B6**.
 
+## Session 9 fixes (2026-06-13, commit `d69a4ec`)
+
+- Enriched catalog import (D1b) was broken (`ArrayList cannot be cast to
+  java.lang.Void`) — fixed via tree-based JSON parsing. Now PASS, see Result log.
+- Catalog `category` field could be stored as `"Pop! Vinyl"` (a format
+  descriptor, not a real category), making 714 records unsearchable via
+  `FunkoLookupService.searchByName`'s category filter (separate bug: broken
+  slug-vs-name comparison, also fixed). Both fixed; merge-path repair applied
+  on re-import. **A3a should be re-tested** — the search-filter fix affects
+  the whole catalog, not just the 714 affected records, so it may change
+  results for other categories too.
+- `db.getDatabase().getDocument()` → `db.getCollection().getDocument()` in
+  `FunkoLookupService` (deprecation cleanup, Session 7 Collection API pattern).
+- `Icons.Default.Logout` → `Icons.AutoMirrored.Filled.Logout`,
+  `Icons.Default.TrendingUp` → `Icons.Default.AttachMoney` (deprecation
+  cleanup in new `ReportsScreen`/`SettingsScreen` code).
+- "Import Enriched Catalog" picker now defaults to Downloads
+  (`OpenDocumentInDownloads`, API 26+).
+
+See `CHANGELOG.md` Session 9 entry and `LESSONS_LEARNED.md` #26–27 for full detail.
+
 ---
 
 ## Part A — Core Collection Features
@@ -62,7 +83,7 @@ they're untested like everything else in this tracker.
 ## Part D — Automated
 
 - [ ] D1a. Enriched import — 5-record test file, exact counts (1 or 0 enriched / 2 or 3 added / 2 skipped / 0 errors)
-- [ ] D1b. Enriched import — full 14,314-record file (optional)
+- [x] D1b. Enriched import — full 14,314-record file — PASS (see Result log)
 - [ ] D2. `gradlew test` — 72 tests green (9+11+8+15+20+9)
 - [ ] D3. SecureKeyStore v2 prefs format / no Cipher/KeyStore exceptions across restart
 
@@ -75,3 +96,6 @@ they're untested like everything else in this tracker.
 ## Result log
 
 (Add one line per completed item: date · item · PASS/FAIL/BLOCKED · note)
+
+- 2026-06-13 · D1b · PASS · Full 14,314-record `funko_data_enriched.json`, first run: 13,585 enriched / 725 added / 4 skipped / 0 errors, 51s. Matches HANDOFF.md dry-run estimate (~13,583/~725/~4).
+- 2026-06-13 · D1b (re-import) · PASS · Same file, second run after category fix: 14,310 updated / 0 added / 4 skipped / 0 errors, 47s. Confirms idempotency + category repair (714 docs). Verified via Search Catalog → "perpetua" returning "Papa V Perpetua · Music" (was 0 results before fix).

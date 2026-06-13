@@ -227,4 +227,64 @@ not the user opens the app, keeping both provider sessions alive indefinitely. U
 so the weekly interval is not reset on every app launch. This is a lesson in thinking beyond
 the happy path: the token refresh code is correct, but the system needs a heartbeat to stay alive.
 
+---
+
+## Data Parsing
+
+### 26. Gson reflective `TypeToken<List<DataClass>>` can fail on Kotlin data classes for reasons unrelated to field nullability
+Importing `funko_data_enriched.json` (14,314 records) via
+`gson.fromJson(json, TypeToken<List<EnrichedRecord>>)` threw `java.util.ArrayList
+cannot be cast to java.lang.Void` on every attempt, on-device. The natural
+suspect is a nullable generic field (`series: List<String>?`), matching a
+known Gson/Kotlin issue (KT-41176). That theory was tested and falsified: both
+the nullable and a non-nullable (`List<String> = emptyList()`) variant of the
+field parsed correctly under a standalone Gson 2.11.0 build (compiled from
+source, plain Java reflection) against the same JSON. The minified-build R8
+explanation was also ruled out — the failure occurred on a `debug` build
+(`isMinifyEnabled = false`).
+
+The actual trigger remained Kotlin-bytecode-specific and unreproducible
+without `kotlinc` (not obtainable through the project's network allowlist).
+Rather than continue isolating it, the fix bypassed Gson's reflective
+`TypeAdapter` entirely: parse the JSON tree (`JsonParser` → `JsonArray` →
+`JsonObject`) and map each object to the data class via explicit
+`optString`/`optBoolean`/`optStringList` extension functions. This is more
+verbose but removes an entire class of Gson-reflection-vs-Kotlin-metadata
+failure modes for any future enriched-data field changes. **Lesson:** when a
+reflective JSON-binding error doesn't reproduce in isolated tests of the
+"obvious" field, don't keep tuning field types — switch to tree parsing for
+data-import paths where the schema is externally controlled (here, by
+`enrich.js`) and may drift.
+
+### 27. A derived display field (`category`) must only ever hold values from its own enum/taxonomy
+`CatalogMapper.mapRecord` derived `category` as "the first series tag starting
+with `Pop!`". For HobbyDB-sourced records this is almost always a real
+category ("Pop! Disney", "Pop! Music"). But funko.com-sourced records
+(729 of them, from the enriched-import net-new path) carry series like
+`["Pop! Vinyl", "Music"]` — `"Pop! Vinyl"` is a *format* descriptor (every
+standard Pop is "Pop! Vinyl"), not a category, and doesn't appear anywhere in
+`FunkoCategories.ALL`. 714 records got `category = "Pop! Vinyl"` stored.
+
+Separately, `FunkoLookupService.searchByName`'s category filter compared
+`item.category.contains(key)` where `key` is a normalized slug (`pop_music`)
+and `item.category` is the display string (`"Pop! Music"`) —
+`"Pop! Music".contains("pop_music")` is always `false`. This silently dropped
+**every** search result whose category was non-empty, masked because most
+manual testing queries happened to hit items with empty categories or fall
+through other paths. Combined, the 714 mis-categorized records were
+unsearchable and invisible to the bug until a specific net-new record
+("Papa V Perpetua") was searched and returned zero results.
+
+**Lessons:** (1) when a derived field's value space should be a closed set
+(here, `FunkoCategories.ALL`), exclude known-non-member values explicitly at
+the point of derivation — mirror any existing exclusion list for a sibling
+field (`primarySeries` already excluded `"Pop! Vinyl"`; `category` did not).
+(2) Any comparison between a normalized key (`pop_music`) and a display string
+(`"Pop! Music"`) must go through the same canonical normalizer
+(`FunkoCategories.toKey()`) on both sides — never raw `contains()`. (3) A
+merge/upsert path that already has access to "existing doc + freshly-parsed
+record" is the cheapest place to add a self-healing repair for previously
+mis-written derived fields — no migration script or catalog wipe needed, the
+fix applies the next time the import runs.
+
 *Document maintained by Celtic Heart Steamworks. Update after each significant change.*

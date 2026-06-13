@@ -5,6 +5,121 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — Session 9 — 2026-06-13
+
+### Fixed
+
+**Wiring gaps from Session 8 handoff (commits `74c5616`, `6f2c523`)**
+
+- **`ReportsScreen.kt`** — was referenced/imported by `FunkoDexNavHost.kt` but
+  absent from the repo (local-only file from a prior session). Created
+  `ui/screens/reports/ReportsScreen.kt` and `ReportsViewModel.kt`: summary
+  stat cards (owned/want-list/franchises/market value), cost breakdown card,
+  `ExportButton()`, per-series completion cards with expandable want-list
+  rows, and the existing `REPORTS_EMPTY`/`REPORTS_MARKET_NOTE` help strings
+  (previously dead). Unblocked test item **A9**.
+- **`CatalogDataSection`** — was defined in `SettingsScreen.kt` but never
+  invoked, so the Channel3 API key dialog, HobbyDB/eBay OAuth connect rows,
+  and the catalog auto-refresh controls (interval, Wi-Fi-only, "Refresh now")
+  were unreachable. Wired into the "Catalog" section of `SettingsScreen`,
+  reusing the existing `catalogSettingsViewModel` instance. Unblocked test
+  items **B1, B2, B3, B6**.
+- **`.gitignore`** — a blanket `reports/` rule (intended for
+  `app/build/reports/` Gradle test output) was also matching the new
+  `ui/screens/reports/` source package, silently excluding it from `git add`.
+  Narrowed to `app/build/reports/`.
+
+**Enriched catalog import — JSON parse failure (`ArrayList cannot be cast to
+java.lang.Void`)**
+
+- Root cause: Gson's reflective `TypeToken<List<EnrichedRecord>>` binding
+  mis-resolved the `EnrichedRecord` data class's field types under Kotlin's
+  emitted bytecode/metadata, throwing on every import attempt regardless of
+  field nullability (verified both nullable and non-nullable `List<String>`
+  variants parse correctly via plain Java + Gson 2.11.0 reflection — the
+  failure is Kotlin-bytecode-specific and not reproducible with `kotlinc`
+  unavailable in the sandbox).
+- Fix: `CatalogImporter.importFromUri` no longer uses
+  `gson.fromJson(json, TypeToken<List<EnrichedRecord>>)`. Parses the JSON tree
+  (`JsonParser` → `JsonArray` → `JsonObject`) and maps each object to
+  `EnrichedRecord` via explicit field-by-field extension functions
+  (`optString`/`optBoolean`/`optStringList`), bypassing Gson's reflective
+  `TypeAdapter` entirely. Validated against the full 14,314-record
+  `funko_data_enriched.json` with a standalone Gson 2.11.0 build (compiled
+  from source in-sandbox) — all records parse, including `series` arrays and
+  null `available`/`funkoNumber` fields.
+- `EnrichedRecord.kt` — `series: List<String>? = null` → `series: List<String>
+  = emptyList()` (the tree parser always supplies a list, never null); removed
+  now-redundant `?: emptyList()` elsis at the three call sites and the
+  now-unused `gson`/`Gson`/`TypeToken` members/imports in `CatalogImporter.kt`.
+- **On-device result (full 14,314-record file, first run):** 13,585 enriched,
+  725 added, 4 skipped, 0 errors, completed in 51s — matches
+  `HANDOFF.md`'s "~13,583 enriched, ~725 added, ~4 skipped" expectation from
+  the 2026-06-12 dry-run estimate. **D1b confirmed PASS.**
+
+**Catalog category data bug — "Pop! Vinyl" stored as `category`, hiding 714
+records from search**
+
+- `CatalogMapper.mapRecord`'s `category` field picked the first series tag
+  starting with `"Pop!"`, including the generic format descriptor `"Pop!
+  Vinyl"`. For the 729 funko.com-sourced `.html`-handle records (series like
+  `["Pop! Vinyl", "Music"]`), this produced `category = "Pop! Vinyl"` for 714
+  of them — a value that doesn't correspond to any entry in
+  `FunkoCategories.ALL`.
+- `FunkoLookupService.searchByName`'s category filter compared
+  `item.category.contains(key)` where `key` is a normalized slug (e.g.
+  `pop_music`) and `item.category` is a display string (e.g. `"Pop! Music"`)
+  — `"Pop! Music".contains("pop_music")` is always `false`. Every catalog
+  search result was being silently dropped by this filter unless
+  `item.category` was empty (the only path that passed).
+- Fixes:
+  - `CatalogMapper.kt` — `category` selection now excludes `"Pop! Vinyl"` and
+    bare `"Pop!"`, mirroring the existing `primarySeries` exclusion. Falls
+    back to `""` (uncategorized) when no real Pop! category tag is present.
+  - `FunkoLookupService.kt` — category filter now normalizes
+    `item.category` via the canonical `FunkoCategories.toKey()` before
+    checking set membership against `enabled` (which holds keys, not display
+    strings).
+  - `CatalogImporter.kt` (merge path) — if an existing doc's stored
+    `category` is `"Pop! Vinyl"`, recompute from the record's series and
+    overwrite, so **re-running the import self-heals previously-inserted bad
+    categories** without a catalog wipe.
+- **On-device result (re-import after fix):** 14,310 updated, 0 added, 4
+  skipped, completed in 47s — confirms all 14,310 records now match by
+  handle (idempotent) and the 714 bad categories were repaired. Verified
+  `Search Catalog → "perpetua"` now returns "Papa V Perpetua · Music" (was
+  previously zero results).
+
+**File picker — enriched catalog import defaulted away from Downloads**
+
+- `SettingsScreen.kt` — added `OpenDocumentInDownloads`, a small
+  `ActivityResultContracts.OpenDocument` subclass that sets
+  `EXTRA_INITIAL_URI` to the AOSP Downloads root
+  (`DocumentsContract.buildDocumentUri("com.android.providers.downloads.documents",
+  "downloads")`, API 26+, matches minSdk 26) so the "Import Enriched Catalog"
+  picker opens directly in Downloads instead of the picker's default location.
+  Most pickers (incl. AOSP DocumentsUI) honor this; some OEM pickers may
+  ignore it.
+
+### Changed
+
+**Deprecation cleanup (Material icons + CBL)**
+
+- `ReportsScreen.kt` — `Icons.Default.TrendingUp` (deprecated, no
+  `AutoMirrored` equivalent exists) → `Icons.Default.AttachMoney` for the
+  "Market Value" stat card.
+- `SettingsScreen.kt` — `Icons.Default.Logout` →
+  `Icons.AutoMirrored.Filled.Logout` (Disconnect Google Drive row).
+- `FunkoLookupService.kt` — `db.getDatabase().getDocument(docId)` (deprecated
+  in the CBL 3.x Collection API) → `db.getCollection().getDocument(docId)`,
+  matching the Session 7 Collection API migration pattern already used in
+  `CatalogImporter`.
+
+### Commits
+`74c5616`, `6f2c523`, `4e6759d`, `d69a4ec`
+
+---
+
 ## [Unreleased] — Session 8 — 2026-06-12
 
 ### Changed

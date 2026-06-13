@@ -26,12 +26,13 @@ as they run, with one-line results in its log section.
 `db.reopen()` → fresh `Collection` accessor path, the biggest regression risk
 from the Collection API migration. Run Part C last (it wipes the database).
 
-**Two known wiring gaps** (both confirmed against the pushed repo, flagged in
-the plan/tracker on the items they affect):
-- `ReportsScreen.kt` is imported by `FunkoDexNavHost.kt` but is not present in
-  the repo (local-only/uncommitted). Affects A9 (Reports + export).
-- `CatalogDataSection` (Channel3/HobbyDB/eBay "Lookup sources" rows + "Refresh
-  now") exists in `SettingsScreen.kt` but has no call sites. Affects B1–B3, B6.
+**Two known wiring gaps — RESOLVED Session 9 (commits `74c5616`, `6f2c523`):**
+- `ReportsScreen.kt` + `ReportsViewModel.kt` created at
+  `ui/screens/reports/`, wired into `FunkoDexNavHost.kt`. A9 unblocked.
+- `CatalogDataSection` is now invoked from the "Catalog" section of
+  `SettingsScreen.kt`. B1–B3, B6 unblocked.
+
+Both untested-but-reachable as of Session 9; see `TEST_TRACKER.md`.
 
 ---
 
@@ -113,9 +114,9 @@ com.funkodex/
         ├── prescan/            PreScanScreen + PreScanViewModel — "Check" tab:
         │                       read-only camera "do I already own this?" duplicate
         │                       checker (4s auto-reset, no add flow)
-        ├── reports/            ReportsScreen — imported by FunkoDexNavHost but NOT
-        │                       present in the repo (local-only/uncommitted; see
-        │                       TEST_TRACKER.md gaps)
+        ├── reports/            ReportsScreen + ReportsViewModel — summary stats,
+        │                       cost breakdown, ExportButton, per-series
+        │                       completion + want-list (Session 9)
         ├── scanner/            ScannerScreen (all ScanState branches + POST_NOTIF),
         │                       ScannerViewModel (ConnectivityObserver, no deprecated API),
         │                       BatchScanScreen/VM, BarcodeAnalyzer
@@ -128,9 +129,9 @@ com.funkodex/
                                 SettingsViewModel (+logLevel StateFlow + setLogLevel)
 
   > **Note:** `CatalogDataSection` (Channel3/HobbyDB/eBay "Lookup sources"
-  > rows + "Refresh now") exists in `SettingsScreen.kt` but has NO call sites
-  > in the repo — same local-only situation as `ReportsScreen.kt`. See
-  > `TEST_TRACKER.md` gaps.
+  > rows + "Refresh now") is now invoked from the "Catalog" section of
+  > `SettingsScreen.kt` (Session 9). Reachable but untested — see
+  > `TEST_TRACKER.md`.
 ```
 
 ---

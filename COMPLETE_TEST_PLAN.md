@@ -1,9 +1,10 @@
 # FunkoDex — Complete Functional Test Plan (code-verified)
 
 Every UI label, dialog title, and behavior below was verified against the
-repository source (master, verified in sync with GitHub). Items that exist in
-code but have **no call sites in the pushed repo** are flagged — they are
-likely wired in local-only files (`ReportsScreen.kt` is confirmed local-only).
+repository source (master, verified in sync with GitHub). As of Session 9
+(commit `d69a4ec`), `ReportsScreen.kt`/`ReportsViewModel.kt` and
+`CatalogDataSection` are present and wired — the "local-only file" caveats
+that previously applied to A9/B1–B3/B6 no longer apply.
 
 Recommended order: **Part A** (core) → **Part B** (integrations) → **Part C**
 (backup/restore — LAST, force-restore wipes the database) → **Part D**
@@ -65,8 +66,9 @@ button and a **"Search by name"** button.
    - **Add** tab: scan the same barcode again → preview sheet reopens
      (want-list items re-present as Preview so you can confirm you bought it).
 
-   > Note: there is no want-list browsing screen in the pushed repo — want
-   > list views likely live on the local-only `ReportsScreen.kt`.
+   > Note: there is no dedicated want-list browsing screen, but
+   > `ReportsScreen.kt`'s per-series "Show want list (N)" expandable section
+   > (added Session 9) lists missing/wanted items per series — verify there.
 
 ### A2c. Scan → already owned
 
@@ -332,12 +334,10 @@ search-results effect.
 
 ## A9. Reports tab + export
 
-> **Caveat (verified):** `ReportsScreen.kt` is referenced by
-> `FunkoDexNavHost.kt` but does **not exist in the pushed repo** — it lives
-> only in your local working tree (uncommitted). Likewise `ExportButton`
-> (the .xlsx/.csv export UI) and `CatalogDataSection` have **no call sites**
-> in the pushed repo. Test against your actual local screens; the data-layer
-> expectations below are verified.
+> **Session 9 update:** `ReportsScreen.kt`/`ReportsViewModel.kt` were created
+> and wired into `FunkoDexNavHost.kt`; `ExportButton` and `CatalogDataSection`
+> are also wired (commits `74c5616`, `6f2c523`). The data-layer expectations
+> below are verified against `CollectionStats` and the built screen.
 
 1. **Reports** tab loads without crash.
 2. Data available to it (`CollectionStats`): totalOwned, totalWanted,
@@ -347,7 +347,7 @@ search-results effect.
    missingItems, totalCostPaid, marketValue).
 3. Add/remove an item → return → numbers update.
 
-### A9b. Export (if wired into your local Reports screen)
+### A9b. Export
 
 4. **"Export collection"** button → sheet with **"Excel workbook (.xlsx)"**
    and **"CSV spreadsheet (.csv)"**, states "Building spreadsheet…" /
@@ -357,8 +357,8 @@ search-results effect.
 6. **.csv** → `FunkoDex_<date>.csv`, one row per owned item, columns: Name,
    Series, #, Category, Retail Price, Exclusive, Retailer, Vaulted.
 
-**Pass:** Reports loads with correct live stats; export (if present) produces
-both files correctly.
+**Pass:** Reports loads with correct live stats; export produces both files
+correctly.
 
 ---
 
@@ -409,19 +409,18 @@ re-scan all work.
 
 # PART B — Integrations
 
-> **Caveat (verified):** the connection UI for B1–B3 and the "Refresh now"
-> button in B6 live in `CatalogDataSection` (SettingsScreen.kt line ~830),
-> which has **no call sites in the pushed repo**. If you cannot find these
-> rows in your build's Settings, that section isn't wired in — flag it as a
-> gap rather than a test failure, and test the underlying behavior where
-> reachable. The descriptions below match the composable's verified content.
+> **Session 9 update:** the connection UI for B1–B3 and the "Refresh now"
+> button in B6 live in `CatalogDataSection` (SettingsScreen.kt, "Catalog"
+> section), which is now invoked from `SettingsScreen` (commit `6f2c523`) —
+> reachable but untested. The descriptions below match the composable's
+> verified content.
 
 ## B1. Channel3 API key
 
-1. Locate the **"Lookup sources"** card (CatalogDataSection — see caveat).
-   Rows: **"Kenny Chan dataset"** ("~23,000 items · free · offline ·
-   auto-updates", locked on), **"Channel3 API"**, **"HobbyDB / Pop Price
-   Guide"**, **"eBay sold listings"**.
+1. Locate the **"Lookup sources"** card (Settings → Catalog →
+   CatalogDataSection). Rows: **"Kenny Chan dataset"** ("~23,000 items · free
+   · offline · auto-updates", locked on), **"Channel3 API"**, **"HobbyDB /
+   Pop Price Guide"**, **"eBay sold listings"**.
 2. Tap **Channel3 API** ("Not configured · tap to add API key") →
    **"Channel3 API key"** dialog → enter a key → save.
 3. **Expected:** row shows "Connected · UPC lookup · pricing".
@@ -512,10 +511,10 @@ worker; no crypto errors.
 
 `CatalogRefreshWorker` is scheduled at app start (KEEP policy) and runs
 periodically. The manual **"Refresh now"** button is in `CatalogDataSection`
-(see Part B caveat).
+(Settings → Catalog).
 
-1. Trigger via "Refresh now" if reachable; otherwise rely on the scheduled
-   run (note it in results rather than skipping silently).
+1. Trigger via "Refresh now"; alternatively rely on the scheduled run (note
+   it in results rather than skipping silently).
 2. Logcat (filter `CatalogRefreshWorker`) expected sequence:
    - "Starting catalog refresh…"
    - "Refresh complete: N new catalog records added" (N may be 0)
@@ -695,11 +694,16 @@ Push: `adb push test_enriched.json /sdcard/Download/test_enriched.json`
 ### D1b. Full enriched file (optional)
 
 Push the real `funko_data_enriched.json` (14,314 records) the same way.
-**Expected:** progress advances in batches of 500 (verified chunk size);
-approximately 13,583 enriched, ~725 added, ~4 skipped, 0 errors (per
-HANDOFF.md's 2026-06-12 run).
+**Expected:** progress advances in batches of 500 (verified chunk size).
 
-**Pass:** exact counts on the 5-record file; clean full-file run if tested.
+**Actual (2026-06-13, on-device, PASS):** first run 13,585 enriched / 725
+added / 4 skipped / 0 errors, 51s — matches the ~13,583/~725/~4 estimate from
+HANDOFF.md's 2026-06-12 dry-run. Re-import (idempotency check, after the
+Session 9 category fix) gave 14,310 updated / 0 added / 4 skipped / 0 errors,
+47s.
+
+**Pass:** exact counts on the 5-record file (D1a — not yet run); full-file
+run PASS (above).
 
 ## D2. Unit tests
 
@@ -769,11 +773,11 @@ On the **16 KB Page Size** emulator (Pixel 10, API 37.0) from Session A:
 - [ ] A6. Search / segmented sort (4 options) / "All"+franchise chips
 - [ ] A7. Price alerts (want-list only; "Target price (USD)")
 - [ ] A8. "My collection categories": toggles, genre toggle, Reset, restart
-- [ ] A9. Reports (local-only file — caveat) + export .xlsx (4 sheets) / .csv
+- [ ] A9. Reports + export .xlsx (4 sheets) / .csv
 - [ ] A10. **Check tab — Pre-Purchase Check (all 4 overlays, 4 s auto-reset)**
 - [ ] A11. App theme (6 options) + Diagnostics log share
 
-## Part B — Integrations (CatalogDataSection caveat applies to B1–B3, B6)
+## Part B — Integrations
 - [ ] B1. Channel3 key set/persist
 - [ ] B2. HobbyDB OAuth connect/persist/disconnect
 - [ ] B3. eBay OAuth connect/persist/disconnect
@@ -790,7 +794,7 @@ On the **16 KB Page Size** emulator (Pixel 10, API 37.0) from Session A:
 
 ## Part D — Automated
 - [ ] D1a. Enriched import 5-record file (exact counts)
-- [ ] D1b. Full enriched file (optional)
+- [x] D1b. Full enriched file — PASS (2026-06-13, see above)
 - [ ] D2. `gradlew test` — 72 tests green
 - [ ] D3. SecureKeyStore v2 prefs format / no crypto exceptions
 

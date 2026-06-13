@@ -1,7 +1,7 @@
 # FunkoDex — Session Handoff
-**Date:** 2026-06-12
-**Sessions completed:** 1 (initial build), 2 (enricher/catalog import), 3 (UI/variant/photo/backup), 4 (enriched catalog import implementation + handle repair), 5 (16 KB page-size compliance + Drive auth migration), 6 (Photo Picker migration + P3 deprecation cleanup), 7 (CBL Collection API migration), 8 (Keystore/security-crypto migration)
-**Next session focus:** Full functional/device test pass for Sessions 7 and 8 (see `SESSION_D_TRACKER.md` checklist — backup/restore/force-restore highest priority for Session 7; for Session 8, verify Channel3/HobbyDB/eBay re-entry flows on a real device since the old encrypted prefs are abandoned), plus carried-over Cloud Console OAuth client verification, device tests T-D1–T-D5, and Photo Picker smoke test
+**Date:** 2026-06-13
+**Sessions completed:** 1 (initial build), 2 (enricher/catalog import), 3 (UI/variant/photo/backup), 4 (enriched catalog import implementation + handle repair), 5 (16 KB page-size compliance + Drive auth migration), 6 (Photo Picker migration + P3 deprecation cleanup), 7 (CBL Collection API migration), 8 (Keystore/security-crypto migration), 9 (wiring gaps closed — Reports/CatalogDataSection; enriched-import parse fix + on-device verification; category data/filter bugfix; deprecation cleanup)
+**Next session focus:** Full functional/device test pass per `TEST_TRACKER.md` — D1b and D2 (unit tests) are the only items confirmed so far this session (D1b PASS, D2 not yet run). All of Parts A/B/C/E remain untested. Backup/restore/force-restore (C3) is still highest priority for the Session 7 Collection-API regression risk. Carried over: Cloud Console OAuth client verification, device tests T-D1–T-D5, Photo Picker smoke test, 16 KB emulator regression (E1).
 
 ---
 
@@ -63,7 +63,11 @@ smoke test (API 33+ and API 26–32), then physical device testing per
       (`docs/PlayStore_Readiness_Migration_SPEC.md` §2.3)
 - [ ] Community contribution Cloudflare Worker deployment (infrastructure)
 - [ ] 16 KB emulator regression — re-run smoke test (CBL access patterns changed)
-- [ ] Device testing results (may surface new bugs) — now includes on-device enriched import run
+- [x] Device testing — enriched catalog import (full 14,314-record file),
+      run twice on-device (Session 9): first run 13,585/725/4/0 (matches
+      dry-run estimate), re-import after category fix 14,310/0/4/0
+      (idempotent, repairs applied). D1b confirmed PASS. See
+      "Result for funko_data_enriched.json" above.
 
 ### Already resolved
 - [x] `android:enableOnBackInvokedCallback="true"` manifest warning
@@ -78,9 +82,13 @@ smoke test (API 33+ and API 26–32), then physical device testing per
       READ_EXTERNAL_STORAGE (Session 6 — code complete, smoke test pending)
 - [x] P3 cleanup — `kotlinOptions` → `compilerOptions`, `accompanist-flowlayout`
       → Compose Foundation `FlowRow` (Session 6). Note: `Icons.Default.ArrowBack`
-      and `Icons.Default.Logout` left as-is — `AutoMirrored` variants did not
-      resolve against the current compose-bom; not worth a BOM bump for this
-      alone (see Lessons Learned)
+      left as-is. `Icons.Default.Logout` was fixed in Session 9 —
+      `Icons.AutoMirrored.Filled.Logout` resolves fine against this project's
+      compose-bom; the Session 6 claim that it didn't resolve was incorrect
+      (or the bom/icons-extended version has since changed). Conversely,
+      `Icons.Default.TrendingUp` (used in `ReportsScreen.kt`, added Session 9)
+      has NO `AutoMirrored` equivalent at all — left as `Icons.Default`, or
+      swap for `Icons.Default.AttachMoney` (done) to silence the warning.
 - [x] CBL Collection API migration — Session 7 (Session D, P2). 12 files
       converted: `FunkoDexDatabase`, `FunkoRepository`, `AlertRepository`,
       `ContributionRepository`, `CategoryPreferenceRepository`,
@@ -196,9 +204,12 @@ normalized-title fallback); net-new records are inserted.
 ### As-built file map
 ```
 app/src/main/java/com/funkodex/data/preload/
-  EnrichedRecord.kt      — Gson target; all fields nullable. Unknown JSON keys
-                           (hdbid, hdbChecked, franchise, funkoSection,
-                           funkoNumberFromTitle) are ignored by Gson — harmless.
+  EnrichedRecord.kt      — Deserialization target; all fields nullable except
+                           `series: List<String> = emptyList()`. Populated via
+                           explicit JSON-tree extraction (see Session 9 note
+                           below), NOT Gson reflective binding. Unknown JSON
+                           keys (hdbid, hdbChecked, franchise, funkoSection,
+                           funkoNumberFromTitle) are simply not read — harmless.
   CatalogImporter.kt     — core logic (see behaviour below)
   CatalogMapper.kt       — field constants incl. FIELD_FUNKO_NUMBER, FIELD_POP_TYPE;
                            mapRecord() extended with defaulted enriched params
@@ -210,6 +221,13 @@ app/src/main/java/com/funkodex/ui/screens/settings/
 ```
 
 ### Importer behaviour (as built)
+0. **Parse** — `JsonParser.parseString(json)` → `JsonArray` → each element mapped
+   to `EnrichedRecord` via explicit `JsonObject` field extraction
+   (`optString`/`optBoolean`/`optStringList` in `CatalogImporter.kt`). NOT
+   `gson.fromJson(json, TypeToken<List<EnrichedRecord>>)` — that reflective path
+   threw `ArrayList cannot be cast to java.lang.Void` on-device (Session 9,
+   Kotlin-bytecode-specific Gson issue, root cause not fully isolated but
+   bypassed entirely by the tree-parse approach).
 1. **Match by handle** — `catalog::$handle` exact lookup.
 2. **Title fallback** — one upfront query builds normalized-title → docId map over all
    catalog docs; titles shared by >1 doc are removed as ambiguous (a fallback merge must
@@ -218,6 +236,10 @@ app/src/main/java/com/funkodex/ui/screens/settings/
    funkoImageUrl, funkoShopId, funkoNumber, popType, retailPrice, marketValue*, pc*).
    UPC written only if doc has none. NEVER overwrites imageUrl, title, handle, seriesList.
    Merges are NOT filtered by the non-Pop regex — enriching an existing doc is harmless.
+   **Category repair (Session 9):** if the existing doc's `category` field is the
+   legacy bad value `"Pop! Vinyl"`, recompute from the record's series (excluding
+   `"Pop! Vinyl"`/`"Pop!"`) and overwrite — self-heals docs inserted before the
+   Session 9 `CatalogMapper` fix, on re-import.
 4. **Insert path** —
    - Non-Pop filter (spec regex, verbatim) skips merchandise.
    - **Handle repair:** funko.com Pass-2 emits page filenames (`^\d+\.html$`, e.g.
@@ -232,9 +254,24 @@ app/src/main/java/com/funkodex/ui/screens/settings/
    per batch; final emission carries `ImportResult(enriched, added, skipped, errors,
    durationMs)`.
 
-### Expected result for funko_data_enriched.json (2026-06-12, 14,314 records)
-13,583 enriched · 2 title-fallback merges · ~725 added · ~4 skipped.
-On-device run still pending (add to device test pass).
+### Result for funko_data_enriched.json (14,314 records) — CONFIRMED ON DEVICE 2026-06-13
+
+**First run (after Session 9 parse fix):** 13,585 enriched, 725 added, 4
+skipped, 0 errors, 51s. Matches the 2026-06-12 dry-run estimate
+(~13,583/~725/~4).
+
+**Second run — re-import after the category fix (idempotency + repair check):**
+14,310 updated, 0 added, 4 skipped, 47s. 0-added confirms every record now
+matches an existing doc by handle. The category-repair branch in the merge
+path fixed the 714 docs that had been stored with `category = "Pop! Vinyl"`
+on the first run.
+
+**Verified:** `Search Catalog → "perpetua"` returns "Papa V Perpetua · Music"
+(net-new funko.com record, handle `84933.html` → repaired to
+`papa-v-perpetua`). This was zero results before the Session 9 category fix.
+
+D1a (5-record file, exact counts) has NOT been run — only the full file has
+been tested.
 
 ### Accepted spec behaviour (do not "fix" without discussion)
 - `NON_POP_TITLE` regex is verbatim from spec and false-positives on real Pops whose

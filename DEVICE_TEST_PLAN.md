@@ -217,7 +217,8 @@
 
 **Pass criteria:**
 - Progress dialog shows live `processed / total` counts (14,314 total)
-- Result summary shows approximately: 13,583 enriched, ~725 added, ~4 skipped, 0 errors
+- Result summary shows approximately 13,583 enriched, ~725 added, ~4 skipped,
+  0 errors — **confirmed 2026-06-13: 13,585/725/4/0** on first run
 - Spot-check a known existing item (e.g. search "Twinkie the Kid") — detail screen should
   now show enriched data without `imageUrl`, `title`, or `seriesList` having changed
 - Spot-check a net-new item (e.g. search "Peacemaker on Peacecycle") — should appear as
@@ -246,4 +247,4 @@
 | 6. Fetch from catalog | | |
 | 7. App performance | | |
 | 8. Send to another phone | | |
-| 9. Enriched catalog import | | |
+| 9. Enriched catalog import | PARTIAL PASS | 2026-06-13. Confirmed: progress completed (14,314 total, batches of 500); first run 13,585/725/4/0 (51s), matches ~13,583/~725/~4 estimate; re-import gave 0 added/14,310 updated (idempotency criterion met); net-new item search confirmed via "perpetua" → "Papa V Perpetua · Music" (handle repaired from `84933.html` → `papa-v-perpetua`). **Not yet verified:** the "Twinkie the Kid" existing-item spot-check (imageUrl/title/seriesList unchanged), and the "Peacemaker on Peacecycle" / `91991.html`→`peacemaker-on-peacecycle` spot-check — both records confirmed present in the source JSON but not specifically checked on-device this session. |

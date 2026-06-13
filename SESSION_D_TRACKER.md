@@ -1,5 +1,11 @@
 # Session D — CBL Collection API Migration — Progress & Test Tracker
 
+> **Note:** The "End-of-session test checklist" below is superseded by
+> `TEST_TRACKER.md` (Parts A–E), which is the actively-maintained functional
+> test tracker as of Session 9. This file's checklist is kept for historical
+> reference to the Session D migration scope; do not update it further —
+> update `TEST_TRACKER.md` instead.
+
 Migration: `database.X()` / `DataSource.database(db)` / database-level change
 listeners → `collection.X()` / `DataSource.collection(col)` / collection-level
 listeners, via `db.getCollection()` (new accessor → `database.defaultCollection`,
@@ -18,7 +24,7 @@ non-null).
 | `data/preload/CatalogPreloader.kt` | DONE | 8 sites; `ensureCatalogIndexes` now takes `Collection` param |
 | `data/preload/CatalogImporter.kt` | DONE | 8 sites; `buildTitleIndex` now takes `Collection` param |
 | `data/preload/CatalogRefreshWorker.kt` | DONE | 12 sites across 3 functions; `inBatch` stays on `database` in all 3 |
-| `network/FunkoLookupService.kt` | DONE | 2 DataSource.database → collection |
+| `network/FunkoLookupService.kt` | DONE | 2 DataSource.database → collection. **Session 9:** found+fixed a 3rd missed site — `db.getDatabase().getDocument(docId)` → `db.getCollection().getDocument(docId)` (was using the deprecated `Database.getDocument`, only surfaced as a compiler warning, not caught by this migration's original sweep) |
 | `network/ConnectivityObserver.kt` | DONE | 7 sites: getDocument/save/delete/DataSource all converted |
 | `ui/screens/settings/DatabaseTransferViewModel.kt` | DONE | export/import/forceRestore all converted; `liveCollection` obtained AFTER `db.reopen()` in force-restore so it reflects the fresh DB instance; `inBatch` stays on `liveDb` |
 

@@ -67,8 +67,10 @@ class CategoryPreferenceRepository @Inject constructor(
         query.execute().use { rs ->
             rs.allResults().mapNotNull { result ->
                 val docId = result.getString("id") ?: return@mapNotNull null
-                collection.getDocument(docId)
-                    ?.getString(FunkoDexDatabase.FIELD_CAT_NAME)
+                // The enabled set must hold category KEYS (e.g. "pop_disney") to match
+                // the filter in FunkoLookupService (`toKey(item.category) in enabled`).
+                // Doc ID format is "cat_pref::{categoryKey}", so derive the key from it.
+                docId.removePrefix("cat_pref::")
             }.toSet()
         }
     }

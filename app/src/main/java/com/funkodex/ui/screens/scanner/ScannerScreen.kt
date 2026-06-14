@@ -904,23 +904,6 @@ private fun NotFoundSheet(
                     Icon(Icons.Default.Close, "Close")
                 }
             }
-            // Manual UPC entry — for when the camera couldn't resolve the barcode
-            var manualUpc by remember { mutableStateOf(state.upc) }
-            OutlinedTextField(
-                value         = manualUpc,
-                onValueChange = { manualUpc = it },
-                label         = { Text("UPC (edit if scanned incorrectly)") },
-                singleLine    = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier      = Modifier.fillMaxWidth(),
-                trailingIcon  = {
-                    if (manualUpc != state.upc && manualUpc.length >= 8) {
-                        TextButton(onClick = { onQueryChange(""); /* trigger re-lookup via upc */ }) {
-                            Text("Retry", style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                }
-            )
             Text(HelpContent.SCANNER_NOT_FOUND_BODY,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)

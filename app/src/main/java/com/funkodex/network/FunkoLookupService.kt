@@ -73,16 +73,20 @@ class FunkoLookupService @Inject constructor(
         val enabled = categoryPrefs.getEnabledCategories()
         val localResults = searchLocalByName(query)
         val results = if (localResults.isNotEmpty()) localResults else searchChannel3ByName(query)
-        // Apply category filter — only show items whose category is enabled.
-        // `enabled` holds normalized category KEYS (e.g. "pop_music"); item.category
-        // is a display string (e.g. "Pop! Music"), so normalize via the canonical
-        // FunkoCategories.toKey() before comparing. (The previous raw substring
-        // check never matched real categories — "Pop! Music".contains("pop_music")
-        // is false — so it only passed items via the empty-category escape hatch.)
+        // Apply category filter. Hide an item ONLY when its category is a
+        // RECOGNIZED Pop! line that the user has explicitly disabled. Items with
+        // a blank category, or a category not in the canonical list (e.g.
+        // enriched records whose series tags had no clean "Pop! X" line), were
+        // never deliberately turned off — so they must pass through, not vanish.
         if (enabled.isEmpty()) results
-        else results.filter { item ->
-            item.category.isEmpty() ||
-            com.funkodex.data.model.FunkoCategories.toKey(item.category) in enabled
+        else {
+            val knownKeys = com.funkodex.data.model.FunkoCategories.ALL
+                .map { it.key }.toSet()
+            results.filter { item ->
+                if (item.category.isEmpty()) return@filter true
+                val key = com.funkodex.data.model.FunkoCategories.toKey(item.category)
+                key !in knownKeys || key in enabled
+            }
         }
     }
 

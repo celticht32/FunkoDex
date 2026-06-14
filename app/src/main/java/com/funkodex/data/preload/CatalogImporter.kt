@@ -213,6 +213,15 @@ class CatalogImporter @Inject constructor(
                                     mutable.setString(CatalogMapper.FIELD_UPC, it)
                                 }
                             }
+                            record.imageName?.takeIf { it.isNotBlank() }?.let {
+                                // Fill the primary display image only when the existing doc
+                                // has none. Never overwrite a present image (it may be a
+                                // good HobbyDB CDN URL), but a doc first created without an
+                                // image should self-heal on re-import.
+                                if (existing.getString(CatalogMapper.FIELD_IMAGE_URL).isNullOrBlank()) {
+                                    mutable.setString(CatalogMapper.FIELD_IMAGE_URL, it)
+                                }
+                            }
                             record.price?.let { raw ->
                                 val parsed = raw.replace(Regex("[^0-9.]"), "").toDoubleOrNull()
                                 if (parsed != null && parsed > 0.0) {

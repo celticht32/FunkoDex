@@ -1354,11 +1354,13 @@ private fun EditContent(
         }
         OutlinedTextField(
             value         = draft.upc,
-            onValueChange = onUpc,
+            onValueChange = {},
+            readOnly      = true,
             label         = { Text("UPC") },
+            placeholder   = { Text("Scan barcode to set") },
+            supportingText = { Text("UPC can only be set by scanning the barcode") },
             modifier      = Modifier.fillMaxWidth(),
             singleLine    = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             trailingIcon  = {
                 IconButton(onClick = {
                     if (cameraPermission.status.isGranted) showUpcScanner = true

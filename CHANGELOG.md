@@ -7,7 +7,81 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] — Session 10 — 2026-06-13
 
+### Changed
+
+**UPC is now set by camera scan only — manual entry removed everywhere**
+
+- Hand-typing a UPC from the printed box text stored a wrong value: the
+  human-readable digits under a barcode commonly omit the leading number-system
+  digit and the trailing check digit (e.g. box shows "89698 21921" but the
+  real UPC-A is `889698219211`). A hand-typed short value fails exact-match
+  duplicate detection and would propagate a bad UPC to the community database.
+- `DetailScreen.kt` — the edit-screen UPC field is now `readOnly`; the only
+  way to set it is the scan icon (camera → `UpcScanDialog`). Caption notes
+  "UPC can only be set by scanning the barcode."
+- `ScannerScreen.kt` — removed the manual UPC text field from the scanner's
+  "not found" sheet; name-search remains as the recovery path when a barcode
+  can't be read.
+
+**Detail screen — removed the "Funko ID" row**
+
+- `funkoId` is an internal product-ID/slug populated only when a lookup
+  source supplies it, so it was blank ("—") for most items and added no
+  collector-facing value. Removed the `DetailRow("Funko ID", …)` from the
+  Detail screen. The `funkoId` field remains in the model and is still
+  stored/matched against — only the display row was removed.
+
 ### Fixed
+
+**Catalog name search returned nothing once category prefs were seeded**
+
+- `CategoryPreferenceRepository.getEnabledCategories()` returned category
+  *display names* ("Pop! Disney"), but the search filter in `FunkoLookupService`
+  compares category *keys* (`toKey(item.category)` → "pop_disney"). Names never
+  equal keys, so the filter silently dropped every result. Because the app
+  auto-seeds all categories as enabled on first run (`ensureDefaults`, marker
+  `system::cat_prefs_seeded_v3`), the enabled set is never empty — so this broke
+  catalog search for effectively every user, not just those who used the filter.
+- Fix: `getEnabledCategories()` now derives the key from the doc ID
+  (`cat_pref::{key}`), so the enabled set holds keys that match the filter.
+
+**Catalog items with blank/unrecognized categories were hidden from search**
+
+- The category filter hid any item whose `toKey(category)` wasn't in the enabled
+  set — which silently dropped items with a blank category or a category not in
+  the canonical list (e.g. enriched records whose series tags had no clean
+  "Pop! X" line, like "Papa V Perpetua" → series `["Pop! Vinyl","Music"]` →
+  category "").
+- `FunkoLookupService.searchByName` now hides an item only when its category is
+  a RECOGNIZED Pop! line that is explicitly disabled; blank/unknown categories
+  pass through.
+
+**Catalog image not backfilled on re-import for items created without one**
+
+- `CatalogImporter` merge path wrote enriched fields but never `imageUrl`, to
+  avoid clobbering a good HobbyDB image. Side effect: a doc first created with a
+  blank image stayed imageless across all re-imports.
+- On update, `imageUrl` is now filled from the record only when the existing
+  doc's image is blank (mirrors the existing fill-if-blank UPC pattern) — never
+  overwrites a present image.
+
+**"Fetch from catalog" couldn't recover an item with a blank image URL**
+
+- `DetailViewModel.fetchImageFromCatalog` bailed immediately when the item's own
+  `imageUrl` was empty. It now resolves a URL from the linked catalog doc
+  (`catalogRef` → `imageUrl`, then `funkoImageUrl` fallback), persists it onto
+  the item, then downloads — so a blank-image item can recover without a full
+  re-import.
+
+**"Fetch from catalog" failures now report the real cause**
+
+- The fetch error was a generic "could not download… no internet / not available
+  / exceeds 600KB" list. `ImageBlobRepository` now returns a specific result
+  (`Success`, `HttpError(code)`, `TooLarge(bytes)`, `NetworkError`, etc.) and the
+  dialog shows the actual reason — e.g. a dead HobbyDB URL now reports a clear
+  404 instead of three guesses. Also fixed a latent PNG magic-byte check
+  (`bytes[0] == 0x89`). The legacy `downloadAndStore(): Boolean` is preserved for
+  fire-and-forget callers.
 
 **Detail screen — Category never displayed; Series mis-imported as "Funko"**
 

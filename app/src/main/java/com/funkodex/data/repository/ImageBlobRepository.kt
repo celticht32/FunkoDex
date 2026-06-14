@@ -42,16 +42,24 @@ class ImageBlobRepository @Inject constructor(
      * Download and store the image blob for the given item.
      * Silently no-ops if the item has no imageUrl or already has a blob.
      */
-    suspend fun downloadAndStore(item: FunkoItem): Boolean = withContext(Dispatchers.IO) {
-        if (item.imageUrl.isEmpty()) return@withContext false
-        if (item.id.isEmpty())       return@withContext false
+    suspend fun downloadAndStore(item: FunkoItem): Boolean =
+        downloadAndStoreResult(item) is ImageFetchResult.Success
+
+    /**
+     * Like [downloadAndStore] but returns a specific outcome so callers (e.g. the
+     * detail-screen "Fetch from catalog" action) can show an accurate error
+     * instead of a generic "could not download" with a list of maybe-causes.
+     */
+    suspend fun downloadAndStoreResult(item: FunkoItem): ImageFetchResult = withContext(Dispatchers.IO) {
+        if (item.imageUrl.isEmpty()) return@withContext ImageFetchResult.NoUrl
+        if (item.id.isEmpty())       return@withContext ImageFetchResult.NoUrl
 
         val collection = db.getCollection()
 
         // Skip if blob already stored
         val existing = collection.getDocument(item.id)
         if (existing?.getBlob(FunkoDexDatabase.FIELD_THUMBNAIL_BLOB) != null) {
-            return@withContext true
+            return@withContext ImageFetchResult.Success
         }
 
         return@withContext runCatching {
@@ -63,13 +71,13 @@ class ImageBlobRepository @Inject constructor(
             val bytes = client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     FunkoDexLogger.w(TAG, "Image fetch failed ${response.code} for ${item.name}")
-                    return@runCatching false
+                    return@runCatching ImageFetchResult.HttpError(response.code)
                 }
-                response.body?.bytes() ?: return@runCatching false
+                response.body?.bytes() ?: return@runCatching ImageFetchResult.EmptyBody
             }
             if (bytes.size > MAX_BYTES) {
                 FunkoDexLogger.w(TAG, "Image too large (${bytes.size}B) for ${item.name} — skipping")
-                return@runCatching false
+                return@runCatching ImageFetchResult.TooLarge(bytes.size)
             }
 
             // Detect MIME type from magic bytes
@@ -79,6 +87,7 @@ class ImageBlobRepository @Inject constructor(
                 bytes[1] == 0xD8.toByte() &&
                 bytes[2] == 0xFF.toByte() -> "image/jpeg"
                 bytes.size >= 8 &&
+                bytes[0] == 0x89.toByte() &&
                 bytes[1] == 0x50.toByte() &&
                 bytes[2] == 0x4E.toByte() &&
                 bytes[3] == 0x47.toByte() -> "image/png"
@@ -86,15 +95,26 @@ class ImageBlobRepository @Inject constructor(
             }
 
             // Upsert the blob onto the existing document
-            val doc = collection.getDocument(item.id)?.toMutable() ?: return@runCatching false
+            val doc = collection.getDocument(item.id)?.toMutable()
+                ?: return@runCatching ImageFetchResult.NoUrl
             doc.setBlob(FunkoDexDatabase.FIELD_THUMBNAIL_BLOB, Blob(mimeType, bytes))
             collection.save(doc)
 
             FunkoDexLogger.d(TAG, "Stored ${bytes.size}B image for ${item.name}")
-            true
+            ImageFetchResult.Success
         }.getOrElse { e ->
             FunkoDexLogger.e(TAG, "Image download failed for ${item.name}: ${e.message}")
-            false
+            ImageFetchResult.NetworkError(e.message ?: "unknown error")
         }
     }
+}
+
+/** Specific outcome of an image fetch, so the UI can show an accurate reason. */
+sealed class ImageFetchResult {
+    object Success : ImageFetchResult()
+    object NoUrl : ImageFetchResult()
+    object EmptyBody : ImageFetchResult()
+    data class HttpError(val code: Int) : ImageFetchResult()
+    data class TooLarge(val bytes: Int) : ImageFetchResult()
+    data class NetworkError(val message: String) : ImageFetchResult()
 }

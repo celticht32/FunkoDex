@@ -395,10 +395,24 @@ class DetailViewModel @Inject constructor(
             is DetailUiState.Editing -> s.draft
             else -> null
         } ?: return
-        if (item.imageUrl.isEmpty()) {
+        // Resolve an image URL. Prefer the item's own imageUrl; if blank, fall
+        // back to the linked catalog doc (catalogRef → catalog::{handle}),
+        // trying its imageUrl then funkoImageUrl. This lets items that were
+        // created without an image still recover one without a full re-import.
+        var resolvedUrl = item.imageUrl
+        if (resolvedUrl.isEmpty() && item.catalogRef.isNotEmpty()) {
+            val catalogDoc = db.getCollection().getDocument(item.catalogRef)
+            resolvedUrl = catalogDoc?.getString(com.funkodex.data.preload.CatalogMapper.FIELD_IMAGE_URL)
+                ?.takeIf { it.isNotBlank() }
+                ?: catalogDoc?.getString(com.funkodex.data.preload.CatalogMapper.FIELD_FUNKO_IMAGE)
+                    ?.takeIf { it.isNotBlank() }
+                ?: ""
+        }
+        if (resolvedUrl.isEmpty()) {
             _fetchState.value = FetchState.Failed("No catalog image URL available for this item")
             return
         }
+        val itemWithUrl = item.copy(id = itemId, imageUrl = resolvedUrl)
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             _fetchState.value = FetchState.Fetching
             _photoError.value = null
@@ -406,22 +420,35 @@ class DetailViewModel @Inject constructor(
             val doc = db.getCollection().getDocument(itemId)?.toMutable()
             if (doc != null) {
                 doc.remove(com.funkodex.data.db.FunkoDexDatabase.FIELD_THUMBNAIL_BLOB)
+                // Persist the resolved URL onto the item so future fetches/displays have it
+                doc.setString(com.funkodex.data.db.FunkoDexDatabase.FIELD_IMAGE_URL, resolvedUrl)
                 db.getCollection().save(doc)
             }
-            val success = imageBlobs.downloadAndStore(item.copy(id = itemId))
-            if (success) {
+            val result = imageBlobs.downloadAndStoreResult(itemWithUrl)
+            if (result is com.funkodex.data.repository.ImageFetchResult.Success) {
                 val bytes = db.getCollection().getDocument(itemId)
                     ?.getBlob(com.funkodex.data.db.FunkoDexDatabase.FIELD_THUMBNAIL_BLOB)
                     ?.content
                 _photoBytes.value = bytes
                 _fetchState.value = FetchState.Success
             } else {
-                _fetchState.value = FetchState.Failed(
-                    "Could not download image from catalog.\n\n" +
-                    "Checked: ${item.imageUrl}\n\n" +
-                    "Possible causes: no internet connection, image not available in catalog, " +
-                    "or image exceeds size limit (600KB)."
-                )
+                val reason = when (result) {
+                    is com.funkodex.data.repository.ImageFetchResult.HttpError ->
+                        if (result.code == 404)
+                            "The catalog image no longer exists (404). This record's image URL is dead — try a different copy or add your own photo."
+                        else
+                            "The image server returned an error (HTTP ${result.code})."
+                    is com.funkodex.data.repository.ImageFetchResult.TooLarge ->
+                        "Image is too large (${result.bytes / 1024} KB; limit is ${600_000 / 1024} KB)."
+                    is com.funkodex.data.repository.ImageFetchResult.NetworkError ->
+                        "Network error: ${result.message}. Check your connection and try again."
+                    is com.funkodex.data.repository.ImageFetchResult.EmptyBody ->
+                        "The image server returned an empty response."
+                    is com.funkodex.data.repository.ImageFetchResult.NoUrl ->
+                        "No catalog image URL available for this item."
+                    else -> "Could not download the image."
+                }
+                _fetchState.value = FetchState.Failed("$reason\n\nURL: $resolvedUrl")
             }
         }
     }

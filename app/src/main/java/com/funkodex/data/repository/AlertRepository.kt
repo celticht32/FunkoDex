@@ -107,7 +107,7 @@ class AlertRepository @Inject constructor(
             trySend(alert)
         }
         query.execute()
-        awaitClose { query.removeChangeListener(token) }
+        awaitClose { token.remove() }
     }.flowOn(Dispatchers.IO)
 
     // ─── Mapping helpers ──────────────────────────────────────────────────────

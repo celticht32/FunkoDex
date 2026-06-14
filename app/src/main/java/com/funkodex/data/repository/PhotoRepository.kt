@@ -124,10 +124,10 @@ class PhotoRepository @Inject constructor(
      */
     suspend fun deletePhoto(itemId: String): Boolean = withContext(Dispatchers.IO) {
         runCatching {
-            val doc = db.getDatabase().getDocument(itemId)?.toMutable()
+            val doc = db.getCollection().getDocument(itemId)?.toMutable()
                 ?: return@runCatching false
             doc.remove(FIELD_USER_PHOTO)
-            db.getDatabase().save(doc)
+            db.getCollection().save(doc)
             true
         }.getOrElse { false }
     }
@@ -137,7 +137,7 @@ class PhotoRepository @Inject constructor(
      * Returns null if no user photo is stored.
      */
     suspend fun getPhotoBytes(itemId: String): ByteArray? = withContext(Dispatchers.IO) {
-        db.getDatabase().getDocument(itemId)
+        db.getCollection().getDocument(itemId)
             ?.getBlob(FIELD_USER_PHOTO)
             ?.content
     }
@@ -193,8 +193,8 @@ class PhotoRepository @Inject constructor(
     }
 
     private fun storeBlob(itemId: String, bytes: ByteArray) {
-        val doc = db.getDatabase().getDocument(itemId)?.toMutable() ?: return
+        val doc = db.getCollection().getDocument(itemId)?.toMutable() ?: return
         doc.setBlob(FIELD_USER_PHOTO, Blob("image/jpeg", bytes))
-        db.getDatabase().save(doc)
+        db.getCollection().save(doc)
     }
 }

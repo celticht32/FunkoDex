@@ -46,7 +46,7 @@ class CategoryPreferenceRepository @Inject constructor(
             }
         }
         query.execute()
-        awaitClose { query.removeChangeListener(token) }
+        awaitClose { token.remove() }
     }.flowOn(Dispatchers.IO)
 
     /** Set of enabled category KEYS — used for fast filtering in queries */

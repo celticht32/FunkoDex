@@ -909,15 +909,16 @@ fun CatalogDataSection(
                         Text("Refresh interval", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf(1 to "Daily", 7 to "Weekly", 14 to "Bi-weekly", 30 to "Monthly")
-                                .forEach { (days, label) ->
-                                    FilterChip(
-                                        selected = config.intervalDays == days,
-                                        onClick  = { viewModel.setIntervalDays(days) },
-                                        label    = { Text(label, fontSize = 11.sp) }
-                                    )
-                                }
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            val options = listOf(1 to "Daily", 7 to "Weekly", 14 to "Bi-weekly", 30 to "Monthly")
+                            options.forEachIndexed { index, (days, label) ->
+                                SegmentedButton(
+                                    selected = config.intervalDays == days,
+                                    onClick  = { viewModel.setIntervalDays(days) },
+                                    shape    = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                                    label    = { Text(label, fontSize = 12.sp, maxLines = 1) }
+                                )
+                            }
                         }
                     }
 

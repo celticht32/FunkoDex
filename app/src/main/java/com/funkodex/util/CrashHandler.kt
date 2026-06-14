@@ -60,6 +60,7 @@ class CrashHandler private constructor(
         }
     }
 
+    @Suppress("DEPRECATION") // thread.id retained; Thread.threadId() requires verifying availability on minSdk 26
     private fun writeCrashReport(thread: Thread, throwable: Throwable) {
         val logDir = File(filesDir, LOG_DIR).also { it.mkdirs() }
         val ts     = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())

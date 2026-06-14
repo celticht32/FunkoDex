@@ -240,7 +240,7 @@
 | Test | Result | Notes |
 |------|--------|-------|
 | 1. First launch / catalog preload | PASS (VM) | Verified on emulator — splash-gated preload completes, Collection loads, manual search returns catalog results. No physical-device dependency. |
-| 2. UPC scan — add screen | | |
+| 2. UPC scan — add screen | PASS | 2026-06-13. Verified on device (Galaxy S23, SM-S911U). Scanned a physical box barcode from the add flow; camera opened, barcode read, catalog match found and item added (e.g. Tinker Bell scanned in successfully). |
 | 3. UPC scan — edit screen | | |
 | 4. Manual search keyboard dismiss | PASS (VM) | Verified on emulator — keyboard dismisses on Done, results render, list selectable. No physical-device dependency. |
 | 5. Check screen | | |

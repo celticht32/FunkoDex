@@ -9,6 +9,46 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+**Detail screen — Category never displayed; Series mis-imported as "Funko"**
+
+- Two linked problems. (1) The edit form had no Category control and the
+  ViewModel had no `updateCategory`, so a scanned item's category could
+  never be set or corrected by hand — it showed blank on the Detail screen.
+  (2) The Channel3 lookup mapper fell back to `brand` when no `series`
+  attribute was returned (`franchise = attributes?.get("series") ?: brand`),
+  writing the manufacturer "Funko" into the Series field on every scan that
+  lacked taxonomy.
+- `FunkoLookupService.kt` — dropped the `brand` fallback; Series is left
+  blank when the source has no real series, rather than falsely set to "Funko".
+- `DetailViewModel.kt` — added `updateCategory`, which sets `category` and
+  re-derives `genre` via `FunkoGenre.fromCategory`.
+- `DetailScreen.kt` — added a grouped Category dropdown (driven by
+  `FunkoCategories.ALL`), a read-only Genre row on both Detail and edit that
+  updates live with category, relabeled Series with a hint, and an info-icon
+  explainer describing Series vs Category vs Genre.
+
+**Catalog refresh — "Refresh now" gave no feedback; "Last refreshed" never shown**
+
+- `CatalogRefreshWorker` wrote its timestamp to the catalog marker document,
+  but nothing wrote `LAST_REFRESH_KEY` into the settings DataStore the UI
+  reads, so the "Last refreshed" line never rendered and the button appeared
+  to do nothing.
+- `CatalogRefreshWorker.kt::runNow` now returns the enqueued request UUID.
+- `CatalogSettingsViewModel.kt` — `refreshNow` observes the worker via
+  `getWorkInfoByIdFlow`, writes today's date to the DataStore on success, and
+  exposes a `RefreshUiState` (Running / UpToDate / Added / Failed).
+- `SettingsScreen.kt` — inline status text by the button: "Refreshing…",
+  then "Catalog already up to date" / "Added N new records" / "Refresh failed".
+- `libs.versions.toml` — WorkManager bumped 2.9.1 → 2.10.1 for
+  `getWorkInfoByIdFlow`.
+
+### Testing
+
+**Device test 7 (App performance) — PASS**
+
+- Verified on device (Galaxy S23, SM-S911U). Performance acceptable —
+  responsive in normal use, no notable jank observed.
+
 **Reports — "Est. Market Value" and "Total Retail Value" always showed $0.00**
 
 - Root cause: `FunkoItem.marketAvg` and `retailPrice` were only ever *read*

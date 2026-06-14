@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.funkodex.data.model.Condition
 import com.funkodex.data.model.FunkoItem
+import com.funkodex.data.model.FunkoGenre
 import com.funkodex.data.model.ResolvedPrice
 import com.funkodex.data.repository.FunkoRepository
 import com.funkodex.network.PriceService
@@ -196,6 +197,9 @@ class DetailViewModel @Inject constructor(
     fun updatePricePaid(value: String)       = updateDraft { it.copy(pricePaid = value.toDoubleOrNull() ?: it.pricePaid) }
     fun updateCondition(value: Condition)    = updateDraft { it.copy(condition = value) }
     fun updateNotes(value: String)           = updateDraft { it.copy(notes = value) }
+    fun updateCategory(value: String)        = updateDraft {
+        it.copy(category = value, genre = FunkoGenre.fromCategory(value))
+    }
     fun updateUpc(value: String)             = updateDraft { it.copy(upc = value) }
 
     fun clearMissingOriginal() {

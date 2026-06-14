@@ -245,6 +245,6 @@
 | 4. Manual search keyboard dismiss | PASS (VM) | Verified on emulator — keyboard dismisses on Done, results render, list selectable. No physical-device dependency. |
 | 5. Check screen | | |
 | 6. Fetch from catalog | | |
-| 7. App performance | | |
+| 7. App performance | PASS | 2026-06-13. Verified on device (Galaxy S23, SM-S911U). Performance acceptable — responsive in normal use, no notable jank observed. |
 | 8. Send to another phone | | |
 | 9. Enriched catalog import | PARTIAL PASS | 2026-06-13. Confirmed: progress completed (14,314 total, batches of 500); first run 13,585/725/4/0 (51s), matches ~13,583/~725/~4 estimate; re-import gave 0 added/14,310 updated (idempotency criterion met); net-new item search confirmed via "perpetua" → "Papa V Perpetua · Music" (handle repaired from `84933.html` → `papa-v-perpetua`). **Not yet verified:** the "Twinkie the Kid" existing-item spot-check (imageUrl/title/seriesList unchanged), and the "Peacemaker on Peacecycle" / `91991.html`→`peacemaker-on-peacecycle` spot-check — both records confirmed present in the source JSON but not specifically checked on-device this session. |

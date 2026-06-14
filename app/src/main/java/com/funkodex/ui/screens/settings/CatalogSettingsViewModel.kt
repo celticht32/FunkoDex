@@ -5,6 +5,8 @@ import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.funkodex.data.model.CatalogRefreshConfig
 import com.funkodex.data.model.CatalogSource
 import com.funkodex.data.preload.CatalogRefreshWorker
@@ -53,6 +55,10 @@ class CatalogSettingsViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CatalogRefreshConfig())
 
+    // Inline feedback for the "Refresh now" button
+    private val _refreshState = MutableStateFlow<RefreshUiState>(RefreshUiState.Idle)
+    val refreshState: StateFlow<RefreshUiState> = _refreshState.asStateFlow()
+
     fun setEnabled(enabled: Boolean) = update { it[ENABLED_KEY] = enabled }
     fun setIntervalDays(days: Int)   = update { it[INTERVAL_KEY] = days.coerceIn(1, 30) }
 
@@ -77,8 +83,37 @@ class CatalogSettingsViewModel @Inject constructor(
     fun setHobbyDbEnabled(v: Boolean)= update { it[HOBBYDB_KEY] = v }
 
     fun refreshNow() {
-        CatalogRefreshWorker.runNow(context)
+        _refreshState.value = RefreshUiState.Running
+        val requestId = CatalogRefreshWorker.runNow(context)
+        viewModelScope.launch {
+            WorkManager.getInstance(context)
+                .getWorkInfoByIdFlow(requestId)
+                .collect { info ->
+                    if (info == null) return@collect
+                    when (info.state) {
+                        WorkInfo.State.SUCCEEDED -> {
+                            val newItems = info.outputData.getInt("new_items", 0)
+                            val merged   = info.outputData.getInt("upcs_merged", 0)
+                            // Persist the refresh date so the UI's "Last refreshed" line shows it
+                            context.catalogDataStore.edit {
+                                it[LAST_REFRESH_KEY] = LocalDate.now().toString()
+                            }
+                            _refreshState.value =
+                                if (newItems == 0 && merged == 0) RefreshUiState.UpToDate
+                                else RefreshUiState.Added(newItems, merged)
+                            return@collect
+                        }
+                        WorkInfo.State.FAILED -> {
+                            _refreshState.value = RefreshUiState.Failed
+                            return@collect
+                        }
+                        else -> { /* ENQUEUED / RUNNING / BLOCKED — keep showing Running */ }
+                    }
+                }
+        }
     }
+
+    fun clearRefreshState() { _refreshState.value = RefreshUiState.Idle }
 
     // ─── OAuth helpers ───────────────────────────────────────────────────────────
     fun isHobbyDbConnected(): Boolean = secureKeyStore.hasHobbyDbToken() && secureKeyStore.isHobbyDbTokenValid()
@@ -102,4 +137,13 @@ class CatalogSettingsViewModel @Inject constructor(
             RefreshScheduler.applyConfig(context, config.value)
         }
     }
+}
+
+/** Inline UI state for the "Refresh now" button. */
+sealed class RefreshUiState {
+    data object Idle     : RefreshUiState()
+    data object Running  : RefreshUiState()
+    data object UpToDate : RefreshUiState()
+    data object Failed   : RefreshUiState()
+    data class  Added(val newItems: Int, val mergedUpcs: Int) : RefreshUiState()
 }

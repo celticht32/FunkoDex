@@ -334,7 +334,7 @@ class FunkoLookupService @Inject constructor(
                 upc               = upcVal,
                 funkoId           = id ?: "",
                 name              = name ?: "Unknown",
-                franchise         = attributes?.get("series") ?: brand ?: "",
+                franchise         = attributes?.get("series") ?: "",
                 seriesNumber      = attributes?.get("number") ?: "",
                 category          = category ?: "",
                 imageUrl          = imageUrl ?: "",

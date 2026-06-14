@@ -851,6 +851,7 @@ fun CatalogDataSection(
     viewModel: CatalogSettingsViewModel = hiltViewModel()
 ) {
     val config              by viewModel.config.collectAsState()
+    val refreshState        by viewModel.refreshState.collectAsState()
     var showChannel3Dialog  by remember { mutableStateOf(false) }
     var channel3KeyDraft    by remember { mutableStateOf(config.channel3ApiKey) }
     var hobbyDbConnected    by remember { mutableStateOf(viewModel.isHobbyDbConnected()) }
@@ -946,11 +947,21 @@ fun CatalogDataSection(
 
                     OutlinedButton(
                         onClick  = viewModel::refreshNow,
+                        enabled  = refreshState !is RefreshUiState.Running,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Default.Refresh, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Refresh now")
+                        Text(if (refreshState is RefreshUiState.Running) "Refreshing…" else "Refresh now")
+                    }
+                    when (val rs = refreshState) {
+                        is RefreshUiState.UpToDate -> RefreshStatusText("Catalog already up to date")
+                        is RefreshUiState.Failed   -> RefreshStatusText("Refresh failed — check your connection", isError = true)
+                        is RefreshUiState.Added    -> RefreshStatusText(
+                            "Added ${rs.newItems} new record" + (if (rs.newItems == 1) "" else "s") +
+                            (if (rs.mergedUpcs > 0) ", ${rs.mergedUpcs} UPCs merged" else "")
+                        )
+                        else -> {}
                     }
                 }
             }
@@ -1106,3 +1117,14 @@ private class OpenDocumentInDownloads : ActivityResultContracts.OpenDocument() {
     }
 }
 
+
+@Composable
+private fun RefreshStatusText(message: String, isError: Boolean = false) {
+    Text(
+        message,
+        style = MaterialTheme.typography.labelSmall,
+        color = if (isError) MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+}

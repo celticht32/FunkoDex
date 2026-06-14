@@ -40,6 +40,8 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsNone
 import com.funkodex.data.model.Condition
 import com.funkodex.data.model.FunkoItem
+import com.funkodex.data.model.FunkoGenre
+import com.funkodex.data.model.FunkoCategories
 import com.funkodex.ui.screens.detail.PriceUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -296,6 +298,7 @@ fun DetailScreen(
                     onPrice    = viewModel::updatePricePaid,
                     onCondition= viewModel::updateCondition,
                     onNotes    = viewModel::updateNotes,
+                    onCategory = viewModel::updateCategory,
                     onUpc      = viewModel::updateUpc,
                     photoBytes        = photoBytes,
                     onSavePhoto       = viewModel::setPendingPhoto,
@@ -496,10 +499,10 @@ private fun ViewContent(
                 DetailRow("Series",     item.franchise.ifEmpty { "—" })
                 if (item.seriesNumber.isNotEmpty()) DetailRow("Number", item.seriesNumber)
                 DetailRow("Category",   item.category.ifEmpty { "—" })
+                DetailRow("Genre",      item.genre.displayName)
                 DetailRow("Condition",  item.condition.name.lowercase().replaceFirstChar { it.uppercase() })
                 DetailRow("Price paid", if (item.pricePaid > 0) "${"$%.2f".format(item.pricePaid)}" else "—")
                 DetailRow("UPC",        item.upc.ifEmpty { "—" })
-                DetailRow("Funko ID",   item.funkoId.ifEmpty { "—" })
                 DetailRow("Date added", item.dateAdded.toString())
                 if (item.dateAcquired != null) DetailRow("Date acquired", item.dateAcquired.toString())
                 if (item.notes.isNotEmpty()) {
@@ -1174,7 +1177,7 @@ private fun DetailRow(
 // ─── Edit mode ─────────────────────────────────────────────────────────────────
 
 @Composable
-@OptIn(ExperimentalPermissionsApi::class)
+@OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 private fun EditContent(
     draft:             FunkoItem,
     onName:            (String) -> Unit,
@@ -1183,6 +1186,7 @@ private fun EditContent(
     onPrice:           (String) -> Unit,
     onCondition:       (Condition) -> Unit,
     onNotes:           (String) -> Unit,
+    onCategory:        (String) -> Unit,
     onUpc:             (String) -> Unit,
     photoBytes:        ByteArray?,
     onSavePhoto:       (android.net.Uri) -> Unit,
@@ -1224,6 +1228,7 @@ private fun EditContent(
                 value         = draft.franchise,
                 onValueChange = onSeries,
                 label         = { Text("Series") },
+                supportingText = { Text("The property on the box, e.g. Disney") },
                 modifier      = Modifier.weight(2f),
                 singleLine    = true,
             )
@@ -1233,6 +1238,81 @@ private fun EditContent(
                 label         = { Text("#") },
                 modifier      = Modifier.weight(1f),
                 singleLine    = true,
+            )
+        }
+
+        // Category dropdown (controlled vocabulary) + auto-derived genre + help
+        var categoryExpanded by remember { mutableStateOf(false) }
+        var showFieldHelp     by remember { mutableStateOf(false) }
+        ExposedDropdownMenuBox(
+            expanded         = categoryExpanded,
+            onExpandedChange = { categoryExpanded = it },
+        ) {
+            OutlinedTextField(
+                value         = draft.category.ifEmpty { "" },
+                onValueChange = {},
+                readOnly      = true,
+                label         = { Text("Category") },
+                placeholder   = { Text("Select a Funko product line") },
+                supportingText = {
+                    Text("Funko product line, e.g. Pop! Disney  ·  Genre: ${draft.genre.displayName}")
+                },
+                trailingIcon  = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { showFieldHelp = true }) {
+                            Icon(Icons.Default.Info, contentDescription = "What do these fields mean?")
+                        }
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded)
+                    }
+                },
+                modifier      = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+            )
+            ExposedDropdownMenu(
+                expanded         = categoryExpanded,
+                onDismissRequest = { categoryExpanded = false },
+            ) {
+                FunkoCategories.ALL
+                    .groupBy { it.genre }
+                    .forEach { (genre, defs) ->
+                        DropdownMenuItem(
+                            enabled = false,
+                            text    = {
+                                Text(
+                                    genre.displayName.uppercase(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            },
+                            onClick = {},
+                        )
+                        defs.forEach { def ->
+                            DropdownMenuItem(
+                                text    = { Text(def.displayName) },
+                                onClick = {
+                                    onCategory(def.displayName)
+                                    categoryExpanded = false
+                                },
+                            )
+                        }
+                    }
+            }
+        }
+        if (showFieldHelp) {
+            AlertDialog(
+                onDismissRequest = { showFieldHelp = false },
+                confirmButton    = {
+                    TextButton(onClick = { showFieldHelp = false }) { Text("Got it") }
+                },
+                title = { Text("About these fields") },
+                text  = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Series — the IP or property printed on the box, e.g. Disney, Star Wars, One Piece.")
+                        Text("Category — the official Funko product line, e.g. Pop! Disney, Pop! Movies. Pick from the list.")
+                        Text("Genre — set automatically from Category. Used for filtering and reports.")
+                    }
+                },
             )
         }
         OutlinedTextField(

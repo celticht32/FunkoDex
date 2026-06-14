@@ -91,7 +91,7 @@ class CatalogRefreshWorker(
             WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
         }
 
-        fun runNow(context: Context) {
+        fun runNow(context: Context): java.util.UUID {
             val request = OneTimeWorkRequestBuilder<CatalogRefreshWorker>()
                 .setConstraints(
                     Constraints.Builder()
@@ -100,6 +100,7 @@ class CatalogRefreshWorker(
                 )
                 .build()
             WorkManager.getInstance(context).enqueue(request)
+            return request.id
         }
     }
 

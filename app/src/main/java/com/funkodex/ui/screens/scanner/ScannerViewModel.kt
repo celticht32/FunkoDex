@@ -3,6 +3,7 @@ package com.funkodex.ui.screens.scanner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.funkodex.data.model.FunkoItem
+import com.funkodex.data.model.Condition
 import com.funkodex.data.model.PendingUpcScan
 import com.funkodex.data.repository.FunkoRepository
 import com.funkodex.data.repository.ImageBlobRepository
@@ -67,11 +68,41 @@ sealed class ScanState {
     /** Item saved to collection */
     data class Saved(val item: FunkoItem) : ScanState()
 
+    /**
+     * Manual entry of an item not found in the catalog. [upc] is carried from a
+     * scan when reached from the NotFound sheet ([upcLocked] = true), or blank
+     * and editable when reached from the toolbar manual-search sheet.
+     */
+    data class ManualAdd(
+        val upc: String = "",
+        val upcLocked: Boolean = false,
+    ) : ScanState()
+
     /** A5: No network — UPC queued for later lookup */
     data class Pending(val upc: String) : ScanState()
 
     data class Error(val message: String) : ScanState()
 }
+
+/**
+ * Form input for [ScannerViewModel.confirmManualAdd]. Only [name] is required;
+ * all other fields are optional and default to empty/sensible values so a
+ * record can be created from the minimum and fleshed out later.
+ */
+data class ManualAddInput(
+    val upc: String = "",
+    val name: String,
+    val seriesNumber: String = "",     // Pop! box number, e.g. "1496"
+    val franchise: String = "",
+    val category: String = "",
+    val isExclusive: Boolean = false,
+    val exclusiveRetailer: String = "",
+    val imageUrl: String = "",
+    val pricePaid: Double = 0.0,
+    val condition: Condition = Condition.MINT,
+    val isOwned: Boolean = true,
+    val shareToCommunity: Boolean = true,
+)
 
 @HiltViewModel
 class ScannerViewModel @Inject constructor(
@@ -332,10 +363,88 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
+    // ─── Manual add (new item not in catalog) ─────────────────────────────────
+
+    /** Open the manual-add form from the NotFound sheet, carrying the scanned UPC. */
+    fun openManualAddFromScan(upc: String) {
+        _state.value = ScanState.ManualAdd(upc = upc, upcLocked = true)
+    }
+
+    /** Open the manual-add form from the toolbar manual-search sheet (no UPC yet). */
+    fun openManualAddBlank() {
+        _state.value = ScanState.ManualAdd(upc = "", upcLocked = false)
+    }
+
+    /**
+     * Save a manually-entered item to the collection. Only [ManualAddInput.name]
+     * is required; everything else is optional and can be edited later from the
+     * detail screen. When [ManualAddInput.shareToCommunity] is true and a UPC is
+     * present, a community contribution is queued via the existing opt-in flow
+     * (provenance: USER_MANUAL).
+     */
+    fun confirmManualAdd(input: ManualAddInput) {
+        if (input.name.isBlank()) return
+        viewModelScope.launch {
+            val upc = input.upc.trim()
+            val id = if (upc.isNotEmpty()) "funko::$upc"
+                     else "funko::${java.util.UUID.randomUUID()}"
+            val item = FunkoItem(
+                id                = id,
+                upc               = upc,
+                name              = input.name.trim(),
+                franchise         = input.franchise.trim(),
+                category          = input.category.trim(),
+                seriesNumber      = input.seriesNumber.trim(),
+                imageUrl          = input.imageUrl.trim(),
+                pricePaid         = input.pricePaid,
+                isOwned           = input.isOwned,
+                isExclusive       = input.isExclusive,
+                exclusiveRetailer = input.exclusiveRetailer.trim(),
+                condition         = input.condition,
+            )
+            repository.saveItem(item).fold(
+                onSuccess = { saved ->
+                    _state.value = ScanState.Saved(saved)
+                    if (saved.isOwned) launch { imageBlobs.downloadAndStore(saved) }
+                    // Queue community contribution if opted in and we have a UPC to key on.
+                    if (input.shareToCommunity && upc.isNotEmpty()) {
+                        launch {
+                            contribRepo.saveContribution(
+                                CatalogContribution(
+                                    upc               = upc,
+                                    handle            = FunkoLookupService
+                                        .normalizeForSearch(input.name).replace(' ', '-'),
+                                    name              = input.name.trim(),
+                                    franchise         = input.franchise.trim(),
+                                    category          = input.category.trim(),
+                                    seriesNumber      = input.seriesNumber.trim(),
+                                    isExclusive       = input.isExclusive,
+                                    exclusiveRetailer = input.exclusiveRetailer.trim(),
+                                    imageUrl          = input.imageUrl.trim(),
+                                    source            = "USER_MANUAL",
+                                )
+                            )
+                        }
+                    }
+                },
+                onFailure = { _state.value = ScanState.Error("Save failed: ${it.message}") }
+            )
+        }
+    }
+
     // ─── General ───────────────────────────────────────────────────────────────
 
     fun startScanning() { lastScannedUpc = ""; _state.value = ScanState.Scanning }
     fun reset()         { lastScannedUpc = ""; _state.value = ScanState.Idle }
+
+    /**
+     * "Scan again" from the NotFound sheet. A scan that missed (e.g. a
+     * single-frame misread that resolved to a UPC not in the catalog) leaves
+     * [lastScannedUpc] set, which would suppress an immediate re-read of the
+     * same barcode. Clearing it and returning to [ScanState.Scanning] lets the
+     * user re-aim and try again without backing all the way out of the screen.
+     */
+    fun retryScan() { lastScannedUpc = ""; _state.value = ScanState.Scanning }
 
     // ─── Helpers ───────────────────────────────────────────────────────────────
 

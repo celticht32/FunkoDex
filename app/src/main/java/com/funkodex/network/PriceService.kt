@@ -1,7 +1,6 @@
 package com.funkodex.network
 
 import com.funkodex.util.FunkoDexLogger
-import android.util.Xml
 import com.funkodex.data.model.FunkoItem
 import com.funkodex.data.model.PriceSnapshot
 import com.funkodex.data.model.PriceSource
@@ -11,7 +10,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.xmlpull.v1.XmlPullParser
 import java.net.URLEncoder
 import java.time.LocalDate
 import javax.inject.Inject
@@ -28,7 +26,7 @@ import javax.inject.Singleton
  *   retailPrice already stored on FunkoItem from catalog data.
  *
  * Tier 2 — Free network, no auth:
- *   2a. eBay completed-listings RSS (real sold prices, XmlPullParser, no key)
+ *   2a. eBay completed/sold listings (real sold prices, HTML s-card parse, no key)
  *   2b. UPCitemdb  (generic pricing, 100 req/day free)
  *   2c. Channel3 free (structured Funko data, 100 req/day free)
  *
@@ -52,9 +50,16 @@ class PriceService @Inject constructor(
         private const val TAG = "PriceService"
         private const val USER_AGENT = "FunkoDex/1.0 Android (price lookup)"
 
-        // eBay completed-listings RSS
-        private const val EBAY_RSS_BASE =
-            "https://www.ebay.com/sch/i.html?LH_Complete=1&LH_Sold=1&_rss=1&_ipg=20&_nkw="
+        // eBay sold/completed listings — HTML search results (the RSS feed
+        // _rss=1 was deprecated; eBay now serves the s-card HTML layout).
+        private const val EBAY_SOLD_BASE =
+            "https://www.ebay.com/sch/i.html?LH_Complete=1&LH_Sold=1&_ipg=60&_nkw="
+
+        // eBay serves the results HTML to browser-like clients; a generic UA
+        // can be redirected to a challenge page or an empty result.
+        private const val EBAY_BROWSER_UA =
+            "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) " +
+            "Chrome/124.0.0.0 Mobile Safari/537.36"
 
         // UPCitemdb
         private const val UPCITEMDB =
@@ -87,9 +92,9 @@ class PriceService @Inject constructor(
             )
         }
 
-        // Tier 2a: eBay RSS — most valuable (real sold prices)
-        fetchEbayRss(item)?.let {
-            FunkoDexLogger.d(TAG, "Tier 2a (eBay RSS) hit for ${item.name}")
+        // Tier 2a: eBay sold listings — most valuable (real sold prices)
+        fetchEbaySold(item)?.let {
+            FunkoDexLogger.d(TAG, "Tier 2a (eBay sold) hit for ${item.name}")
             return@withContext it
         }
 
@@ -177,25 +182,28 @@ class PriceService @Inject constructor(
         )
     }.getOrNull()
 
-    // ─── Tier 2a: eBay completed-listings RSS ─────────────────────────────────
+    // ─── Tier 2a: eBay sold/completed listings (HTML) ─────────────────────────
 
-    private fun fetchEbayRss(item: FunkoItem): PriceSnapshot? {
+    private fun fetchEbaySold(item: FunkoItem): PriceSnapshot? {
         return runCatching {
             // Build search query: "funko pop {name} {number}" — specific enough to avoid noise
             val query = buildEbayQuery(item)
-            val url   = EBAY_RSS_BASE + URLEncoder.encode(query, "UTF-8")
+            val url   = EBAY_SOLD_BASE + URLEncoder.encode(query, "UTF-8")
 
             val response = client.newCall(
                 Request.Builder()
                     .url(url)
-                    .header("User-Agent", USER_AGENT)
+                    // eBay serves the s-card results page to browser-like clients;
+                    // a non-browser UA can be redirected or blocked.
+                    .header("User-Agent", EBAY_BROWSER_UA)
+                    .header("Accept", "text/html,application/xhtml+xml")
                     .build()
             ).execute()
 
             if (!response.isSuccessful) return@runCatching null
-            val xml = response.body?.string() ?: return@runCatching null
+            val html = response.body?.string() ?: return@runCatching null
 
-            parseEbayRss(item.id, xml)
+            parseEbaySold(item.id, html)
         }.getOrNull()
     }
 
@@ -214,68 +222,49 @@ class PriceService @Inject constructor(
     }
 
     /**
-     * Parse eBay RSS 2.0 XML using Android's XmlPullParser.
-     * Extracts sold prices from <tobin:startprice> or $XX.XX in titles.
-     * Returns a PriceSnapshot with low/high/avg computed from all results.
+     * Parse eBay's sold-listings HTML (the current `s-card` results layout; the
+     * older `s-item` layout and the `_rss=1` XML feed are both retired).
+     *
+     * Sold prices appear as:
+     *   <span class="su-styled-text positive bold large-1 s-card__price">$20.00</span>
+     *   <span class="su-styled-text primary  bold large-1 s-card__price">$20.00</span>
+     * A `strikethrough` modifier marks an original (was-)price and is excluded.
+     *
+     * Verified against a live results page (Mr. Toad with Monocle #1496, 2026-06).
+     * If eBay changes these class names again, this returns null and Tier 2a is
+     * simply skipped — pricing falls through to the next tier rather than crashing.
      */
-    private fun parseEbayRss(itemId: String, xml: String): PriceSnapshot? {
-        val prices = mutableListOf<Double>()
-        val priceRegex = Regex("""\$(\d+(?:\.\d{2})?)""")
+    private fun parseEbaySold(itemId: String, html: String): PriceSnapshot? {
+        // Match s-card__price spans, capturing the class list (to drop strikethrough)
+        // and the inner text. Tolerant of attribute/whitespace variation.
+        val spanRegex = Regex(
+            """<span class="([^"]*\bs-card__price\b[^"]*)"[^>]*>\s*\$?([\d,]+(?:\.\d{2})?)""",
+            RegexOption.IGNORE_CASE,
+        )
 
-        try {
-            val parser = Xml.newPullParser()
-            parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, true)
-            parser.setInput(xml.reader())
-
-            var inItem         = false
-            var currentTitle   = ""
-            var currentPrice   = 0.0
-            var eventType      = parser.eventType
-
-            while (eventType != XmlPullParser.END_DOCUMENT) {
-                when (eventType) {
-                    XmlPullParser.START_TAG -> {
-                        when (parser.name) {
-                            "item"       -> { inItem = true; currentTitle = ""; currentPrice = 0.0 }
-                            "title"      -> if (inItem) currentTitle = parser.nextText()
-                            "startprice" -> {
-                                // <tobin:startprice> — most reliable price field
-                                val text = parser.nextText()
-                                currentPrice = text.toDoubleOrNull() ?: 0.0
-                            }
-                        }
-                    }
-                    XmlPullParser.END_TAG -> {
-                        if (parser.name == "item" && inItem) {
-                            val price = when {
-                                currentPrice > 0 -> currentPrice
-                                else -> priceRegex.find(currentTitle)
-                                    ?.groupValues?.getOrNull(1)
-                                    ?.toDoubleOrNull() ?: 0.0
-                            }
-                            // Filter out obviously wrong prices (< $1 or > $500)
-                            if (price in 1.0..500.0) prices.add(price)
-                            inItem = false
-                        }
-                    }
-                }
-                eventType = parser.next()
-            }
-        } catch (e: Exception) {
-            FunkoDexLogger.w(TAG, "eBay RSS parse error: ${e.message}")
+        val prices = spanRegex.findAll(html).mapNotNull { m ->
+            val classes = m.groupValues[1]
+            if (classes.contains("strikethrough", ignoreCase = true)) return@mapNotNull null
+            m.groupValues[2].replace(",", "").toDoubleOrNull()
         }
+            // Filter out obviously wrong prices: below $3 is almost always a
+            // shipping fee or junk match, above $500 a misfire.
+            .filter { it in 3.0..500.0 }
+            .toList()
 
         if (prices.isEmpty()) return null
 
         val sorted = prices.sorted()
+        val median = if (sorted.size % 2 == 1) sorted[sorted.size / 2]
+                     else (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2.0
         return PriceSnapshot(
             itemId        = itemId,
             source        = PriceSource.EBAY_RSS,
             low           = sorted.first(),
             high          = sorted.last(),
-            avg           = sorted.average(),
-            lastSalePrice = sorted.last(),   // most recent = last in RSS feed
-            saleCount     = prices.size,
+            avg           = median,          // median is robust to promo/outlier prices
+            lastSalePrice = sorted.first(),  // results are sorted newest-first by default
+            saleCount     = sorted.size,
             fetchedAt     = LocalDate.now(),
         )
     }

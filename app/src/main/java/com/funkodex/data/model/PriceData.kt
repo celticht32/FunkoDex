@@ -34,14 +34,20 @@ enum class PriceSource(
     val requiresLogin: Boolean,
     val staleDays: Int,         // how many days before this source's data is considered stale
 ) {
+    // Tier 0 — user-entered, authoritative, effectively never stale (100y),
+    // never overwritten except by a real market feed. NOTE: staleDays feeds
+    // LocalDate.plusDays(); Int.MAX_VALUE overflows that and throws, so use a
+    // large finite value instead.
+    MANUAL(           "Manually set",             0, false, false, 36_500),
+
     // Tier 1 — always available
-    USER_PAID(        "Your paid price",          1, false, false, Int.MAX_VALUE),
+    USER_PAID(        "Your paid price",          1, false, false, 36_500),
     RETAIL_CATALOG(   "Funko retail (catalog)",   1, false, false, 30),
 
     // Tier 2 — free network
     UPCITEMDB(        "UPCitemdb",                2, false, false, 7),
     CHANNEL3_FREE(    "Channel3 (free)",          2, false, false, 3),
-    EBAY_RSS(         "eBay sold listings (RSS)", 2, false, false, 1),
+    EBAY_RSS(         "eBay sold listings",       2, false, false, 1),
 
     // Tier 3 — API key
     CHANNEL3_PREMIUM( "Channel3 (premium)",       3, true,  false, 1),
@@ -68,7 +74,12 @@ data class PriceSnapshot(
     val fetchedAt: LocalDate = LocalDate.now(),
     val currency: String = "USD",
 ) {
-    val isStale: Boolean get() = fetchedAt.plusDays(source.staleDays.toLong()).isBefore(LocalDate.now())
+    val isStale: Boolean get() {
+        // Guard against overflow: very large staleDays (e.g. "never stale" sources)
+        // would overflow LocalDate.plusDays() and throw. Cap the horizon at ~100y.
+        val days = source.staleDays.toLong().coerceAtMost(36_500L)
+        return fetchedAt.plusDays(days).isBefore(LocalDate.now())
+    }
 
     /** Best single "estimated value" number to show the user */
     val estimatedValue: Double get() = when {

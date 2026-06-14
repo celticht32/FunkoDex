@@ -11,6 +11,8 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -39,10 +41,15 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.funkodex.ui.help.HelpBanner
+import com.funkodex.util.toHttpsImageUrl
 import com.funkodex.ui.help.HelpContent
 import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImage
 import com.funkodex.data.model.FunkoItem
+import com.funkodex.data.model.Condition
+import com.funkodex.data.model.FunkoCategories
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import android.os.Build
@@ -164,6 +171,7 @@ fun ScannerScreen(
                     onSearch       = viewModel::submitManualSearch,
                     onToggleSelect = viewModel::toggleManualSelection,
                     onConfirmBulk  = viewModel::confirmBulkAdd,
+                    onAddManual    = viewModel::openManualAddBlank,
                     onDismiss      = viewModel::reset,
                 )
             }
@@ -189,7 +197,16 @@ fun ScannerScreen(
                     state            = s,
                     onQueryChange    = viewModel::onNotFoundQueryChanged,
                     onSelectMatch    = { item -> viewModel.selectNotFoundMatch(item, s.upc) },
+                    onRetry          = viewModel::retryScan,
+                    onAddManual      = { viewModel.openManualAddFromScan(s.upc) },
                     onDismiss        = viewModel::startScanning,
+                )
+            }
+            is ScanState.ManualAdd -> {
+                ManualAddSheet(
+                    state     = s,
+                    onSave    = viewModel::confirmManualAdd,
+                    onDismiss = viewModel::startScanning,
                 )
             }
             is ScanState.Pending -> {
@@ -216,14 +233,26 @@ private fun CameraPreview(
     val context       = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    // Hold the PreviewView so the camera can be re-bound on resume. Without this,
+    // the camera is bound once at composition; when the screen turns off (ON_STOP)
+    // the preview surface is torn down, and on resume the stale binding doesn't
+    // re-attach — leaving a black preview until the screen is left and re-entered.
+    val previewView = remember { PreviewView(context) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                startCamera(context, lifecycleOwner, previewView, onBarcodeDetected)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
 
         AndroidView(
-            factory  = { ctx ->
-                val previewView = PreviewView(ctx)
-                startCamera(ctx, lifecycleOwner, previewView, onBarcodeDetected)
-                previewView
-            },
+            factory  = { previewView },
             modifier = Modifier.fillMaxSize()
         )
 
@@ -372,7 +401,7 @@ private fun FunkoPreviewSheet(
             }
             if (item.imageUrl.isNotEmpty()) {
                 AsyncImage(
-                    model             = item.imageUrl,
+                    model             = item.imageUrl.toHttpsImageUrl(),
                     contentDescription = item.name,
                     modifier          = Modifier
                         .size(160.dp)
@@ -465,6 +494,7 @@ private fun ManualSearchSheet(
     onSearch: (String) -> Unit,
     onToggleSelect: (FunkoItem) -> Unit,
     onConfirmBulk: () -> Unit,
+    onAddManual: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -560,12 +590,22 @@ private fun ManualSearchSheet(
                     }
                 }
                 state.results.isEmpty() && state.query.isNotBlank() -> {
-                    Text(
-                        "No results found",
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            "No results found",
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Button(onClick = onAddManual, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Add manually")
+                        }
+                    }
                 }
                 state.results.isNotEmpty() -> {
                     Row(
@@ -614,7 +654,7 @@ private fun ManualSearchSheet(
                                 )
                                 if (item.imageUrl.isNotEmpty()) {
                                     AsyncImage(
-                                        model = item.imageUrl,
+                                        model = item.imageUrl.toHttpsImageUrl(),
                                         contentDescription = null,
                                         modifier = Modifier
                                             .size(48.dp)
@@ -870,6 +910,8 @@ private fun NotFoundSheet(
     state:         ScanState.NotFound,
     onQueryChange: (String) -> Unit,
     onSelectMatch: (FunkoItem) -> Unit,
+    onRetry:       () -> Unit,
+    onAddManual:   () -> Unit,
     onDismiss:     () -> Unit,
 ) {
     ModalBottomSheet(
@@ -911,7 +953,7 @@ private fun NotFoundSheet(
                 value         = state.query,
                 onValueChange = onQueryChange,
                 label         = { Text("Search by name (e.g. Batman)") },
-                leadingIcon   = {
+                trailingIcon  = {
                     if (state.isSearching)
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     else
@@ -920,6 +962,14 @@ private fun NotFoundSheet(
                 singleLine    = true,
                 modifier      = Modifier.fillMaxWidth(),
             )
+            OutlinedButton(
+                onClick  = onRetry,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Default.QrCodeScanner, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Scan again")
+            }
             if (state.results.isNotEmpty()) {
                 HorizontalDivider()
                 Text("Tap to match this UPC to an item:",
@@ -943,7 +993,7 @@ private fun NotFoundSheet(
                             ) {
                                 if (item.imageUrl.isNotEmpty()) {
                                     AsyncImage(
-                                        model              = item.imageUrl,
+                                        model              = item.imageUrl.toHttpsImageUrl(),
                                         contentDescription = null,
                                         modifier           = Modifier
                                             .size(44.dp)
@@ -968,6 +1018,307 @@ private fun NotFoundSheet(
                         }
                     }
                 }
+            }
+            // Defect A: explicit empty-state so a zero-result search doesn't look dead.
+            if (state.query.isNotBlank() && !state.isSearching && state.results.isEmpty()) {
+                Text(
+                    "No catalog matches for \"${state.query}\".",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    textAlign = TextAlign.Center,
+                )
+            }
+            // Always offer manual add — the item may simply not be in the catalog.
+            Button(
+                onClick  = onAddManual,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Add manually")
+            }
+        }
+    }
+}
+
+// ─── Manual add sheet (Feature C) ───────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ManualAddSheet(
+    state:     ScanState.ManualAdd,
+    onSave:    (ManualAddInput) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // Essential fields
+    var upc              by remember { mutableStateOf(state.upc) }
+    var name             by remember { mutableStateOf("") }
+    var isOwned          by remember { mutableStateOf(true) }
+    var shareToCommunity by remember { mutableStateOf(true) }
+
+    // Optional fields (behind "More details")
+    var showMore          by remember { mutableStateOf(false) }
+    var popNumber         by remember { mutableStateOf("") }
+    var franchise         by remember { mutableStateOf("") }
+    var category          by remember { mutableStateOf("") }
+    var isExclusive       by remember { mutableStateOf(false) }
+    var exclusiveRetailer by remember { mutableStateOf("") }
+    var imageUrl          by remember { mutableStateOf("") }
+    var pricePaid         by remember { mutableStateOf("") }
+    var condition         by remember { mutableStateOf(Condition.MINT) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 24.dp)
+                .imePadding()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.Add, null, Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Add item manually",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold)
+                }
+                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Close") }
+            }
+            Text("Future scans of this barcode will match instantly.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            // UPC — locked (from scan) or editable (from manual search)
+            if (state.upcLocked) {
+                OutlinedTextField(
+                    value = upc,
+                    onValueChange = {},
+                    label = { Text("UPC (from scan)") },
+                    leadingIcon = { Icon(Icons.Default.Lock, null, Modifier.size(18.dp)) },
+                    readOnly = true,
+                    enabled = false,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                OutlinedTextField(
+                    value = upc,
+                    onValueChange = { upc = it },
+                    label = { Text("UPC (optional)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            // Name — the only required field
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Name *") },
+                placeholder = { Text("e.g. Mr. Toad with Monocle") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            // Owned / Want toggle
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                SegmentedButton(
+                    selected = isOwned,
+                    onClick = { isOwned = true },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                ) { Text("Owned") }
+                SegmentedButton(
+                    selected = !isOwned,
+                    onClick = { isOwned = false },
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                ) { Text("Want list") }
+            }
+
+            // More details expander
+            Surface(
+                onClick = { showMore = !showMore },
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(if (showMore) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            null, Modifier.size(18.dp))
+                        Text("More details", style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Text("optional", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            if (showMore) {
+                OutlinedTextField(
+                    value = popNumber, onValueChange = { popNumber = it },
+                    label = { Text("Pop! number (from box, e.g. 1496)") }, singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = franchise, onValueChange = { franchise = it },
+                    label = { Text("Franchise") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                // Category dropdown
+                var catExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = catExpanded,
+                    onExpandedChange = { catExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = category,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Category") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = catExpanded) },
+                        modifier = Modifier
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                            .fillMaxWidth(),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = catExpanded,
+                        onDismissRequest = { catExpanded = false },
+                    ) {
+                        FunkoCategories.ALL.forEach { def ->
+                            DropdownMenuItem(
+                                text = { Text(def.displayName) },
+                                onClick = { category = def.displayName; catExpanded = false },
+                            )
+                        }
+                    }
+                }
+
+                // Exclusive toggle + retailer
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Exclusive", style = MaterialTheme.typography.bodyMedium)
+                    Switch(checked = isExclusive, onCheckedChange = { isExclusive = it })
+                }
+                if (isExclusive) {
+                    OutlinedTextField(
+                        value = exclusiveRetailer, onValueChange = { exclusiveRetailer = it },
+                        label = { Text("Exclusive retailer / event") },
+                        placeholder = { Text("e.g. 2024 Fall Convention") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+
+                OutlinedTextField(
+                    value = imageUrl, onValueChange = { imageUrl = it },
+                    label = { Text("Image URL") },
+                    placeholder = { Text("Paste a funko.com or HobbyDB image link") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = pricePaid, onValueChange = { pricePaid = it },
+                        label = { Text("Price paid") }, singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
+                    )
+                    var condExpanded by remember { mutableStateOf(false) }
+                    ExposedDropdownMenuBox(
+                        expanded = condExpanded,
+                        onExpandedChange = { condExpanded = it },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        OutlinedTextField(
+                            value = condition.name.replace('_', ' ').lowercase()
+                                .replaceFirstChar { it.uppercase() },
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Condition") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = condExpanded) },
+                            modifier = Modifier
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                                .fillMaxWidth(),
+                        )
+                        ExposedDropdownMenu(
+                            expanded = condExpanded,
+                            onDismissRequest = { condExpanded = false },
+                        ) {
+                            Condition.entries.forEach { c ->
+                                DropdownMenuItem(
+                                    text = { Text(c.name.replace('_', ' ').lowercase()
+                                        .replaceFirstChar { ch -> ch.uppercase() }) },
+                                    onClick = { condition = c; condExpanded = false },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Community share
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { shareToCommunity = !shareToCommunity }
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Checkbox(checked = shareToCommunity, onCheckedChange = { shareToCommunity = it })
+                Text("Share with community UPC database",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+
+            Button(
+                onClick = {
+                    onSave(
+                        ManualAddInput(
+                            upc               = upc,
+                            name              = name,
+                            seriesNumber      = popNumber,
+                            franchise         = franchise,
+                            category          = category,
+                            isExclusive       = isExclusive,
+                            exclusiveRetailer = exclusiveRetailer,
+                            imageUrl          = imageUrl,
+                            pricePaid         = pricePaid.toDoubleOrNull() ?: 0.0,
+                            condition         = condition,
+                            isOwned           = isOwned,
+                            shareToCommunity  = shareToCommunity,
+                        )
+                    )
+                },
+                enabled = name.isNotBlank(),
+                modifier = Modifier.fillMaxWidth().height(44.dp),
+            ) {
+                Text("Add to collection")
             }
         }
     }

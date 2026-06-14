@@ -8,17 +8,51 @@ Items are grouped by theme and ordered by rough implementation priority within e
 
 ---
 
+## Community Catalog Distribution (major initiative — design complete, not built)
+
+A full architecture & design document was produced in Session 11:
+**`FunkoDex_Catalog_Distribution_Architecture_v1.0.docx`** (in repo root / docs).
+Design only; nothing implemented. Summary:
+
+- **Golden master base.** Bundle the enriched catalog + maintainer's accumulated
+  data as `funko_data_golden.json`, loaded on first install. Deprecates the
+  Enriched Catalog Import feature. NOTE: the current `CatalogPreloader` reads only
+  `handle/title/imageName/series` (old thin format) — bundling enriched data
+  requires teaching the preloader the richer schema (upc, funkoNumber, etc.).
+- **Core/user field split.** Every record splits into core (shared, syncable —
+  name, franchise, category, upc, imageUrl, exclusive flags, etc.) and user
+  (private, never synced — pricePaid, marketAvg, notes, condition, photos, owned).
+- **Community hub.** GitHub repo `funko-upc-community`; a merge/moderation process
+  emits dated update packets (core data only). Builds on the existing
+  `CatalogContribution` (`source = "USER_MANUAL"`) already written by manual-add.
+- **Client update cycle.** Monthly scan pulls packets newer than last imported.
+- **Per-field conflict resolution.** Empty → fill; never-update flag → keep
+  (resettable in Settings); else field policy: "always update" (overwrite) or
+  "ask me" (keep→set flag, or accept→overwrite).
+- **Five open decisions** (see doc §7): record identity across sync; flag storage/
+  granularity; packet authority for hand-entered fields; contribution moderation;
+  delta vs. cumulative packets.
+- **Five-phase build** (see doc §8): (1) golden-master base + preloader, (2) field
+  policy schema + Settings UI, (3) contribution export, (4) client import + conflict
+  engine, (5) hub merge/distribution. Phase 1 is the foundational first step.
+
+---
+
 ## Authentication & OAuth
 
 ### F-AUTH-1: Silent eBay token refresh via Browse API (not RSS)
-**Current state:** eBay prices use RSS feed (Tier 2a). eBay OAuth is implemented but
-the Browse API (`OAuthConfig.eBay.SOLD_URL`) is never called.
+**Current state (updated Session 11):** The RSS feed (`_rss=1`) is retired by eBay;
+Tier 2a was switched to scraping the HTML sold-listings page, but eBay returns
+**403 (bot block)** to the app's request even with a browser User-Agent. So Tier 2a
+is effectively non-functional. eBay OAuth is implemented but the Browse API is never
+called. NOTE: the Browse API returns only *active* listings, not sold comps — so it
+is not a drop-in replacement for sold-price data. Recommended direction (Session 11):
+rely on manual market value + HobbyDB/Channel3 rather than eBay; only pursue Browse
+API if active asking prices are acceptable.
 **What to build:** Once `isEbayTokenValid()` is true, `PriceService` should attempt a
-Browse API call before falling back to RSS. The Browse API returns structured JSON with
-`soldPrice`, `listingDate`, and `condition` — far richer than RSS XML.
-**Files to change:** `PriceService.kt` — add `fetchEbayBrowseApi(item, token)` method
-between Tier 2a (RSS) and Tier 2b (UPCitemdb). Return a `PriceSnapshot` with
+Browse API call before falling back. Return a `PriceSnapshot` with
 `source = PriceSource.EBAY_BROWSE`.
+**Files to change:** `PriceService.kt` — add `fetchEbayBrowseApi(item, token)`.
 **Effort:** ~1 session. Requires a real eBay CLIENT_ID (developer.ebay.com).
 
 ### ~~F-AUTH-2~~: Automatic token refresh notification ✅ DONE

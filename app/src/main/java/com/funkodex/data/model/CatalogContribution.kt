@@ -41,7 +41,7 @@ data class CatalogContribution(
     val imageUrl:          String     = "",
 
     // ── Provenance ────────────────────────────────────────────────────────────
-    val source:            String     = "USER_SCAN",   // USER_SCAN | USER_SCAN_CHANNEL3 | CHANNEL3
+    val source:            String     = "USER_SCAN",   // USER_SCAN | USER_SCAN_CHANNEL3 | CHANNEL3 | USER_MANUAL
     val schemaVersion:     Int        = 1,
     val contributedAt:     LocalDate  = LocalDate.now(),
 

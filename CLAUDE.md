@@ -6,10 +6,13 @@ FunkoDex is an Android Kotlin/Jetpack Compose app for managing a Funko Pop colle
 Built entirely in Claude across multiple sessions. This file gives Claude the full
 context needed to work on the codebase without re-explaining architecture.
 
-**67 Kotlin source files. 6 test files (72 tests). Feature-complete at the
-code level through Sessions 1–8 (incl. Session 7 CBL Collection API migration
-and Session 8 Keystore/security-crypto migration); full functional/device test
-pass is the current focus — see Testing below.**
+**67+ Kotlin source files. Feature-complete at the code level through
+Sessions 1–11. Sessions 7–8 (CBL Collection API + Keystore migrations) and
+Session 11 (scanner/manual-add/pricing/image work + manual market value) are
+the most recent code changes; full functional/device test pass remains the
+standing focus — see Testing below. A Community Catalog Distribution
+architecture (golden-master base + GitHub update packets) is designed but not
+built — see FUTURE.md.**
 
 ---
 
@@ -276,7 +279,8 @@ Collection features, Platform, Data/Sync, QA, UI/UX, Security, Performance, i18n
 ## Remaining limitations
 
 - Couchbase Lite Community is unencrypted on disk (accepted — collector data, not financial)
-- eBay RSS URL blocked in some regions (falls back to UPCitemdb gracefully)
+- eBay pricing (Tier 2a) is effectively non-functional: the RSS feed is retired and the
+  HTML sold-listings scrape gets 403 (bot block). Other tiers + manual market value cover it.
 - Play Integrity API in Cloudflare Worker not yet implemented (optional hardening)
 - eBay `CLIENT_ID` requires developer.ebay.com registration
 - Wear OS companion, tablet two-pane layout, value-over-time chart not built
@@ -288,3 +292,12 @@ Collection features, Platform, Data/Sync, QA, UI/UX, Security, Performance, i18n
 1–9: Architecture, security, data, SVG, dev workflow, dependency management
 10–15: OAuth PKCE, install ID storage, deep-link validation, central logger, CrashHandler,
         POST_NOTIFICATIONS guards
+26–29: Gson TypeToken on data classes, display-field taxonomy integrity, resolved-vs-persisted
+        writes, fallback values not feeding tier/source fields
+30: Pin version-sensitive API symbol names (e.g. material3 `MenuAnchorType` in 1.3.0) against
+        the pinned dependency — never infer from memory; check existing project usage first.
+        Corollary: clear deprecated APIs (they get removed later), but verify the replacement
+        symbol against the pin too
+31–33: `Int.MAX_VALUE` staleDays overflows LocalDate.plusDays() (broke manual market value);
+        CameraX preview goes black after screen-off (rebind on ON_RESUME); eBay price RSS retired
+        and HTML scrape 403s — treat eBay pricing as unreliable

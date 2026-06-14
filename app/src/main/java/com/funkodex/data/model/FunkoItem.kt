@@ -54,6 +54,8 @@ data class FunkoItem(
     val marketLow: Double = 0.0,         // Current market low (from HobbyDB/Channel3)
     val marketHigh: Double = 0.0,        // Current market high
     val marketAvg: Double = 0.0,         // Current market average / estimated value
+    val marketValueIsManual: Boolean = false, // true = user set marketAvg by hand;
+                                          // price refresh must NOT overwrite it.
     val priceLastUpdated: LocalDate? = null, // When market prices were last fetched
 
     // ── Status flags ─────────────────────────────────────────────────────────

@@ -35,6 +35,7 @@ object FunkoMapper {
         doc.setDouble(FunkoDexDatabase.FIELD_MARKET_LOW,     item.marketLow)
         doc.setDouble(FunkoDexDatabase.FIELD_MARKET_HIGH,    item.marketHigh)
         doc.setDouble(FunkoDexDatabase.FIELD_MARKET_AVG,     item.marketAvg)
+        doc.setBoolean(FunkoDexDatabase.FIELD_MARKET_VALUE_IS_MANUAL, item.marketValueIsManual)
         item.priceLastUpdated?.let { doc.setString(FunkoDexDatabase.FIELD_PRICE_UPDATED, it.toString()) }
         // Flags
         doc.setBoolean(FunkoDexDatabase.FIELD_IS_OWNED,      item.isOwned)
@@ -99,6 +100,7 @@ object FunkoMapper {
         marketLow        = doc.getDouble(FunkoDexDatabase.FIELD_MARKET_LOW),
         marketHigh       = doc.getDouble(FunkoDexDatabase.FIELD_MARKET_HIGH),
         marketAvg        = doc.getDouble(FunkoDexDatabase.FIELD_MARKET_AVG),
+        marketValueIsManual = doc.getBoolean(FunkoDexDatabase.FIELD_MARKET_VALUE_IS_MANUAL),
         priceLastUpdated = runCatching {
             doc.getString(FunkoDexDatabase.FIELD_PRICE_UPDATED)?.let { LocalDate.parse(it) }
         }.getOrNull(),

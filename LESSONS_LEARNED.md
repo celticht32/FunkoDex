@@ -139,6 +139,33 @@ produces a cryptic injection failure at Worker creation time.
 `androidx.exifinterface:exifinterface` is a separate dependency. Without it, user
 photos taken in portrait mode display sideways. Add it alongside any camera feature work.
 
+### 30. Pin version-sensitive API symbol names against the pinned dependency — never infer from memory
+Compose/Material 3 rename and re-signature public symbols across releases, so a name
+that is correct in one version fails to resolve in another. Real example from this
+project: the `Modifier.menuAnchor()` no-arg overload was deprecated and replaced by a
+typed overload. In **material3 1.3.0** (this project's pin, via Compose BOM 2024.09.00)
+the type is **`MenuAnchorType.PrimaryNotEditable`**; the symbol was later renamed to
+`ExposedDropdownMenuAnchorType` in 1.4.0+. Writing the 1.4.0 name against the 1.3.0 pin
+produced `Unresolved reference 'ExposedDropdownMenuAnchorType'` at compile time.
+
+Rule: before writing any version-sensitive symbol (Compose APIs, enum names, method
+signatures, library classes), pin the exact name against the version actually in use.
+Check the project's own existing usage first — it is ground truth for these versions —
+then the versioned API docs. If a symbol can't be verified against the pin, flag that
+line rather than guessing. Pinned stack: material3 1.3.0 (BOM 2024.09.00), Kotlin 2.0.21,
+AGP 8.13.2, Gradle 8.13.
+
+Corollary — deprecated APIs: don't leave a deprecated call in place "because it still
+compiles." This project does not set `allWarningsAsErrors`, so a deprecation is only a
+warning today — but the deprecated symbol gets *removed* in a later version, turning that
+warning into a hard `Unresolved reference` on the next dependency bump. Migrate to the
+current replacement when you touch the code. The catch is that the migration itself is
+where versions bite: the no-arg `Modifier.menuAnchor()` is deprecated, and its typed
+replacement is `MenuAnchorType.PrimaryNotEditable` in **1.3.0** but renamed to
+`ExposedDropdownMenuAnchorType` in 1.4.0+ — so fixing the deprecation requires pinning the
+replacement name to the same version (per the rule above), not just adopting the newest
+name you've seen. Net: clear the deprecation, but verify the replacement against the pin.
+
 ---
 
 ## Testing
@@ -326,5 +353,39 @@ site needs its own
 `import androidx.compose.material.icons.automirrored.filled.<IconName>`.
 **Lesson:** an AutoMirrored icon swap is a two-line change (usage + import),
 not one — verify the import before declaring the deprecation fixed.
+
+## Pricing & lifecycle (Session 11)
+
+### 31. `Int.MAX_VALUE` as a "never" duration overflows `LocalDate.plusDays()` and throws
+A `MANUAL`/`USER_PAID` price source was given `staleDays = Int.MAX_VALUE` to
+mean "never stale." But `PriceSnapshot.isStale` computes
+`fetchedAt.plusDays(staleDays.toLong())`, and `LocalDate.plusDays(2147483647)`
+exceeds the max supported year and throws `DateTimeException`. That made
+`isStale` throw, `getResolvedPrice`'s `.filter { !it.isStale }` discard the
+snapshot, the price resolve to 0, and a refresh overwrite the user's manually
+entered market value with nothing. **Lesson:** never use `Int.MAX_VALUE` (or
+any value near it) as a day/month/year count fed into `java.time` arithmetic.
+Use a large *finite* value (e.g. 36,500 days ≈ 100y) AND defensively cap the
+horizon at the computation site so no future source can re-trigger it.
+
+### 32. CameraX preview goes black after screen-off; bind once is not enough
+The scanner bound the camera once inside `AndroidView`'s `factory` block. When
+the screen sleeps (lifecycle ON_STOP) the `PreviewView` surface is torn down,
+and on resume the existing binding does not re-attach → black preview until the
+user leaves and re-enters the screen. **Lesson:** for a CameraX preview in
+Compose, hold the `PreviewView` in `remember` and add a
+`DisposableEffect(lifecycleOwner)` that re-runs the bind on
+`Lifecycle.Event.ON_RESUME` (and removes the observer in `onDispose`).
+`bindToLifecycle` alone does not survive a surface teardown.
+
+### 33. eBay deprecated the price RSS feed and 403s scraping; treat as unreliable
+The completed-listings RSS feed (`_rss=1`) is retired. Switching to scraping the
+HTML results page works against a saved page but returns **403 (bot block)** to
+the app's OkHttp request even with a browser User-Agent — eBay fingerprints more
+than the UA. **Lesson:** eBay sold-price scraping is fundamentally fragile; the
+official Browse API returns only *active* listings (not sold comps), so neither
+path is a clean win. The durable answer is the manual market-value fallback plus
+relying on other tiers (HobbyDB/Channel3) — see CHANGELOG Session 11. Don't sink
+effort into hardening the scraper.
 
 *Document maintained by Celtic Heart Steamworks. Update after each significant change.*

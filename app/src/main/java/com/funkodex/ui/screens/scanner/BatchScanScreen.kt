@@ -18,6 +18,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.funkodex.ui.help.HelpContent
+import com.funkodex.util.toHttpsImageUrl
 import coil.compose.AsyncImage
 
 /**
@@ -192,7 +193,7 @@ private fun BatchEntryRow(
             // Thumbnail or status icon
             if (entry.item?.imageUrl?.isNotEmpty() == true) {
                 AsyncImage(
-                    model              = entry.item.imageUrl,
+                    model              = entry.item.imageUrl.toHttpsImageUrl(),
                     contentDescription = null,
                     modifier           = Modifier
                         .size(44.dp)

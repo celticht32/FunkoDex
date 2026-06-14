@@ -146,6 +146,12 @@
 - "Image not available" dialog — note the URL shown for debugging
 - Spinner dialog never appears (regression from earlier fix)
 
+**Session 11 note:** `http://` image hosts (e.g. media.aent-m.com) are now upgraded to
+`https://` before loading, so a previously-failing "CLEARTEXT communication not permitted"
+URL should now succeed. A "too many follow-up requests" / redirect-loop URL (e.g. a
+UPC-guessed booksamillion cover) is dead data, not an app bug — fix by setting a real
+image URL (see test 13). A `.html` page URL will not render; it must be a direct image URL.
+
 ---
 
 ## 7. App Performance
@@ -235,6 +241,93 @@
 
 ---
 
+## 10. Manual Add — Item Not in Catalog (Session 11)
+
+**What to test:** Adding an item the catalog doesn't have (e.g. a convention exclusive), from both entry points.
+
+**Steps (from scan):**
+1. Scan a barcode not in the catalog (or a new exclusive) → "Barcode not in catalog" sheet
+2. Tap **Add manually**
+3. UPC field is shown locked (from the scan); enter a Name (required)
+4. Expand **More details**, optionally set Pop! number, franchise, category, exclusive + retailer, price paid, condition, image URL
+5. Leave **Share with community** on; tap **Add to collection**
+
+**Steps (from manual search):**
+6. Add → Search Manually → type a term with no results → **Add manually** (UPC field editable/blank)
+
+**Pass criteria:**
+- Form scrolls so **Add to collection** is reachable with More details expanded
+- Item saves; appears in My Dex with `funko::{upc}` id when a UPC was present
+- Re-scanning the same barcode later resolves instantly (UPC now linked)
+- If shared, a `USER_MANUAL` contribution is queued (verify via contribution/worker log)
+
+**Fail indicators:**
+- Save button unreachable when More details expanded
+- Crash on save; item not in My Dex; future scan of same UPC still "not in catalog"
+
+---
+
+## 11. Scanner — Camera Survives Screen-Saver (Session 11)
+
+**What to test:** The scanner camera recovers after the screen turns off and on (was a black-screen bug).
+
+**Steps:**
+1. Open the scanner (Add tab) and let the camera preview start
+2. Let the screen time out to screen-saver / lock (or press power to sleep)
+3. Wake the device and return to the still-open scanner
+
+**Pass criteria:**
+- Live camera preview resumes automatically; barcodes scan normally
+- No need to exit the scanner and pick another tab to recover
+
+**Fail indicators:**
+- Black preview after wake; must leave/re-enter the scanner to fix (the original bug)
+
+---
+
+## 12. Manual Market Value (Session 11)
+
+**What to test:** Setting a market value by hand and its interaction with price refresh.
+
+**Steps:**
+1. Open an item with no market price (e.g. a manually added exclusive) → Edit
+2. Enter a **Market value**, save → price card shows it ("Manually set")
+3. Tap **Refresh prices** on an item the tiers can't price
+4. Separately, on an item the tiers CAN price, set a manual value then refresh
+
+**Pass criteria:**
+- Manual value persists and displays after save
+- Refresh that finds nothing keeps the manual value (shows "No new market data found" note) — does NOT blank it
+- Refresh that finds real market data overwrites the manual value and clears the manual flag
+- Reports "Est. Market Value" includes manually-set values
+
+**Fail indicators:**
+- Manual value wiped to $0 on a no-data refresh (the staleDays-overflow regression)
+- Card shows "No price data" and drops the value until the screen is re-entered
+
+---
+
+## 13. Image URL Entry + http→https (Session 11)
+
+**What to test:** Pasting an image URL and the http-to-https upgrade.
+
+**Steps:**
+1. Edit an item with no image; paste a direct image URL (HobbyDB/funko.com) in **Image URL**; save
+2. Confirm the image appears; change the URL and save again
+3. Try an item whose catalog image URL is `http://` (e.g. a media.aent-m.com URL)
+
+**Pass criteria:**
+- Pasted image URL loads and shows on card after save
+- Changing the URL re-downloads the thumbnail (old cached image replaced)
+- `http://` image hosts load (upgraded to https) instead of failing with "CLEARTEXT communication not permitted"
+
+**Fail indicators:**
+- Image stays blank after a valid image URL; stale image after URL change
+- "CLEARTEXT ... not permitted" error on an http host that supports https
+- (Expected, not a fail) a page URL like `…/78901.html` won't render — must be a direct image URL
+
+---
+
 ## Results Log
 
 | Test | Result | Notes |
@@ -248,3 +341,7 @@
 | 7. App performance | PASS | 2026-06-13. Verified on device (Galaxy S23, SM-S911U). Performance acceptable — responsive in normal use, no notable jank observed. |
 | 8. Send to another phone | | |
 | 9. Enriched catalog import | PASS | 2026-06-13. Import confirmed: 14,314 total in batches of 500; first run 13,585/725/4/0; re-import idempotent (0 added/~14,310 updated). Net-new enriched-only item confirmed via "perpetua" → "Papa V Perpetua" after fixing a catalog-search filter bug (enabled-categories key/name mismatch was silently dropping all results). Existing-item integrity: re-import left existing records unchanged (pass condition met). Handle-repair spot-check validated: "Peacemaker on Peacecycle" found via search (`91991.html` → `peacemaker-on-peacecycle`). NOTE: the enriched catalog does NOT survive an app uninstall — `uninstallDebug` wipes it and reinstall re-preloads only the base Kenny Chan set, so enriched-only items disappear until the enriched import is re-run manually. The "Twinkie the Kid" image spot-check surfaced a data issue, not a code issue: one duplicate Twinkie variant is linked to a dead/wrong HobbyDB URL (a "Shirts and Jackets" apparel image returning 404 NoSuchKey) — not fixable by the app; that record needs deletion or a manual photo. |
+| 10. Manual add (catalog-missing) | | Session 11 — new |
+| 11. Camera survives screen-saver | | Session 11 — new (was black-screen bug; fix applied) |
+| 12. Manual market value | | Session 11 — new (incl. staleDays-overflow regression check) |
+| 13. Image URL entry + http→https | | Session 11 — new |

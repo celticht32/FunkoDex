@@ -21,7 +21,7 @@ import javax.inject.Inject
 sealed class DetailUiState {
     object Loading                                                     : DetailUiState()
     data class Viewing(val item: FunkoItem)                           : DetailUiState()
-    data class Editing(val draft: FunkoItem, val originalUpc: String = "", val isSaving: Boolean = false) : DetailUiState()
+    data class Editing(val draft: FunkoItem, val originalUpc: String = "", val originalImageUrl: String = "", val isSaving: Boolean = false) : DetailUiState()
     data class Error(val message: String)                              : DetailUiState()
     object Deleted                                                     : DetailUiState()
 }
@@ -54,6 +54,13 @@ class DetailViewModel @Inject constructor(
 
     private val _priceState = MutableStateFlow<PriceUiState>(PriceUiState.Idle)
     val priceState: StateFlow<PriceUiState> = _priceState.asStateFlow()
+
+    // Transient: a refresh completed but found no new market data, while an
+    // existing (cached/manual) price is still shown. Cleared when a refresh
+    // starts. Lets the card show a brief "No new market data found" note
+    // without replacing the visible price.
+    private val _noNewPriceData = MutableStateFlow(false)
+    val noNewPriceData: StateFlow<Boolean> = _noNewPriceData.asStateFlow()
 
     // Photo state — null = no user photo, non-null = ByteArray for display
     private val _photoBytes = MutableStateFlow<ByteArray?>(null)
@@ -117,10 +124,22 @@ class DetailViewModel @Inject constructor(
     }
 
     private suspend fun refreshPrices(item: FunkoItem, showLoading: Boolean) {
+        _noNewPriceData.value = false
         if (showLoading) _priceState.value = PriceUiState.Loading
         val snapshot = priceService.fetchPrice(item)
         if (snapshot != null) {
             repository.savePriceSnapshot(snapshot)
+
+            // A real market feed is ground truth and supersedes a manually-entered
+            // value: a manual market value is only a fallback for when no source has
+            // data. snapshot.avg > 0 means an actual market source returned comps
+            // (retail-only tier-1 hits carry avg = 0 and must NOT clear a manual value).
+            var effectiveItem = item
+            if (snapshot.avg > 0 && item.marketValueIsManual) {
+                repository.deletePriceSnapshot(item.id, com.funkodex.data.model.PriceSource.MANUAL)
+                effectiveItem = item.copy(marketValueIsManual = false)
+            }
+
             val resolved = repository.getResolvedPrice(itemId)
             _priceState.value = PriceUiState.Loaded(resolved)
 
@@ -130,10 +149,15 @@ class DetailViewModel @Inject constructor(
             // written back after a refresh. resolvedRetail is the price-waterfall
             // fallback used when there's no catalog retailPrice (see FunkoItem.effectiveRetail).
             val needsUpdate = resolved != ResolvedPrice.UNKNOWN &&
-                (resolved.marketAvg != item.marketAvg || resolved.retail != item.resolvedRetail)
+                (resolved.marketAvg != effectiveItem.marketAvg ||
+                 resolved.retail != effectiveItem.resolvedRetail ||
+                 effectiveItem.marketValueIsManual != item.marketValueIsManual)
             if (needsUpdate) {
                 val result = repository.saveItem(
-                    item.copy(marketAvg = resolved.marketAvg, resolvedRetail = resolved.retail)
+                    effectiveItem.copy(
+                        marketAvg = resolved.marketAvg,
+                        resolvedRetail = resolved.retail,
+                    )
                 )
                 result.getOrNull()?.let { saved ->
                     if (_state.value is DetailUiState.Viewing) {
@@ -141,10 +165,19 @@ class DetailViewModel @Inject constructor(
                     }
                 }
             }
-        } else if (_priceState.value is PriceUiState.Loading) {
-            _priceState.value = PriceUiState.Error("No price data available")
+        } else {
+            // Fetch found no new market data. Don't blow away an existing cached
+            // or manually-set price — re-resolve and keep showing it. Only show the
+            // "no data" error when there is genuinely nothing to display.
+            val cached = repository.getResolvedPrice(itemId)
+            _priceState.value = if (cached != ResolvedPrice.UNKNOWN) {
+                // Existing price is still shown; flag that this refresh added nothing.
+                _noNewPriceData.value = true
+                PriceUiState.Loaded(cached)
+            } else {
+                PriceUiState.Error("No price data available")
+            }
         }
-        // If already showing cached data, don't replace with an error
     }
 
     // ─── View actions ─────────────────────────────────────────────────────────
@@ -163,7 +196,7 @@ class DetailViewModel @Inject constructor(
 
     fun startEditing() {
         val item = (state.value as? DetailUiState.Viewing)?.item ?: return
-        _state.value = DetailUiState.Editing(item, originalUpc = item.upc)
+        _state.value = DetailUiState.Editing(item, originalUpc = item.upc, originalImageUrl = item.imageUrl)
     }
 
     fun deleteItem() {
@@ -201,6 +234,18 @@ class DetailViewModel @Inject constructor(
         it.copy(category = value, genre = FunkoGenre.fromCategory(value))
     }
     fun updateUpc(value: String)             = updateDraft { it.copy(upc = value) }
+    fun updateImageUrl(value: String)        = updateDraft { it.copy(imageUrl = value) }
+
+    /**
+     * Manually set the market value. Marks it as user-set so price refresh won't
+     * overwrite it (see refreshPrices). A blank/zero value clears the manual flag,
+     * allowing automatic pricing to resume. The MANUAL price snapshot that drives
+     * the price-card display is written on save (see saveEdit).
+     */
+    fun updateMarketValue(value: String) = updateDraft {
+        val parsed = value.toDoubleOrNull() ?: 0.0
+        it.copy(marketAvg = parsed, marketValueIsManual = parsed > 0)
+    }
 
     fun clearMissingOriginal() {
         val item = (state.value as? DetailUiState.Viewing)?.item ?: return
@@ -208,6 +253,7 @@ class DetailViewModel @Inject constructor(
         _state.value = DetailUiState.Editing(
             draft       = item.copy(isMissingOriginal = false),
             originalUpc = item.upc,
+            originalImageUrl = item.imageUrl,
         )
     }
 
@@ -254,6 +300,39 @@ class DetailViewModel @Inject constructor(
             repository.saveItem(editing.draft).fold(
                 onSuccess = { saved ->
                     _state.value = DetailUiState.Viewing(saved)
+                    // If the image URL changed during this edit, the cached blob is
+                    // stale — force a re-download so the picture reflects the new URL.
+                    if (saved.imageUrl.isNotEmpty() && saved.imageUrl != editing.originalImageUrl) {
+                        viewModelScope.launch { imageBlobs.downloadAndStore(saved, force = true) }
+                    }
+                    // Manual market value: write (or refresh) a top-priority MANUAL
+                    // snapshot so the price card shows it; this never goes stale and
+                    // outranks every fetched source.
+                    if (saved.marketValueIsManual && saved.marketAvg > 0) {
+                        viewModelScope.launch {
+                            repository.savePriceSnapshot(
+                                com.funkodex.data.model.PriceSnapshot(
+                                    itemId        = saved.id,
+                                    source        = com.funkodex.data.model.PriceSource.MANUAL,
+                                    avg           = saved.marketAvg,
+                                    low           = saved.marketAvg,
+                                    high          = saved.marketAvg,
+                                    lastSalePrice = saved.marketAvg,
+                                    saleCount     = 0,
+                                    fetchedAt     = java.time.LocalDate.now(),
+                                )
+                            )
+                            _priceState.value = PriceUiState.Loaded(repository.getResolvedPrice(itemId))
+                        }
+                    }
+                    // If the manual value was cleared this edit, remove the MANUAL
+                    // snapshot so automatic pricing can take over again.
+                    if (!saved.marketValueIsManual) {
+                        viewModelScope.launch {
+                            repository.deletePriceSnapshot(saved.id, com.funkodex.data.model.PriceSource.MANUAL)
+                            _priceState.value = PriceUiState.Loaded(repository.getResolvedPrice(itemId))
+                        }
+                    }
                     val newUpc = editing.draft.upc.trim()
                     val oldUpc = editing.originalUpc.trim()
                     viewModelScope.launch {

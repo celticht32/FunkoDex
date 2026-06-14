@@ -5,6 +5,123 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — Session 11 — 2026-06-14
+
+Scanner, manual-add, image-handling, and pricing work, plus a market-value
+field and an architecture design document for community catalog distribution.
+
+### Added
+
+**Manual add of items not in the catalog**
+
+- New `ManualAddSheet` (in `ScannerScreen.kt`) reachable from both the
+  "Barcode not in catalog" sheet (UPC carried from the scan, locked) and the
+  toolbar manual-search sheet (UPC editable). Progressive disclosure: UPC,
+  name, owned/want, and a community-share toggle are always visible; Pop!
+  number, franchise, category, exclusive flag/retailer, price paid, condition,
+  and image URL are behind a "More details" expander. Only name is required.
+- `ManualAddInput` + `ScannerViewModel.confirmManualAdd` build a `FunkoItem`
+  (id `funko::{upc}` when a UPC is present) and, when share is on and a UPC
+  exists, queue a `CatalogContribution` with `source = "USER_MANUAL"`.
+- Removed the Funko *item* number from the form per design; the single number
+  field is the Pop! box number → `seriesNumber`.
+
+**Image URL entry on manual add and detail edit**
+
+- Manual-add form and the detail-edit screen both gained an editable Image URL
+  field. Detail edit auto-re-downloads the thumbnail on save when the URL
+  changed (new `force` flag on `ImageBlobRepository.downloadAndStore`, tracked
+  via `Editing.originalImageUrl`).
+
+**Manual market value**
+
+- Reused the existing `marketAvg` field, made editable in detail edit
+  ("Market value"). New `marketValueIsManual` flag (persisted via
+  `FunkoMapper` / `FIELD_MARKET_VALUE_IS_MANUAL`). A manual value is written as
+  a top-priority `MANUAL` price snapshot (new `PriceSource.MANUAL`, tier 0) so
+  it shows on the price card; cleared values delete the snapshot
+  (`FunkoRepository.deletePriceSnapshot`).
+- A manual value is a *fallback*: a real market feed (`snapshot.avg > 0`)
+  overwrites it and clears the flag. A retail-only hit (avg = 0) does not.
+
+**Community Catalog Distribution architecture design doc**
+
+- `FunkoDex_Catalog_Distribution_Architecture_v1.0.docx` — design only, not
+  built. Golden-master bundled base, core/user field split, community GitHub
+  hub with dated update packets, monthly client pull, and per-field conflict
+  resolution (always / ask / never-update with resettable locks). Five open
+  design decisions and a five-phase build sequence. See FUTURE.md.
+
+### Changed
+
+**eBay pricing: RSS feed → HTML sold-listing scrape**
+
+- The `_rss=1` completed-listings feed is retired; the request now fetches the
+  normal sold/completed results page with a browser User-Agent and parses
+  eBay's current `s-card__price` spans (skips `strikethrough` was-prices,
+  filters $3–$500, uses the **median** for the average). `PriceData.kt`
+  `EBAY_RSS` display label dropped "(RSS)". NOTE: live testing showed eBay
+  returns **403** to the app's request (bot block); the scrape is fragile and
+  this remains effectively unresolved — see FUTURE/eBay. Verified the parser
+  against a saved results page (35 prices, median ~$20 for Mr. Toad #1496).
+
+**Punctuation-tolerant catalog name search**
+
+- `FunkoLookupService` name search is now token-based: `normalizeForSearch`
+  strips non-alphanumerics, `matchesAllTokens` requires every query token to
+  appear. "mr toad", "mr. toad", "toad mr" all match "Mr. Toad". Applied to
+  both the Couchbase path (longest token as coarse pre-filter) and the JSON
+  fallback.
+
+**Scanner: frame-confirmation + retry**
+
+- `BarcodeAnalyzer` now requires the same value on 3 consecutive frames before
+  emitting (kills single-frame misreads). Added a "Scan again" button and an
+  empty-state to the NotFound sheet; the NotFound search icon moved to the
+  trailing position to match the manual-search sheet.
+
+**http→https for all image loads**
+
+- New `util/ImageUrl.kt` `String.toHttpsImageUrl()` upgrades `http://` image
+  URLs to `https://` at every `AsyncImage` site and in the blob downloader.
+  Fixes "CLEARTEXT communication not permitted" on http image hosts (e.g.
+  media.aent-m.com) without weakening the network security policy.
+
+### Fixed
+
+**Manual market value was wiped on refresh (staleDays overflow)**
+
+- `PriceSource.MANUAL`/`USER_PAID` used `staleDays = Int.MAX_VALUE`;
+  `LocalDate.plusDays(Int.MAX_VALUE)` overflows past the max year and throws,
+  so `PriceSnapshot.isStale` threw and `getResolvedPrice` discarded the
+  snapshot → resolved to 0 → overwrote the manual value. Changed to `36_500`
+  (100y) and hardened `isStale` to cap the horizon regardless of source value.
+
+**Failed price refresh blanked an existing manual/cached value**
+
+- A null fetch set `Error("No price data available")`, removing the displayed
+  price until the screen was re-entered. Now re-resolves and keeps showing the
+  cached/manual price, with a transient "No new market data found" note
+  (`noNewPriceData` flag).
+
+**Scanner camera black after screen-saver**
+
+- The camera was bound once in `AndroidView`'s factory and never rebound; after
+  screen-off/on the preview surface was stale → black screen until exit/re-enter.
+  Added a `DisposableEffect` that re-runs `startCamera` on `ON_RESUME`.
+
+**Manual-add form: Save unreachable; deprecated/unresolved API**
+
+- Made the `ManualAddSheet` column scrollable so Save is always reachable when
+  "More details" is expanded.
+- `Modifier.menuAnchor()` (deprecated) → `menuAnchor(MenuAnchorType.PrimaryNotEditable)`.
+  NOTE: the typed enum is `MenuAnchorType` in material3 1.3.0 — NOT
+  `ExposedDropdownMenuAnchorType` (that's the 1.4.0+ name, which failed to
+  resolve). Also fixed the same deprecation in `DetailScreen.kt`. See
+  LESSONS_LEARNED #30.
+
+---
+
 ## [Unreleased] — Session 10 — 2026-06-13
 
 ### Changed

@@ -66,6 +66,40 @@ See `CHANGELOG.md` Session 9 entry and `LESSONS_LEARNED.md` #26–27 for full de
 See `CHANGELOG.md` Session 10 entry and `LESSONS_LEARNED.md` #28–30 for full
 detail.
 
+## Session 11 fixes (2026-06-14)
+
+New/changed surface that affects existing items and adds new ones. See
+`CHANGELOG.md` Session 11 and `LESSONS_LEARNED.md` #31–33 for full detail.
+
+- **Manual add of catalog-missing items** — new `ManualAddSheet` reachable from
+  the "Barcode not in catalog" sheet AND the toolbar manual-search sheet. Creates
+  a `FunkoItem` (name required; UPC carried/locked from scan or editable) and
+  optionally queues a `USER_MANUAL` `CatalogContribution`. **Affects A2d** (the
+  not-found path now offers manual add, not only catalog match) and adds new
+  coverage — see DEVICE_TEST_PLAN §10.
+- **Punctuation-tolerant name search** — `FunkoLookupService` now token-matches
+  (normalize + all-tokens). "mr toad" matches "Mr. Toad". **Re-test A3a and A6** —
+  search behavior changed catalog-wide, not just for punctuated names.
+- **Manual market value** — editable `marketAvg` in detail edit; a manual value is
+  a fallback that a real feed (`snapshot.avg>0`) overwrites; retail-only hits do
+  not. **Affects A4b and A9/B3** (Reports market totals now include manual values;
+  a failed refresh must NOT blank a manual value — regression to verify).
+- **Image URL entry + http→https** — editable Image URL on manual add and detail
+  edit; detail edit auto-re-downloads on URL change. All image loads upgrade
+  `http://`→`https://`. **Affects A4d and DEVICE_TEST_PLAN §6** (the
+  "Image not available / CLEARTEXT" case should now load over https).
+- **Scanner frame-confirmation + retry** — `BarcodeAnalyzer` needs 3 consecutive
+  identical reads; NotFound sheet gained "Scan again" + empty-state. **Affects
+  A2a/A2d.**
+- **Camera black after screen-saver — FIXED** — scanner now rebinds the camera on
+  `ON_RESUME`. New device test, DEVICE_TEST_PLAN §3 addendum / §11.
+- **eBay pricing** — RSS→HTML scrape; returns **403 (bot block)** in practice, so
+  Tier 2a is effectively non-functional. **B3 / price tests:** expect eBay to
+  contribute nothing; market price comes from other tiers or manual value.
+- **Manual market value wipe-on-refresh — FIXED** (staleDays `Int.MAX_VALUE`
+  overflow). Regression: enter a manual market value, hit refresh on an item with
+  no feed data, confirm the value survives.
+
 ---
 
 ## Part A — Core Collection Features
@@ -75,6 +109,7 @@ detail.
 - [ ] A2b. Scan → want list (verify via Check badge / re-scan)
 - [ ] A2c. Scan → "Already in your collection" (variant / variant-missing-original / update)
 - [ ] A2d. Scan → "Barcode not in catalog" → match (silent USER_SCAN contribution)
+- [ ] A2d-2. Scan → "Barcode not in catalog" → **Add manually** (UPC locked; name required; saves; USER_MANUAL contribution queued if shared) — Session 11
 - [ ] A2e. Offline scan → "Scan queued — no network" → auto-resolve + notification
 - [ ] A3a. "Search Catalog" bulk add (incl. category-filtered results)
 - [ ] A3b. Batch scan FAB → "Save all (N)"
@@ -83,6 +118,9 @@ detail.
 - [ ] A4c. UPC scan dialog + "Share UPC with community?" prompt (USER_EDIT)
 - [ ] A4d. Photos: camera / gallery (Photo Picker, no permission prompt) / "Fetch from catalog"; "Save photo as" Main/Variation/Both
 - [ ] A4e. Variant edit: description, price, remove
+- [ ] A4g. **Manual market value** — enter value in edit; shows on card ("Manually set"); refresh with no feed data does NOT blank it (Session 11 regression); a real market feed overwrites it — Session 11
+- [ ] A4h. **Image URL entry** — paste image URL in edit; saves; auto-re-downloads thumbnail on URL change; http URL loads over https — Session 11
+- [ ] A4i. **Manual search → Add manually** — toolbar manual search "No results" → Add manually (UPC editable) → saves — Session 11
 - [ ] A4f. **Blob-preservation regression (CRITICAL — Session 7 risk)**
 - [ ] A5. Delete via card kebab menu AND detail trash → "Remove from collection?"
 - [ ] A6. Search / segmented sort (4 options) / "All" + franchise chips; confirm category prefs do NOT filter My Dex

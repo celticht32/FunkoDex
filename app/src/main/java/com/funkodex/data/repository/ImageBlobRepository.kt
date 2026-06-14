@@ -1,6 +1,7 @@
 package com.funkodex.data.repository
 
 import com.funkodex.util.FunkoDexLogger
+import com.funkodex.util.toHttpsImageUrl
 import com.couchbase.lite.Blob
 import com.funkodex.data.db.FunkoDexDatabase
 import com.funkodex.data.model.FunkoItem
@@ -42,29 +43,36 @@ class ImageBlobRepository @Inject constructor(
      * Download and store the image blob for the given item.
      * Silently no-ops if the item has no imageUrl or already has a blob.
      */
-    suspend fun downloadAndStore(item: FunkoItem): Boolean =
-        downloadAndStoreResult(item) is ImageFetchResult.Success
+    suspend fun downloadAndStore(item: FunkoItem, force: Boolean = false): Boolean =
+        downloadAndStoreResult(item, force) is ImageFetchResult.Success
 
     /**
      * Like [downloadAndStore] but returns a specific outcome so callers (e.g. the
      * detail-screen "Fetch from catalog" action) can show an accurate error
      * instead of a generic "could not download" with a list of maybe-causes.
+     *
+     * @param force when true, re-downloads even if a thumbnail blob is already
+     *   stored. Used when the user changes [FunkoItem.imageUrl] on edit — the
+     *   cached blob is stale and must be replaced.
      */
-    suspend fun downloadAndStoreResult(item: FunkoItem): ImageFetchResult = withContext(Dispatchers.IO) {
+    suspend fun downloadAndStoreResult(
+        item: FunkoItem,
+        force: Boolean = false,
+    ): ImageFetchResult = withContext(Dispatchers.IO) {
         if (item.imageUrl.isEmpty()) return@withContext ImageFetchResult.NoUrl
         if (item.id.isEmpty())       return@withContext ImageFetchResult.NoUrl
 
         val collection = db.getCollection()
 
-        // Skip if blob already stored
+        // Skip if blob already stored (unless forcing a refresh)
         val existing = collection.getDocument(item.id)
-        if (existing?.getBlob(FunkoDexDatabase.FIELD_THUMBNAIL_BLOB) != null) {
+        if (!force && existing?.getBlob(FunkoDexDatabase.FIELD_THUMBNAIL_BLOB) != null) {
             return@withContext ImageFetchResult.Success
         }
 
         return@withContext runCatching {
             val request = Request.Builder()
-                .url(item.imageUrl)
+                .url(item.imageUrl.toHttpsImageUrl())
                 .header("User-Agent", "FunkoDex/1.0 Android (image cache)")
                 .build()
 

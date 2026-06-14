@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.funkodex.ui.help.HelpContent
+import com.funkodex.util.toHttpsImageUrl
 import com.funkodex.ui.help.HelpEmptyState
 import coil.compose.AsyncImage
 import com.funkodex.data.model.FunkoItem
@@ -183,7 +184,7 @@ private fun FunkoGridCard(
             Box {
                 AsyncImage(
                     model             = when {
-                        item.imageUrl.isNotEmpty() -> item.imageUrl
+                        item.imageUrl.isNotEmpty() -> item.imageUrl.toHttpsImageUrl()
                         item.userPhoto != null     -> item.userPhoto
                         item.thumbnailBlob != null -> item.thumbnailBlob
                         else                       -> null

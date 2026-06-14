@@ -39,6 +39,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsNone
 import com.funkodex.data.model.Condition
+import com.funkodex.util.toHttpsImageUrl
 import com.funkodex.data.model.FunkoItem
 import com.funkodex.data.model.FunkoGenre
 import com.funkodex.data.model.FunkoCategories
@@ -52,6 +53,7 @@ fun DetailScreen(
 ) {
     val state      by viewModel.state.collectAsState()
     val priceState  by viewModel.priceState.collectAsState()
+    val noNewPrice  by viewModel.noNewPriceData.collectAsState()
     val photoBytes  by viewModel.photoBytes.collectAsState()
     val photoError  by viewModel.photoError.collectAsState()
     val alertState  by viewModel.alertState.collectAsState()
@@ -287,6 +289,7 @@ fun DetailScreen(
                     onToggleAlert  = viewModel::toggleAlert,
                     photoBytes     = photoBytes,
                     priceState     = priceState,
+                    noNewPrice     = noNewPrice,
                     onRefreshPrices= viewModel::refreshPrices,
                     onClearMissingOriginal = viewModel::clearMissingOriginal,
                     onMarkVariantOnly      = viewModel::markVariantOnly)
@@ -300,6 +303,8 @@ fun DetailScreen(
                     onNotes    = viewModel::updateNotes,
                     onCategory = viewModel::updateCategory,
                     onUpc      = viewModel::updateUpc,
+                    onImageUrl = viewModel::updateImageUrl,
+                    onMarketValue = viewModel::updateMarketValue,
                     photoBytes        = photoBytes,
                     onSavePhoto       = viewModel::setPendingPhoto,
                     onDeletePhoto     = viewModel::deletePhoto,
@@ -346,6 +351,7 @@ private fun ViewContent(
     onToggleAlert:           (Boolean) -> Unit,
     photoBytes:              ByteArray?,
     priceState:              PriceUiState,
+    noNewPrice:              Boolean,
     onRefreshPrices:         () -> Unit,
     onClearMissingOriginal:  () -> Unit,
     onMarkVariantOnly:       () -> Unit,
@@ -537,7 +543,7 @@ private fun ViewContent(
         }
 
         // B3: Market price card
-        MarketPriceCard(priceState = priceState, onRefresh = onRefreshPrices)
+        MarketPriceCard(priceState = priceState, noNewData = noNewPrice, onRefresh = onRefreshPrices)
 
         // Missing original banner — context only, action is on the chip above
         if (item.isMissingOriginal) {
@@ -764,7 +770,7 @@ private fun PhotoCard(
             // 2. HobbyDB catalog image URL
             imageUrl.isNotEmpty() -> {
                 AsyncImage(
-                    model              = imageUrl,
+                    model              = imageUrl.toHttpsImageUrl(),
                     contentDescription = itemName,
                     modifier           = Modifier.fillMaxSize(),
                     contentScale       = ContentScale.Fit,
@@ -1105,6 +1111,7 @@ fun AlertBottomSheet(
 @Composable
 private fun MarketPriceCard(
     priceState: PriceUiState,
+    noNewData:  Boolean,
     onRefresh:  () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -1158,6 +1165,13 @@ private fun MarketPriceCard(
                     )
                 }
             }
+            if (noNewData) {
+                Text(
+                    "No new market data found — showing last known value.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -1188,6 +1202,8 @@ private fun EditContent(
     onNotes:           (String) -> Unit,
     onCategory:        (String) -> Unit,
     onUpc:             (String) -> Unit,
+    onImageUrl:        (String) -> Unit,
+    onMarketValue:     (String) -> Unit,
     photoBytes:        ByteArray?,
     onSavePhoto:       (android.net.Uri) -> Unit,
     onDeletePhoto:     () -> Unit,
@@ -1267,7 +1283,7 @@ private fun EditContent(
                 },
                 modifier      = Modifier
                     .fillMaxWidth()
-                    .menuAnchor(),
+                    .menuAnchor(MenuAnchorType.PrimaryNotEditable),
             )
             ExposedDropdownMenu(
                 expanded         = categoryExpanded,
@@ -1324,6 +1340,23 @@ private fun EditContent(
             singleLine    = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         )
+        OutlinedTextField(
+            value         = if (draft.marketAvg > 0) "%.2f".format(draft.marketAvg) else "",
+            onValueChange = onMarketValue,
+            label         = { Text("Market value") },
+            prefix        = { Text("$") },
+            supportingText = {
+                Text(
+                    if (draft.marketValueIsManual)
+                        "Set by you — used until a price lookup finds real market data, which will replace it."
+                    else
+                        "Auto-filled from price lookup. Enter a value to use until real market data is found."
+                )
+            },
+            modifier      = Modifier.fillMaxWidth(),
+            singleLine    = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        )
 
         // Condition selector
         Text("Condition", style = MaterialTheme.typography.labelMedium,
@@ -1345,6 +1378,17 @@ private fun EditContent(
             label         = { Text("Notes") },
             modifier      = Modifier.fillMaxWidth().heightIn(min = 80.dp),
             maxLines      = 6,
+        )
+
+        OutlinedTextField(
+            value         = draft.imageUrl,
+            onValueChange = onImageUrl,
+            label         = { Text("Image URL") },
+            placeholder   = { Text("Paste a funko.com or HobbyDB image link") },
+            supportingText = { Text("Changing this re-downloads the picture on save") },
+            singleLine    = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+            modifier      = Modifier.fillMaxWidth(),
         )
 
         // UPC field with optional barcode scan

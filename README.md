@@ -10,14 +10,15 @@ and get notified when market prices drop.
 
 - **Barcode scanner** — ML Kit, 5-tier lookup (eBay, UPCitemdb, Channel3, HobbyDB)
 - **Batch scan** — scan multiple items without stopping
+- **Manual add** — add items not in the catalog (e.g. convention exclusives), with optional community contribution
 - **Store check** — pre-purchase scanner: "do I already own this?"
-- **Collection grid** — searchable, filterable by category and franchise, sortable
-- **Price tracking** — eBay sold listings, Channel3, HobbyDB (with sign-in)
+- **Collection grid** — searchable (punctuation-tolerant), filterable by category and franchise, sortable
+- **Price tracking** — Channel3, HobbyDB (with sign-in); manual market value when no source has data
 - **Price drop alerts** — daily background checks, notification at target price
 - **Reports** — cost breakdown, series completion, want list, market value
 - **Export** — Excel (4 sheets) or CSV via email / Files / Drive
 - **Home screen widget** — owned count + top market value
-- **Offline-first** — 23 K+ Funko records bundled; no network needed for common items
+- **Offline-first** — Funko records bundled; no network needed for common items
 - **Google Drive backup** — automatic daily backup on Wi-Fi
 - **Community UPC database** — opt-in anonymous contribution of UPC→product matches
 - **OAuth token management** — silent refresh + weekly background keep-alive

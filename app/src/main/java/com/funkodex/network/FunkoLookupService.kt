@@ -45,6 +45,28 @@ class FunkoLookupService @Inject constructor(
         private const val UPCITEMDB_LOOKUP = "https://api.upcitemdb.com/prod/trial/lookup?upc="
         private const val BARCODESPIDER     = "https://www.barcodelookup.com/"
         private const val USER_AGENT       = "FunkoDex/1.0 Android"
+
+        /**
+         * Normalize a string for punctuation-insensitive name matching.
+         * Lowercases, replaces any run of non-alphanumeric characters with a
+         * single space, and trims. So "Mr. Toad", "mr toad", and "MR.  TOAD"
+         * all normalize to "mr toad".
+         */
+        internal fun normalizeForSearch(s: String): String =
+            s.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()
+
+        /**
+         * True when every whitespace-delimited token of [query] appears as a
+         * substring of the normalized [haystack]. Token order does not matter,
+         * so "toad mr" matches "Mr. Toad" just as "mr toad" does. An all-blank
+         * query matches nothing.
+         */
+        internal fun matchesAllTokens(query: String, haystack: String): Boolean {
+            val tokens = normalizeForSearch(query).split(' ').filter { it.isNotEmpty() }
+            if (tokens.isEmpty()) return false
+            val hay = normalizeForSearch(haystack)
+            return tokens.all { hay.contains(it) }
+        }
     }
 
     private val gson = Gson()
@@ -121,17 +143,18 @@ class FunkoLookupService @Inject constructor(
     }
 
     private fun searchLocalByName(query: String): List<FunkoItem> {
-        val t0 = System.currentTimeMillis()
         return try {
-            val q = query.lowercase()
-            // Diagnostic: count total catalog documents
-            val totalCount = com.couchbase.lite.QueryBuilder
-                .select(com.couchbase.lite.SelectResult.expression(com.couchbase.lite.Meta.id).`as`("id"))
-                .from(com.couchbase.lite.DataSource.collection(db.getCollection()))
-                .where(com.couchbase.lite.Expression.property("type")
-                    .equalTo(com.couchbase.lite.Expression.string("catalog")))
-                .execute().use { it.allResults().size }
-            val results = com.couchbase.lite.QueryBuilder
+            val tokens = normalizeForSearch(query).split(' ').filter { it.isNotEmpty() }
+            if (tokens.isEmpty()) return emptyList()
+            // Use the longest token as the coarse Couchbase pre-filter: it is the
+            // most selective and keeps the candidate set small. Punctuation in the
+            // stored value can't break this because we only require ONE normalized
+            // token to appear via LIKE; exact token/punctuation matching is then
+            // done in-memory by matchesAllTokens below. (A leading-wildcard LIKE
+            // is a full scan regardless, so this is no slower than the old query.)
+            val coarse = tokens.maxByOrNull { it.length } ?: tokens.first()
+
+            val candidates = com.couchbase.lite.QueryBuilder
                 .select(
                     com.couchbase.lite.SelectResult.expression(com.couchbase.lite.Meta.id).`as`("id"),
                     com.couchbase.lite.SelectResult.all()
@@ -144,25 +167,28 @@ class FunkoLookupService @Inject constructor(
                         .and(
                             com.couchbase.lite.Function.lower(
                                 com.couchbase.lite.Expression.property("title"))
-                                .like(com.couchbase.lite.Expression.string("%$q%"))
+                                .like(com.couchbase.lite.Expression.string("%$coarse%"))
                             .or(
                                 com.couchbase.lite.Function.lower(
                                     com.couchbase.lite.Expression.property("series"))
-                                    .like(com.couchbase.lite.Expression.string("%$q%"))
+                                    .like(com.couchbase.lite.Expression.string("%$coarse%"))
                             )
                         )
                 )
-                .limit(com.couchbase.lite.Expression.intValue(20))
                 .execute()
                 .allResults()
                 .mapNotNull { result ->
                     val docId = result.getString("id") ?: return@mapNotNull null
                     val doc = db.getCollection().getDocument(docId) ?: return@mapNotNull null
+                    val title  = doc.getString("title") ?: ""
+                    val series = doc.getString("series") ?: ""
+                    // Require ALL query tokens to match against title + series combined.
+                    if (!matchesAllTokens(query, "$title $series")) return@mapNotNull null
                     com.funkodex.data.model.FunkoItem(
                         id           = docId,
                         upc          = doc.getString("upc") ?: "",
-                        name         = doc.getString("title") ?: "",
-                        franchise    = doc.getString("series") ?: "",
+                        name         = title,
+                        franchise    = series,
                         seriesNumber = doc.getString("seriesNumber") ?: "",
                         category     = doc.getString("category") ?: "",
                         imageUrl     = doc.getString("imageUrl") ?: "",
@@ -172,12 +198,21 @@ class FunkoLookupService @Inject constructor(
                         isVaulted    = doc.getBoolean("isVaulted"),
                     )
                 }
-            // If Couchbase returned nothing, catalog may still be loading — fall back to JSON
-            if (results.isEmpty()) loadLocalDb().filter { record ->
-                record.resolvedName?.lowercase()?.contains(q) == true ||
-                record.series?.any { it.lowercase().contains(q) } == true
-            }.take(20).map { it.toFunkoItem() }
-            else results
+                .take(20)
+
+            // If Couchbase returned nothing, the catalog may still be loading —
+            // fall back to the in-memory JSON bundle using the same token logic.
+            if (candidates.isEmpty()) {
+                loadLocalDb().asSequence()
+                    .filter { record ->
+                        val name   = record.resolvedName ?: ""
+                        val series = record.series?.joinToString(" ") ?: ""
+                        matchesAllTokens(query, "$name $series")
+                    }
+                    .take(20)
+                    .map { it.toFunkoItem() }
+                    .toList()
+            } else candidates
         } catch (e: Exception) {
             android.util.Log.e("FunkoLookup", "Couchbase search failed: ${e.message}")
             emptyList()

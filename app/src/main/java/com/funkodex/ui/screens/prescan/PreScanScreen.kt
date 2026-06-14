@@ -25,6 +25,7 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.funkodex.data.model.FunkoItem
+import com.funkodex.util.toHttpsImageUrl
 import com.funkodex.ui.screens.scanner.BarcodeAnalyzer
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.camera.core.*
@@ -166,7 +167,7 @@ private fun OwnedResult(item: FunkoItem) {
 
         if (item.imageUrl.isNotEmpty()) {
             AsyncImage(
-                model = item.imageUrl, contentDescription = null,
+                model = item.imageUrl.toHttpsImageUrl(), contentDescription = null,
                 modifier = Modifier.size(80.dp).clip(RoundedCornerShape(8.dp)),
                 contentScale = ContentScale.Fit,
             )
@@ -206,7 +207,7 @@ private fun NotOwnedResult(item: FunkoItem) {
 
         if (item.imageUrl.isNotEmpty()) {
             AsyncImage(
-                model = item.imageUrl, contentDescription = null,
+                model = item.imageUrl.toHttpsImageUrl(), contentDescription = null,
                 modifier = Modifier.size(80.dp).clip(RoundedCornerShape(8.dp)),
                 contentScale = ContentScale.Fit,
             )

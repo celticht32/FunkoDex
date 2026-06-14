@@ -219,6 +219,14 @@ class FunkoRepository @Inject constructor(
         }
     }
 
+    /** Delete a single cached price snapshot for [itemId] from [source], if present. */
+    suspend fun deletePriceSnapshot(itemId: String, source: PriceSource) = withContext(Dispatchers.IO) {
+        runCatching {
+            val docId = "price::${itemId}::${source.name}"
+            collection.getDocument(docId)?.let { collection.delete(it) }
+        }
+    }
+
     /**
      * Read all cached price snapshots for [itemId] and resolve the best
      * non-stale price across all sources.

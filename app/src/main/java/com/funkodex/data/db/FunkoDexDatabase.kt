@@ -38,6 +38,7 @@ class FunkoDexDatabase(private val context: Context) {
         const val FIELD_MARKET_LOW     = "marketLow"
         const val FIELD_MARKET_HIGH    = "marketHigh"
         const val FIELD_MARKET_AVG     = "marketAvg"
+        const val FIELD_MARKET_VALUE_IS_MANUAL = "marketValueIsManual"
         const val FIELD_PRICE_UPDATED  = "priceLastUpdated"
 
         // Flags

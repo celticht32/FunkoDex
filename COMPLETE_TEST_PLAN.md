@@ -6,6 +6,13 @@ repository source (master, verified in sync with GitHub). As of Session 9
 `CatalogDataSection` are present and wired — the "local-only file" caveats
 that previously applied to A9/B1–B3/B6 no longer apply.
 
+**Session 11 additions (2026-06-14):** manual add of catalog-missing items
+(A2d-2, A4i), manual market value (A4g), image URL entry + http→https (A4h,
+A4d), camera-survives-screen-saver (A4j — device only), and punctuation-tolerant
+token search (A3a). eBay pricing (Tier 2a) switched RSS→HTML but returns 403 in
+practice — for any price test, expect eBay to contribute nothing; market price
+comes from other tiers or a manual value. See CHANGELOG Session 11.
+
 Recommended order: **Part A** (core) → **Part B** (integrations) → **Part C**
 (backup/restore — LAST, force-restore wipes the database) → **Part D**
 (automated) → **Part E** (16 KB regression).
@@ -90,13 +97,40 @@ button and a **"Search by name"** button.
 
 11. Scan a barcode not in any source (a non-Funko product barcode works).
 12. **Expected:** sheet titled **"Barcode not in catalog"** with:
-    - **"UPC (edit if scanned incorrectly)"** field with a **Retry** action
-    - **"Search by name (e.g. Batman)"** field
-    - **"Tap to match this UPC to an item:"** results list
+    - **"Search by name (e.g. Batman)"** field with a trailing search icon
+      (Session 11: icon moved to trailing; live search as you type, ≥2 chars)
+    - results list when matches are found
+    - a **"No catalog matches for …"** line when a search returns nothing
+      (Session 11 empty-state)
+    - a **"Scan again"** button (Session 11 — returns to live scanning, clears
+      the last-scanned UPC so the same barcode can be re-read)
+    - an **"Add manually"** button (Session 11 — see A2d-2)
 13. Search and tap a catalog match. **Expected:** transitions to the normal
     preview sheet with the scanned UPC merged onto the matched item. **A
     community contribution (source USER_SCAN) is saved silently — there is no
     prompt for this path** (see B5).
+
+### A2d-2. Scan → unknown UPC → Add manually (Session 11)
+
+11b. From the "Barcode not in catalog" sheet (A2d), tap **"Add manually"**.
+12b. **Expected:** **"Add item manually"** sheet with the UPC shown **locked**
+     (from the scan, lock icon), a required **"Name"** field, an
+     **Owned / Want list** toggle, a **"More details"** expander, and a
+     **"Share with community UPC database"** checkbox (on by default).
+13b. Expand **More details**. **Expected:** Pop! number (box number),
+     Franchise, Category (dropdown), Exclusive toggle → retailer/event,
+     Price paid, Condition, Image URL. Confirm the sheet scrolls so
+     **"Add to collection"** stays reachable.
+14b. Enter only a Name, tap **"Add to collection"**. **Expected:** item saved
+     to My Dex with id `funko::{upc}`; sheet dismisses to scanning. With share
+     left on and a UPC present, a `USER_MANUAL` `CatalogContribution` is queued
+     (verify via B5 worker/contribution log).
+15b. Re-scan the same barcode. **Expected:** now resolves instantly to the
+     manually-added item (UPC is linked).
+
+**Pass:** locked UPC carries through; name-only save works; Save reachable with
+More details open; future scan of the same UPC resolves; contribution queued
+when shared.
 
 ### A2e. Scan offline → pending queue
 
@@ -130,12 +164,20 @@ button and a **"Search by name"** button.
    (`searchByName` applies the category filter) — if a category is disabled in
    **Settings → Collection categories**, matching items won't appear here.
    This is the correct place to observe the category filter working (see A6).
+   **Session 11:** matching is now token-based and punctuation-tolerant —
+   "mr toad", "mr. toad", and "toad mr" all return "Mr. Toad". Spot-check a
+   punctuated title to confirm.
 5. Select 2–3 rows. **Expected:** rows highlight, "N selected" shows, bottom
    button changes from **"Select items to add"** (disabled) to
    **"Add N to collection"** (enabled).
 6. Tap **"Add N to collection"**. **Expected:** all selected items land in
    **My Dex** as owned.
-7. Search gibberish ("zzzznonexistent") — **expected:** "No results found".
+7. Search gibberish ("zzzznonexistent") — **expected:** **"No results found"**
+   plus an **"Add manually"** button (Session 11). Tap it. **Expected:** the
+   **"Add item manually"** sheet opens with the **UPC field editable/blank**
+   (not locked — there was no scan); enter a Name and **Add to collection**;
+   item lands in My Dex (id `funko::{uuid}` when no UPC entered). This is the
+   manual-search entry point to manual add (A2d-2 is the scan entry point).
 
 ### A3b. Batch scan
 
@@ -181,7 +223,8 @@ Open an item from **My Dex** (tap its card).
 5. Tap the pencil. **Expected:** title becomes **"Edit Funko"**; top-bar
    actions become **"Save"** (text button) and a Close (X) icon that cancels.
 6. Fields: **Name**, **Series**, **#**, **Price paid** ($ prefix),
-   **Condition** chips, **Notes**, **UPC** (with a camera icon).
+   **Market value** ($ prefix — Session 11), **Condition** chips, **Notes**,
+   **Image URL** (Session 11), **UPC** (with a camera icon, read-only/scan-only).
 7. Edit Notes and Price paid → **Save** → re-open → values persisted.
 
 ### A4c. Edit mode — UPC scan + community prompt
@@ -222,7 +265,45 @@ Open an item from **My Dex** (tap its card).
 16. **Fetch from catalog** — **expected:** dialog **"Fetching image"**
     ("Downloading image from the Funko catalog…") then **"Image downloaded"**
     ("The catalog image has been saved to this item.") — or **"Image not
-    available"** if the catalog has none for this item.
+    available"** if the catalog has none for this item. **Session 11:** image
+    URLs that start with `http://` are upgraded to `https://` before loading,
+    so a previously-failing **"CLEARTEXT communication not permitted"** URL
+    (e.g. media.aent-m.com) should now succeed. A redirect-loop / "too many
+    follow-up requests" URL is dead data — fix by setting a real Image URL
+    (A4h), not an app bug.
+
+### A4g. Manual market value (Session 11)
+
+18. In edit mode, set **Market value** to a dollar amount on an item the price
+    tiers can't price (e.g. a manually-added exclusive). **Save.**
+19. **Expected:** the Market Price card shows the value with source
+    **"Manually set"**. The value persists across navigation.
+20. Tap **Refresh prices** (refresh icon on the Market Price card) for that
+    item. **Expected:** the manual value is **NOT** wiped — the card keeps
+    showing it and adds a small **"No new market data found — showing last
+    known value."** note. (Regression guard for the staleDays-overflow bug.)
+21. On an item the tiers CAN price, set a manual value, then **Refresh**.
+    **Expected:** a real market feed **overwrites** the manual value and the
+    "Manually set" source is replaced by the feed's source.
+22. Open **Reports**. **Expected:** "Est. Market Value" includes manually-set
+    values.
+
+**Pass:** manual value displays and persists; no-data refresh keeps it; real
+feed overwrites it; Reports totals include it.
+
+### A4h. Image URL entry + http→https (Session 11)
+
+23. In edit mode, paste a **direct image URL** (HobbyDB/funko.com, ending in an
+    image extension or a CDN image path) into **Image URL**. **Save.**
+24. **Expected:** image appears on the detail card and the My Dex thumbnail.
+25. Change the Image URL to a different valid image and **Save**. **Expected:**
+    the thumbnail re-downloads — the new image replaces the old cached one
+    (auto re-download on URL change).
+26. (Negative) Paste a **page** URL (e.g. `…/78901.html`). **Expected:** it does
+    NOT render — a page URL is not an image; this is expected, not a bug.
+
+**Pass:** valid image URL loads and persists; URL change re-downloads; http
+hosts load via https; page URLs correctly fail to render.
 
 ### A4e. Variants editing
 
@@ -759,16 +840,21 @@ On the **16 KB Page Size** emulator (Pixel 10, API 37.0) from Session A:
 - [ ] A2b. Scan → want list (verify via Check badge / re-scan)
 - [ ] A2c. Scan → "Already in your collection" (all 3 options)
 - [ ] A2d. Scan → "Barcode not in catalog" → match (silent contribution)
+- [ ] A2d-2. Scan → "Barcode not in catalog" → **Add manually** (UPC locked) — Session 11
 - [ ] A2e. Offline scan → "Scan queued — no network" → auto-resolve + notification
-- [x] A3a. "Search Catalog" bulk add (incl. category-filtered results)
+- [x] A3a. "Search Catalog" bulk add (incl. category-filtered + token search) — re-test Session 11
 - [ ] A3b. Batch scan FAB → "Save all (N)"
 - [x] A4a. View mode (status card "Tap to move", chips, Market Price)
-- [x] A4b. Edit fields ("Edit Funko" / "Save")
+- [x] A4b. Edit fields ("Edit Funko" / "Save") — re-test: Market value + Image URL added (S11)
 - [ ] A4c. UPC scan dialog + "Share UPC with community?" prompt
 - [ ] A4d. Photos: camera / gallery (Photo Picker, no permission) / "Fetch
-      from catalog"; "Save photo as" Main/Variation/Both
+      from catalog" (http→https — S11); "Save photo as" Main/Variation/Both
 - [x] A4e. Variant edit: description, price, remove
 - [x] A4f. **Blob-preservation regression (critical)**
+- [ ] A4g. **Manual market value** — display, no-data-refresh keeps it, feed overwrites — Session 11
+- [ ] A4h. **Image URL entry** — load, re-download on change, http→https — Session 11
+- [ ] A4i. **Manual search → Add manually** (UPC editable) — Session 11 (see A3a step 7)
+- [ ] A4j. **Camera survives screen-saver** (rebind on resume) — Session 11; device only, see DEVICE_TEST_PLAN §11
 - [x] A5. Delete via card kebab menu AND detail trash → "Remove from collection?"
 - [x] A6. Search / segmented sort (4 options) / "All"+franchise chips
 - [x] A7. Price alerts (want-list only; "Target price (USD)")

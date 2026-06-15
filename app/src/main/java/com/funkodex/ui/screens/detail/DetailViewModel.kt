@@ -474,12 +474,16 @@ class DetailViewModel @Inject constructor(
             is DetailUiState.Editing -> s.draft
             else -> null
         } ?: return
-        // Resolve an image URL. Prefer the item's own imageUrl; if blank, fall
-        // back to the linked catalog doc (catalogRef → catalog::{handle}),
-        // trying its imageUrl then funkoImageUrl. This lets items that were
-        // created without an image still recover one without a full re-import.
-        var resolvedUrl = item.imageUrl
-        if (resolvedUrl.isEmpty() && item.catalogRef.isNotEmpty()) {
+        // Resolve an image URL. The user's own imageUrl is authoritative and is
+        // NEVER overwritten by this action. Only when the item has no URL of its
+        // own do we fall back to the linked catalog doc (catalogRef →
+        // catalog::{handle}), trying its imageUrl then funkoImageUrl. This lets
+        // items created without an image recover one, without ever clobbering a
+        // URL the user entered by hand.
+        val userUrl = item.imageUrl.trim()
+        val hasUserUrl = userUrl.isNotEmpty()
+        var resolvedUrl = userUrl
+        if (!hasUserUrl && item.catalogRef.isNotEmpty()) {
             val catalogDoc = db.getCollection().getDocument(item.catalogRef)
             resolvedUrl = catalogDoc?.getString(com.funkodex.data.preload.CatalogMapper.FIELD_IMAGE_URL)
                 ?.takeIf { it.isNotBlank() }
@@ -488,7 +492,7 @@ class DetailViewModel @Inject constructor(
                 ?: ""
         }
         if (resolvedUrl.isEmpty()) {
-            _fetchState.value = FetchState.Failed("No catalog image URL available for this item")
+            _fetchState.value = FetchState.Failed("No image URL set for this item, and no catalog image is available. Add an image URL in edit, or take a photo.")
             return
         }
         val itemWithUrl = item.copy(id = itemId, imageUrl = resolvedUrl)
@@ -499,8 +503,12 @@ class DetailViewModel @Inject constructor(
             val doc = db.getCollection().getDocument(itemId)?.toMutable()
             if (doc != null) {
                 doc.remove(com.funkodex.data.db.FunkoDexDatabase.FIELD_THUMBNAIL_BLOB)
-                // Persist the resolved URL onto the item so future fetches/displays have it
-                doc.setString(com.funkodex.data.db.FunkoDexDatabase.FIELD_IMAGE_URL, resolvedUrl)
+                // Persist the resolved URL ONLY when the item had no user URL of its
+                // own (i.e. we recovered one from the catalog). Never overwrite a
+                // user-entered imageUrl with a catalog URL.
+                if (!hasUserUrl) {
+                    doc.setString(com.funkodex.data.db.FunkoDexDatabase.FIELD_IMAGE_URL, resolvedUrl)
+                }
                 db.getCollection().save(doc)
             }
             val result = imageBlobs.downloadAndStoreResult(itemWithUrl)

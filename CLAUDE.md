@@ -44,13 +44,13 @@ as they run, with one-line results in its log section.
 `db.reopen()` → fresh `Collection` accessor path, the biggest regression risk
 from the Collection API migration. Run Part C last (it wipes the database).
 
-**Two known wiring gaps — RESOLVED Session 9 (commits `74c5616`, `6f2c523`):**
+**Two known wiring gaps — RESOLVED Session 9 (commits `74c5616`, `6f2c523`), VERIFIED working:**
 - `ReportsScreen.kt` + `ReportsViewModel.kt` created at
   `ui/screens/reports/`, wired into `FunkoDexNavHost.kt`. A9 unblocked.
 - `CatalogDataSection` is now invoked from the "Catalog" section of
   `SettingsScreen.kt`. B1–B3, B6 unblocked.
 
-Both untested-but-reachable as of Session 9; see `TEST_TRACKER.md`.
+Both wired and verified working as of Session 9; no longer open gaps.
 
 ---
 
@@ -149,8 +149,7 @@ com.funkodex/
 
   > **Note:** `CatalogDataSection` (Channel3/HobbyDB/eBay "Lookup sources"
   > rows + "Refresh now") is now invoked from the "Catalog" section of
-  > `SettingsScreen.kt` (Session 9). Reachable but untested — see
-  > `TEST_TRACKER.md`.
+  > `SettingsScreen.kt` (Session 9). Reachable and verified working.
 ```
 
 ---

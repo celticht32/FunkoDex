@@ -6,8 +6,8 @@ FunkoDex is an Android Kotlin/Jetpack Compose app for managing a Funko Pop colle
 Built entirely in Claude across multiple sessions. This file gives Claude the full
 context needed to work on the codebase without re-explaining architecture.
 
-**71 Kotlin source files. Feature-complete at the code level through
-Sessions 1–13. Sessions 7–8 (CBL Collection API + Keystore migrations) and
+**72 Kotlin source files. Feature-complete at the code level through
+Sessions 1–14.** Sessions 7–8 (CBL Collection API + Keystore migrations) and
 Session 11 (scanner/manual-add/pricing/image work) were the prior big code
 changes; Session 12 added manual-UPC validation, variant-aware pricing, an
 "enter details manually" entry point, and two resource-leak fixes (HTTP
@@ -23,11 +23,64 @@ variant the catalog has but PriceCharting lists only as a base figure takes the
 base price, flagged, when the core name matches exactly — wrong-figure matches
 still skip. A full production crawl run (1000 new scannable Pops, ~94% with UPCs)
 validated the pipeline end to end.
-Full functional/device test pass remains the standing focus — see Testing
-below; on-device confirmation of the scan-from-catalog and live-refresh paths
-is the immediate Session 13 verification. A Community Catalog Distribution
-architecture (golden-master base + GitHub update packets) is designed but not
-built — see FUTURE.md.**
+
+**Session 14 — catalog data quality + re-link + field protection (code-only).**
+Five threads, all to maximise data quality for the golden master and for
+owned items on-device:
+1. **Enriched-import parser fix** (`CatalogImporter.toEnrichedRecord`): nine
+   keys the hand-rolled JSON mapper silently dropped are now read —
+   `marketValueComplete` (the PRIMARY in-box price) plus `releaseDate`,
+   `ebayEpid`, `amazonAsin`, `printRun`, `publisher`, `pcSeries`,
+   `pcDescription`. `marketValueIsApproximate` stays excluded (computed flag,
+   absent from the JSON).
+2. **Catalog merge → last-enricher-wins** (`CatalogImporter.mergeRecordInto`):
+   re-importing now OVERWRITES every enricher-derived field a record supplies
+   and RECOMPUTES the series-derived fields (seriesList, category,
+   primarySeries, isExclusive, exclusiveRetailer, isChase, seriesNumber) from
+   the incoming tags via the new shared `CatalogMapper.deriveSeriesFields`.
+   This is what propagates an improved enrich.js run (e.g. a series list that
+   grew from 12 to 20+ tags, corrected categories) onto records already in the
+   catalog. Catalog docs hold no user data, so overwrite is correct. Only
+   `handle`, `title`, and `imageUrl` are preserved. The old "repair only the
+   exact 'Pop! Vinyl' category" block is gone — category is recomputed every
+   import. `mapRecord` was refactored to use the same helper, so insert and
+   merge can't drift (insert output unchanged).
+3. **Collection re-link service** (`data/preload/CollectionRelinkService.kt`,
+   NEW): fills/refreshes owned `funko::` items from the enriched catalog so
+   items you already own pick up new UPC/price/image/franchise/category data
+   without re-scanning. Matches each item to its catalog doc by `catalogRef`
+   then UPC (ambiguous UPCs dropped). Run AFTER importing the enriched JSON —
+   the catalog must be enriched first. Surfaced as a "Re-link collection to
+   catalog" row in Settings → Catalog (under "Import Enriched Catalog"), with
+   the same progress/result dialog pattern as the import; both rows guard each
+   other from running concurrently.
+4. **Field protection** (Option B): a `userEditedFields` marker on `funko::`
+   docs records which fields the user edited by hand in the detail screen
+   (franchise, category, upc, imageUrl are stamped by `DetailViewModel`).
+   Re-link REFRESHES a user-editable field from the catalog only when the
+   marker is present and doesn't list it; otherwise fill-only. Pure-enrichment
+   fields (retailPrice, pricechartingUrl, funkoId, market value when not
+   `marketValueIsManual`) always refresh. **Migration rule:** an ABSENT marker
+   (null — a doc created before this field existed) falls back to fill-only for
+   the user-editable fields, so a pre-marker edit is never retroactively
+   clobbered. Marker stored as a JSON-array string, removed when null (so
+   absent stays distinguishable from empty). Every re-link write is guarded by
+   a value-changed check → idempotent.
+5. **Backup/restore audited, no change needed:** the serializer
+   (`DatabaseTransferViewModel.docToJson`/`jsonToDoc`) is field-agnostic
+   (walks `doc.keys`, handles every type FunkoMapper writes), so all new
+   enriched fields ride through backup/restore/force-restore automatically with
+   no stale field schema. Verified against FunkoMapper, not assumed.
+
+The golden-master build path is: re-run enrich.js → import the enriched JSON
+(now last-enricher-wins) → catalog is as rich as the enricher can make it. The
+on-device path is: import → re-link → owned items pick up the improvements
+without clobbering user edits. The master ships catalog-only with an empty user
+collection, so the re-link/field-protection work is a runtime feature, not part
+of the master itself. Full functional/device test pass remains the standing
+focus — see Testing below. A Community Catalog Distribution architecture
+(golden-master base + GitHub update packets) is designed but not built — see
+FUTURE.md.**
 
 ---
 
@@ -101,11 +154,16 @@ com.funkodex/
 │   ├── model/                  FunkoItem (30 fields, incl. resolvedRetail +
 │   │                           effectiveRetail computed getter), PriceData, PriceAlert (+upc field),
 │   │                           CategoryPreference, PendingUpcScan, CatalogContribution
-│   ├── preload/                CatalogPreloader, CatalogMapper, CatalogRefreshWorker
+│   ├── preload/                CatalogPreloader, CatalogMapper (+deriveSeriesFields,
+│   │                           shared series→category/exclusive/chase derivation used by
+│   │                           both insert and merge), CatalogRefreshWorker
 │   │                           (Kenny Chan + community UPC + HobbyDB vaulted refresh),
 │   │                           CatalogImporter + EnrichedRecord (user-triggered enriched
-│   │                           catalog JSON import: handle match → title fallback →
-│   │                           merge/insert, non-Pop filter, .html handle repair),
+│   │                           catalog JSON import: handle → UPC → title match; merge is
+│   │                           last-enricher-wins, recomputes seriesList/category from new
+│   │                           tags; insert non-Pop filter, .html handle repair — S14),
+│   │                           CollectionRelinkService (refresh owned funko:: items from
+│   │                           the enriched catalog, marker-aware field protection — S14),
 │   │                           PriceAlertWorker (@HiltWorker + POST_NOTIF guard)
 │   └── repository/             FunkoRepository (+updateWidget +getOwnedFiltered),
 │                               CategoryPreferenceRepository, AlertRepository (+upc field),

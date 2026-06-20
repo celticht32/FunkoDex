@@ -1,7 +1,8 @@
 # Test Tracker — Functional Validation
 
 <!-- Version: v2.0 (2026-06-20). Tracks COMPLETE_TEST_PLAN.md v2.0. Reconciled
-     to Session 13 (commits 9a315bf, 294dc84, c9fa9c3, d38fd18). -->
+     to Session 14 (catalog last-enricher-wins, re-link, field protection);
+     prior reconcile Session 13 (commits 9a315bf, 294dc84, c9fa9c3, d38fd18). -->
 
 Tracks execution of `COMPLETE_TEST_PLAN.md` (code-verified against the repo).
 Update this file as each item is run — check the box and add a one-line
@@ -20,6 +21,60 @@ they're untested like everything else in this tracker.
 - **`CatalogDataSection`** — now invoked from the "Catalog" section of
   `SettingsScreen.kt`, reusing the existing `catalogSettingsViewModel`
   instance. Was previously affecting **B1, B2, B3, B6**.
+
+## Session 14 changes (2026-06-20)
+
+Code-only; nothing tested on device this session. All five files verified
+IDENTICAL against `origin/master` after push. New/changed test surface:
+
+- **Enriched-import parser fix** (`CatalogImporter.toEnrichedRecord`) — 9 keys
+  that were silently dropped are now read: `marketValueComplete` (PRIMARY in-box
+  price), `releaseDate`, `ebayEpid`, `amazonAsin`, `printRun`, `publisher`,
+  `pcSeries`, `pcDescription`. **After import, a catalog record sourced from a
+  JSON entry that has these keys must now carry them.** Affects D1a/D1c and any
+  market-value display test — `marketValueComplete` previously never landed.
+- **Catalog merge → last-enricher-wins** (`CatalogImporter.mergeRecordInto`) —
+  re-importing an enriched JSON now OVERWRITES enrichment fields on existing
+  catalog docs and RECOMPUTES seriesList + category (+ primarySeries, exclusive,
+  chase, seriesNumber) from the incoming tags. **New test: import file v1, then
+  import file v2 whose record has a longer/corrected series list + different
+  category for the same handle; confirm the existing catalog doc's category and
+  seriesList UPDATE (not just new records). Adds D1d.** Preserved fields:
+  handle/title/imageUrl — confirm those do NOT change on re-import.
+- **Collection re-link** (`CollectionRelinkService`, Settings → Catalog →
+  "Re-link collection to catalog") — refreshes owned funko:: items from the
+  enriched catalog. **New tests (add as Part B/F):**
+  - **R1 fill:** owned item missing UPC/price/image/franchise/category, with a
+    valid catalogRef → after re-link, those fields are filled from the catalog.
+  - **R2 refresh (marker present, not edited):** owned item added/edited after
+    the S14 build (has the marker), enriched catalog has a corrected category →
+    re-link overwrites the item's category + genre.
+  - **R3 protect (marker present, edited):** set a custom category on an item via
+    the edit screen + save, then re-link → the custom category is PRESERVED
+    (userEditedFields contains "category").
+  - **R4 migration (marker absent):** item owned before the S14 build (no marker)
+    with a non-blank category → re-link does NOT overwrite it (fill-only fallback);
+    a blank field IS filled.
+  - **R5 unmatched:** owned item with no catalogRef and no UPC match → untouched,
+    counted "unmatched".
+  - **R6 idempotent:** run re-link twice with no catalog change between → second
+    run reports 0 enriched.
+  - **R7 manual market value:** item with `marketValueIsManual = true` → re-link
+    never touches marketAvg.
+  - **R8 sequencing:** re-link BEFORE importing the enriched JSON links against the
+    asset/seed catalog only (documented constraint — verify the UI/flow guides
+    import-first).
+- **Field-protection marker roundtrip** (`FunkoMapper` ↔ `userEditedFields`) —
+  **D2 unit-test additions (see `RELINK_FIELD_PROTECTION_SPEC.md`):** mapper
+  roundtrip with marker present / present-empty / absent (null); edit-screen
+  `markEdited` stamps the right FIELD_ key with no duplicates.
+- **Backup/restore unchanged but newly relevant** — the new enriched fields and
+  the `userEditedFields` marker must survive Part C (backup → restore →
+  force-restore). Serializer is field-agnostic; **add a C-part assertion that a
+  re-linked item's refreshed fields + marker round-trip through a backup.**
+- **No production test files changed** — `gradlew test` count unchanged; the new
+  R-series and marker tests above are NOT yet written. **D2 carries an expanded
+  coverage-gap note for S14.**
 
 ## Session 13 changes (2026-06-20)
 

@@ -1,7 +1,7 @@
 # FunkoDex — Session Handoff
 **Date:** 2026-06-20
-**Sessions completed:** 1 (initial build), 2 (enricher/catalog import), 3 (UI/variant/photo/backup), 4 (enriched catalog import implementation + handle repair), 5 (16 KB page-size compliance + Drive auth migration), 6 (Photo Picker migration + P3 deprecation cleanup), 7 (CBL Collection API migration), 8 (Keystore/security-crypto migration), 9 (wiring gaps closed — Reports/CatalogDataSection; enriched-import parse fix + on-device verification; category data/filter bugfix; deprecation cleanup), 10 (UPC scan-only enforcement; Funko ID row removal; category-key search fix), 11 (scanner retry/frame-confirmation; punctuation-tolerant search; manual add of catalog-missing items + community contribution; image URL entry + http→https fix; eBay RSS→HTML pricing; manual market value with feed-overwrite; multiple bugfixes; community-distribution architecture design doc), 12 (image-URL clear on edit; scan-again goes straight to camera; manual-UPC check-digit validation; third "enter details manually" button on Add screen; conditional manual-add subtitle; variant-aware pricing across eBay/HobbyDB/Channel3; eBay price-band ceiling raise; OkHttp response-leak fixes in PriceService; UPCitemdb regex→gson rewrite; camera-executor thread-leak fix; enriched-data malformed-UPC salvage), 13 (PriceCharting end-to-end: marketValueComplete + UPCs + metadata through enricher→import→catalog→FunkoItem; scan reads Couchbase catalog not bundled JSON; live PriceCharting refresh tier re-scrapes stored product page via OkHttp; UPC-based import de-dup; import merges instead of skipping priced-but-incomplete records; Channel3 manual-key UI hidden)
-**Next session focus:** On-device verification of Session 13 work — (1) import the enriched JSON (a full production crawl run produced `funko_data_enriched.json`: 1000 new scannable Pops, ~94% with UPCs, plus 57 priced existing records), scan a known catalog item by UPC and confirm it resolves with its market value; (2) hit refresh on an enriched item and confirm the live PriceCharting re-scrape returns a value on a real device (residential IP — plain-fetch worked off-device, on-device is the real proof); (3) confirm an approximate-matched item (e.g. a "(Metallic)" variant) shows "Market avg (approx)" with the `~` prefix. Carried over: full functional/device test pass per `TEST_TRACKER.md`/`COMPLETE_TEST_PLAN_v2.0.md`; decide whether to start Phase 1 of the Community Catalog Distribution architecture. **Resolved Session 13:** scan reads the Couchbase catalog (was bundled `funko_data.json` only); PriceCharting is a working price source both as offline enrichment and a live in-app refresh tier; import no longer drops a colliding record's price/metadata; the enricher's variant matcher gained an exact-core approximate base-price fallback (`marketValueIsApproximate`) that recovers same-character variants PriceCharting lists only as a base figure, while still skipping wrong-figure matches. **Enricher matching note:** the confidence gate is deliberately conservative — on a variant-heavy batch (Imperial Palace / prototype / box-set slices) the uncertain-skip rate can be high (~55% on one 200-item run) and that is mostly correct; mainstream batches skip far less. Watch the new `Found: N (M approximate)` summary line. **Still open:** is HobbyDB pricing (tier 4) actually connected on-device — never verified to fire; PriceCharting now covers the enriched subset so HobbyDB matters less, but un-enriched items still depend on the eBay/UPCitemdb/Channel3/HobbyDB fallback tiers.
+**Sessions completed:** 1 (initial build), 2 (enricher/catalog import), 3 (UI/variant/photo/backup), 4 (enriched catalog import implementation + handle repair), 5 (16 KB page-size compliance + Drive auth migration), 6 (Photo Picker migration + P3 deprecation cleanup), 7 (CBL Collection API migration), 8 (Keystore/security-crypto migration), 9 (wiring gaps closed — Reports/CatalogDataSection; enriched-import parse fix + on-device verification; category data/filter bugfix; deprecation cleanup), 10 (UPC scan-only enforcement; Funko ID row removal; category-key search fix), 11 (scanner retry/frame-confirmation; punctuation-tolerant search; manual add of catalog-missing items + community contribution; image URL entry + http→https fix; eBay RSS→HTML pricing; manual market value with feed-overwrite; multiple bugfixes; community-distribution architecture design doc), 12 (image-URL clear on edit; scan-again goes straight to camera; manual-UPC check-digit validation; third "enter details manually" button on Add screen; conditional manual-add subtitle; variant-aware pricing across eBay/HobbyDB/Channel3; eBay price-band ceiling raise; OkHttp response-leak fixes in PriceService; UPCitemdb regex→gson rewrite; camera-executor thread-leak fix; enriched-data malformed-UPC salvage), 13 (PriceCharting end-to-end: marketValueComplete + UPCs + metadata through enricher→import→catalog→FunkoItem; scan reads Couchbase catalog not bundled JSON; live PriceCharting refresh tier re-scrapes stored product page via OkHttp; UPC-based import de-dup; import merges instead of skipping priced-but-incomplete records; Channel3 manual-key UI hidden), 14 (catalog data-quality + re-link + field protection, code-only: enriched-import parser now reads the 9 dropped keys incl. `marketValueComplete`; catalog merge switched to last-enricher-wins and recomputes series-derived fields via the new shared `CatalogMapper.deriveSeriesFields`, so re-importing an improved enrich.js run upgrades existing catalog records; new `CollectionRelinkService` + Settings "Re-link collection to catalog" row refreshes owned items from the enriched catalog; `userEditedFields` marker + `DetailViewModel` stamping protect user-edited fields during re-link, with an absent-marker→fill-only migration guard; backup/restore audited as field-agnostic, no change needed)
+**Next session focus:** On-device verification of Session 13 + 14 work. **Golden-master rebuild (S14):** re-run enrich.js to regenerate `funko_data_enriched.json` (the catalog merge is now last-enricher-wins, so re-importing carries the richer series tags / corrected categories onto existing records — confirm an existing record's category/seriesList actually updates after import, not just new records). **Re-link (S14):** after importing the enriched JSON, run Settings → Catalog → "Re-link collection to catalog" on a device with owned items and confirm (a) owned items pick up UPC/price/image/franchise/category from the enriched catalog, (b) a field the user edited by hand (set a custom category on an item, save, then re-link) is NOT overwritten, (c) a pre-marker item (owned before this build) falls back to fill-only — its existing non-blank fields are preserved. **Carried from S13:** import the enriched JSON, scan a known catalog item by UPC and confirm it resolves with market value; hit refresh on an enriched item and confirm the live PriceCharting re-scrape returns a value on a real residential-IP device; confirm an approximate-matched item shows "Market avg (approx)" with the `~` prefix. Carried over: full functional/device test pass per `TEST_TRACKER_v2.0.md`/`COMPLETE_TEST_PLAN_v2.0.md` (now includes the S14 re-link/field-protection surface); add the S14 unit tests called out in `RELINK_FIELD_PROTECTION_SPEC.md` (FunkoMapper marker roundtrip present/empty/absent, re-link preserve-vs-refresh, edit-screen stamping) before ship since S14 is the schema-touching change; decide whether to start Phase 1 of the Community Catalog Distribution architecture. **Resolved Session 14:** the enriched-import parser no longer drops `marketValueComplete` + 7 metadata fields; re-importing an improved enricher run now upgrades existing catalog records instead of only new ones; owned items can be brought up to catalog quality via re-link without clobbering user edits; backup/restore confirmed to carry all new fields with no schema change. **Resolved Session 13:** scan reads the Couchbase catalog (was bundled `funko_data.json` only); PriceCharting is a working price source both as offline enrichment and a live in-app refresh tier; import no longer drops a colliding record's price/metadata; the enricher's variant matcher gained an exact-core approximate base-price fallback (`marketValueIsApproximate`). **Still open:** is HobbyDB pricing (tier 4) actually connected on-device — never verified to fire.
 
 ---
 
@@ -40,6 +40,53 @@ re-enter Channel3 key and re-link HobbyDB/eBay once on upgrade. `security-crypto
 dependency removed entirely from `libs.versions.toml`/`build.gradle.kts`.
 
 Both sessions build and run clean.
+
+### Session 14 (2026-06-20) — catalog data quality, re-link, field protection
+
+Code changes only; compiles clean; nothing run on device this session. Files touched:
+- `data/preload/CatalogImporter.kt` — `toEnrichedRecord()` now reads the 9 keys it
+  was silently dropping (`marketValueComplete` + `releaseDate`, `ebayEpid`,
+  `amazonAsin`, `printRun`, `publisher`, `pcSeries`, `pcDescription`).
+  `mergeRecordInto()` rewritten to last-enricher-wins: overwrites every enrichment
+  field the record supplies and recomputes the series-derived fields from the
+  incoming tags. Preserves only handle/title/imageUrl. The narrow "Pop! Vinyl"
+  category-repair block is gone (category recomputed every import).
+- `data/preload/CatalogMapper.kt` — extracted `deriveSeriesFields(seriesList, title)`
+  (returns `SeriesDerived`) as the single source of truth for primarySeries /
+  category / isExclusive / exclusiveRetailer / isChase / seriesNumber. `mapRecord`
+  refactored to call it (insert output unchanged), so insert and merge can't drift.
+- `data/preload/CollectionRelinkService.kt` — NEW. Refresh owned funko:: items from
+  the enriched catalog. Match by catalogRef → UPC (ambiguous UPCs dropped). Pure-
+  enrichment fields refresh unconditionally (retailPrice, pricechartingUrl, funkoId,
+  market value when not manual); user-editable fields (upc, franchise, category,
+  imageUrl) refresh only when the userEditedFields marker is present and doesn't
+  list them, else fill-only; absent marker → fill-only. Every write guarded by a
+  value-changed check (idempotent). Run AFTER the enriched import.
+- `ui/screens/settings/SettingsViewModel.kt` + `SettingsScreen.kt` — injects the
+  service, "Re-link collection to catalog" row in the Catalog section (under Import
+  Enriched Catalog), progress/result/error dialogs mirroring the enriched-import
+  pattern; the two rows guard each other from concurrent runs.
+- `data/model/FunkoItem.kt` — adds `userEditedFields: List<String>? = null`
+  (null = pre-marker doc).
+- `data/db/FunkoDexDatabase.kt` — adds `FIELD_USER_EDITED = "userEditedFields"`.
+- `data/db/FunkoMapper.kt` — serializes the marker as a JSON-array string, removed
+  when null (absent stays distinguishable from empty); reads it back (missing → null).
+- `ui/screens/detail/DetailViewModel.kt` — `markEdited()` helper + stamping on
+  `updateFranchise/updateCategory/updateUpc/updateImageUrl`.
+
+**Backup/restore:** audited, no change. `DatabaseTransferViewModel`'s serializer is
+field-agnostic (walks `doc.keys`, handles every type FunkoMapper writes), so the new
+enriched fields and the marker ride through backup / restore / force-restore with no
+stale schema. Verified against FunkoMapper, not assumed.
+
+**Golden-master sequence:** re-run enrich.js → import enriched JSON (last-enricher-wins)
+→ catalog at max quality. **On-device sequence:** import → re-link → owned items
+upgraded without clobbering user edits. The master ships catalog-only / empty user
+collection, so re-link + field protection are runtime features, not part of the master.
+
+**Open for next session:** add the S14 unit tests (`RELINK_FIELD_PROTECTION_SPEC.md`:
+FunkoMapper marker roundtrip, re-link preserve-vs-refresh, edit-screen stamping) before
+ship; on-device re-link verification (see Next session focus).
 
 ### Session 12 (2026-06-19) — pricing, scanner UX, leak fixes
 

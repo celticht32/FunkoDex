@@ -31,6 +31,14 @@ import com.funkodex.auth.OAuthCallbackActivity
 import com.funkodex.auth.OAuthLauncher
 import com.funkodex.auth.OAuthProvider
 
+/**
+ * Whether to show the Channel3 premium-API-key UI in Settings. Set false to
+ * declutter — the free Channel3 tier and the funkodex_keys.json import path keep
+ * working regardless; only the manual key-entry row + dialog are hidden. Flip to
+ * true to restore the UI.
+ */
+private const val SHOW_CHANNEL3_KEY_UI = false
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -996,15 +1004,21 @@ fun CatalogDataSection(
                     onToggle = {}
                 )
 
-                SourceRow(
-                    name    = "Channel3 API",
-                    detail  = if (config.channel3ApiKey.isNotEmpty())
-                                  "Connected · UPC lookup · pricing"
-                              else "Not configured · tap to add API key",
-                    enabled = config.channel3ApiKey.isNotEmpty(),
-                    locked  = false,
-                    onToggle = { showChannel3Dialog = true }
-                )
+                // Channel3 key entry is hidden from settings — the free Channel3
+                // tier and all import-keys plumbing still work; only the premium-
+                // key UI is suppressed to declutter. Flip SHOW_CHANNEL3_KEY_UI to
+                // true to bring the row + dialog back.
+                if (SHOW_CHANNEL3_KEY_UI) {
+                    SourceRow(
+                        name    = "Channel3 API",
+                        detail  = if (config.channel3ApiKey.isNotEmpty())
+                                      "Connected · UPC lookup · pricing"
+                                  else "Not configured · tap to add API key",
+                        enabled = config.channel3ApiKey.isNotEmpty(),
+                        locked  = false,
+                        onToggle = { showChannel3Dialog = true }
+                    )
+                }
 
                 SourceRow(
                     name    = "HobbyDB / Pop Price Guide",
@@ -1044,7 +1058,7 @@ fun CatalogDataSection(
         }
     }
 
-    if (showChannel3Dialog) {
+    if (SHOW_CHANNEL3_KEY_UI && showChannel3Dialog) {
         AlertDialog(
             onDismissRequest = { showChannel3Dialog = false },
             title   = { Text("Channel3 API key") },

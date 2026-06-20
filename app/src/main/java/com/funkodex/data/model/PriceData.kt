@@ -48,6 +48,7 @@ enum class PriceSource(
     UPCITEMDB(        "UPCitemdb",                2, false, false, 7),
     CHANNEL3_FREE(    "Channel3 (free)",          2, false, false, 3),
     EBAY_RSS(         "eBay sold listings",       2, false, false, 1),
+    PRICECHARTING(    "PriceCharting",            2, false, false, 3),
 
     // Tier 3 — API key
     CHANNEL3_PREMIUM( "Channel3 (premium)",       3, true,  false, 1),

@@ -37,6 +37,9 @@ object FunkoMapper {
         doc.setDouble(FunkoDexDatabase.FIELD_MARKET_AVG,     item.marketAvg)
         doc.setBoolean(FunkoDexDatabase.FIELD_MARKET_VALUE_IS_MANUAL, item.marketValueIsManual)
         item.priceLastUpdated?.let { doc.setString(FunkoDexDatabase.FIELD_PRICE_UPDATED, it.toString()) }
+        if (item.pricechartingUrl.isNotEmpty()) {
+            doc.setString(FunkoDexDatabase.FIELD_PRICECHARTING_URL, item.pricechartingUrl)
+        }
         // Flags
         doc.setBoolean(FunkoDexDatabase.FIELD_IS_OWNED,      item.isOwned)
         doc.setBoolean(FunkoDexDatabase.FIELD_IS_VAULTED,    item.isVaulted)
@@ -104,6 +107,7 @@ object FunkoMapper {
         priceLastUpdated = runCatching {
             doc.getString(FunkoDexDatabase.FIELD_PRICE_UPDATED)?.let { LocalDate.parse(it) }
         }.getOrNull(),
+        pricechartingUrl = doc.getString(FunkoDexDatabase.FIELD_PRICECHARTING_URL) ?: "",
         // Flags
         isOwned          = doc.getBoolean(FunkoDexDatabase.FIELD_IS_OWNED),
         isVaulted        = doc.getBoolean(FunkoDexDatabase.FIELD_IS_VAULTED),

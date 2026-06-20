@@ -76,6 +76,14 @@ class PriceService @Inject constructor(
         private const val CHANNEL3_BASE   = "https://api.trychannel3.com/v1"
         private const val CHANNEL3_SEARCH = "$CHANNEL3_BASE/search"
 
+        // PriceCharting — the live refresh re-fetches the catalog-stored product
+        // page (item.pricechartingUrl) and reads the three grade prices. Verified
+        // this session: PriceCharting serves the real page to a plain Android-UA
+        // GET (no JS challenge), so OkHttp works without a headless browser.
+        private const val PRICECHARTING_UA =
+            "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) " +
+            "Chrome/124.0.0.0 Mobile Safari/537.36"
+
         // Minimum sold listings a variant-specific eBay query must return before
         // we trust its median; below this we fall back to the broad query rather
         // than price off one or two sales.
@@ -90,6 +98,15 @@ class PriceService @Inject constructor(
      * Tier 1 (retail) always returns a result if retailPrice > 0.
      */
     suspend fun fetchPrice(item: FunkoItem): PriceSnapshot? = withContext(Dispatchers.IO) {
+        // Tier 1m: PriceCharting — when the catalog gave us this item's product
+        // page, re-scrape it for a current market value (real sold-comp data).
+        // Runs before the retail short-circuit below, because retail (MSRP) is not
+        // a market value: this provides snapshot.avg, which the retail tier can't.
+        fetchPriceCharting(item)?.let {
+            FunkoDexLogger.d(TAG, "Tier 1m (PriceCharting) hit for ${item.name}")
+            return@withContext it
+        }
+
         // Tier 1: retail price from catalog — always instant
         if (item.retailPrice > 0) {
             FunkoDexLogger.d(TAG, "Tier 1 hit for ${item.name}: retail=${item.retailPrice}")
@@ -196,6 +213,64 @@ class PriceService @Inject constructor(
     }.getOrNull()
 
     // ─── Tier 2a: eBay sold/completed listings (HTML) ─────────────────────────
+
+    /**
+     * Re-scrape the catalog-stored PriceCharting product page for current prices.
+     * Only runs when the item carries a pricechartingUrl (set by the enricher),
+     * so there's no search and no variant-matching risk — it re-reads the exact
+     * page already identified as correct. Parses the three grade prices from the
+     * #used_price / #complete_price / #new_price containers (verified structure).
+     * Returns a snapshot with low=loose, avg=complete (primary), high=mint.
+     */
+    private fun fetchPriceCharting(item: FunkoItem): PriceSnapshot? {
+        val url = item.pricechartingUrl
+        if (url.isBlank() || !url.startsWith("http")) return null
+        return runCatching {
+            val html = client.newCall(
+                Request.Builder()
+                    .url(url)
+                    .header("User-Agent", PRICECHARTING_UA)
+                    .header("Accept", "text/html,application/xhtml+xml")
+                    .build()
+            ).execute().use { response ->
+                if (!response.isSuccessful) return@runCatching null
+                response.body?.string() ?: return@runCatching null
+            }
+
+            val loose    = parsePriceChartingGrade(html, "used_price")
+            val complete = parsePriceChartingGrade(html, "complete_price")
+            val mint     = parsePriceChartingGrade(html, "new_price")
+            if (loose == null && complete == null && mint == null) return@runCatching null
+
+            // Complete (in-box) is the primary displayed value, matching the
+            // enricher's marketValueComplete convention.
+            val avg = complete ?: loose ?: mint ?: 0.0
+            PriceSnapshot(
+                itemId = item.id,
+                source = PriceSource.PRICECHARTING,
+                low    = loose ?: 0.0,
+                high   = mint ?: 0.0,
+                avg    = avg,
+                lastSalePrice = avg,
+            )
+        }.getOrNull()
+    }
+
+    /**
+     * Read one PriceCharting grade price. The value lives as "$NN.NN" text inside
+     * a container with id used_price / complete_price / new_price (the dollar
+     * amount may include thousands separators). Returns the dollar value or null.
+     */
+    private fun parsePriceChartingGrade(html: String, elementId: String): Double? {
+        // Grab the chunk of HTML following the element id, then the first $ value.
+        val idIdx = html.indexOf("id=\"$elementId\"")
+            .let { if (it < 0) html.indexOf("id='$elementId'") else it }
+        if (idIdx < 0) return null
+        val window = html.substring(idIdx, minOf(idIdx + 400, html.length))
+        val m = Regex("""\$\s*([\d,]+\.\d{2})""").find(window) ?: return null
+        val value = m.groupValues[1].replace(",", "").toDoubleOrNull() ?: return null
+        return if (value > 0.0 && value <= 100000.0) value else null
+    }
 
     private fun fetchEbaySold(item: FunkoItem): PriceSnapshot? {
         // For chase/exclusive items, query the variant-specific listings first so

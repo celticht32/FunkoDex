@@ -57,6 +57,9 @@ data class FunkoItem(
     val marketValueIsManual: Boolean = false, // true = user set marketAvg by hand;
                                           // price refresh must NOT overwrite it.
     val priceLastUpdated: LocalDate? = null, // When market prices were last fetched
+    val pricechartingUrl: String = "",   // Catalog-stored PriceCharting product page,
+                                          // if known. Lets the live refresh re-scrape the
+                                          // exact page (no search/variant matching needed).
 
     // ── Status flags ─────────────────────────────────────────────────────────
     val isOwned: Boolean = true,         // false = on want list

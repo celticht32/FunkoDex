@@ -10,6 +10,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.URLEncoder
 import java.time.LocalDate
 import javax.inject.Inject
@@ -72,7 +74,7 @@ class PriceService @Inject constructor(
 
         // Channel3
         private const val CHANNEL3_BASE   = "https://api.trychannel3.com/v1"
-        private const val CHANNEL3_SEARCH = "$CHANNEL3_BASE/products/search"
+        private const val CHANNEL3_SEARCH = "$CHANNEL3_BASE/search"
 
         // Minimum sold listings a variant-specific eBay query must return before
         // we trust its median; below this we fall back to the broad query rather
@@ -361,49 +363,54 @@ class PriceService @Inject constructor(
     private fun fetchChannel3(item: FunkoItem, premium: Boolean): PriceSnapshot? {
         return runCatching {
             val key = secureKeyStore.getChannel3Key()
-            if (key.isEmpty() && premium) return@runCatching null
+            // Channel3 requires a key for every call (free + premium tiers share the
+            // same authenticated endpoint). Without a key there is nothing to do.
+            if (key.isEmpty()) return@runCatching null
 
-            val url = if (item.upc.isNotEmpty()) {
-                "$CHANNEL3_SEARCH?upc=${item.upc}"
-            } else {
-                // No UPC to uniquely identify the variant — append variant terms so
-                // the name search narrows to the owned variant, not the common one.
-                val qText = "${item.name} ${item.seriesNumber} ${variantSuffix(item)}".trim()
-                    .replace(Regex("""\s+"""), " ")
-                val q = URLEncoder.encode(qText, "UTF-8")
-                "$CHANNEL3_SEARCH?q=$q&brand=Funko"
-            }
+            // Real API (verified against docs.trychannel3.com): POST /v1/search,
+            // x-api-key header, JSON body { query, limit }. There is no UPC search
+            // parameter, so we query by name + series + variant terms. Prices live
+            // in products[].offers[].price (merchant offers — retail/availability,
+            // not secondary-market sold comps).
+            val queryText = "funko pop ${item.name} ${item.seriesNumber} ${variantSuffix(item)}"
+                .trim().replace(Regex("""\s+"""), " ")
+            val payload = gson.toJson(Channel3Request(query = queryText, limit = 10))
+            val reqBody = payload.toRequestBody("application/json".toMediaType())
 
-            val builder = Request.Builder()
-                .url(url)
+            val request = Request.Builder()
+                .url(CHANNEL3_SEARCH)
+                .header("x-api-key", key)
                 .header("User-Agent", USER_AGENT)
-            if (key.isNotEmpty()) builder.header("Authorization", "Bearer $key")
+                .post(reqBody)
+                .build()
 
-            val body = client.newCall(builder.build()).execute().use { response ->
+            val body = client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@runCatching null
                 response.body?.string() ?: return@runCatching null
             }
 
-            // Parse just the price fields from the JSON response
-            val lowestMatch  = Regex(""""lowest_price"\s*:\s*(\d+\.?\d*)""").find(body)
-            val highestMatch = Regex(""""highest_price"\s*:\s*(\d+\.?\d*)""").find(body)
-            val avgMatch     = Regex(""""average_price"\s*:\s*(\d+\.?\d*)""").find(body)
-            val retailMatch  = Regex(""""retail_price"\s*:\s*(\d+\.?\d*)""").find(body)
+            val parsed = gson.fromJson(body, Channel3SearchResponse::class.java)
+                ?: return@runCatching null
 
-            val low    = lowestMatch?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
-            val high   = highestMatch?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
-            val avg    = avgMatch?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
-            val retail = retailMatch?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+            // Collect every offer price across the returned products, then summarise.
+            val prices = parsed.products.orEmpty()
+                .flatMap { it.offers.orEmpty() }
+                .mapNotNull { it.price }
+                .filter { it in 1.0..5000.0 }   // drop junk/typo values
+                .sorted()
+            if (prices.isEmpty()) return@runCatching null
 
-            if (low == 0.0 && avg == 0.0 && retail == 0.0) return@runCatching null
+            val low  = prices.first()
+            val high = prices.last()
+            val avg  = prices.sum() / prices.size
 
             PriceSnapshot(
                 itemId    = item.id,
                 source    = if (premium) PriceSource.CHANNEL3_PREMIUM else PriceSource.CHANNEL3_FREE,
-                retail    = retail,
                 low       = low,
                 high      = high,
                 avg       = avg,
+                saleCount = prices.size,
                 fetchedAt = LocalDate.now(),
             )
         }.getOrNull()
@@ -425,5 +432,32 @@ class PriceService @Inject constructor(
     private data class UpcItemDbPriceItem(
         val lowest_recorded_price: Double? = null,
         val highest_recorded_price: Double? = null,
+    )
+
+    /**
+     * Channel3 POST /v1/search request body. Only the fields we use are modeled;
+     * the API also accepts filters, image inputs, and paging which we don't need.
+     */
+    private data class Channel3Request(
+        val query: String,
+        val limit: Int,
+    )
+
+    /**
+     * Channel3 search response (subset). Shape (verified against docs.trychannel3.com):
+     * { products: [ { title, brand:{name}, offers:[ { price, currency, ... } ] } ] }.
+     * Price lives per-merchant in offers[].price; there are no flat low/high/avg
+     * fields. We summarise across all offers of all returned products.
+     */
+    private data class Channel3SearchResponse(
+        val products: List<Channel3Product>? = null,
+    )
+
+    private data class Channel3Product(
+        val offers: List<Channel3Offer>? = null,
+    )
+
+    private data class Channel3Offer(
+        val price: Double? = null,
     )
 }

@@ -858,6 +858,18 @@ fun CatalogDataSection(
     var ebayConnected       by remember { mutableStateOf(viewModel.isEbayConnected()) }
     val context             = LocalContext.current
 
+    // Import API keys from a JSON file in Downloads (funkodex_keys.json). Sets any
+    // recognised non-blank keys and reports the result via a toast.
+    val keyImportLauncher = rememberLauncherForActivityResult(
+        OpenDocumentInDownloads()
+    ) { uri ->
+        uri?.let {
+            val result = viewModel.importKeysFromFile(it)
+            channel3KeyDraft = viewModel.config.value.channel3ApiKey
+            android.widget.Toast.makeText(context, result, android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
     DisposableEffect(Unit) {
         val receiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(ctx: android.content.Context?, intent: android.content.Intent?) {
@@ -1048,6 +1060,22 @@ fun CatalogDataSection(
                         label         = { Text("API key") },
                         singleLine    = true,
                         modifier      = Modifier.fillMaxWidth()
+                    )
+                    OutlinedButton(
+                        onClick  = {
+                            showChannel3Dialog = false
+                            keyImportLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Description, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Import from file")
+                    }
+                    Text(
+                        "Import a funkodex_keys.json file from Downloads instead of typing the key.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             },

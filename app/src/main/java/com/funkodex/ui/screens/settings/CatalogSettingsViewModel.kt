@@ -80,6 +80,50 @@ class CatalogSettingsViewModel @Inject constructor(
             context.catalogDataStore.edit { /* no-op edit to force flow re-emission */ }
         }
     }
+
+    /**
+     * Import API keys from a user-picked JSON file (e.g. funkodex_keys.json in
+     * Downloads). Recognised fields: "channel3_api_key" (set now), plus
+     * "ebay_client_id" / "hobbyDB" which are accepted but not yet wired (eBay
+     * client ID is still a compile-time constant; HobbyDB's API is partner-gated).
+     * Only non-blank fields are applied. Returns a short human-readable summary of
+     * what was imported, or an error message, for the caller to surface.
+     */
+    fun importKeysFromFile(uri: android.net.Uri): String {
+        return try {
+            val text = context.contentResolver.openInputStream(uri)
+                ?.bufferedReader()?.use { it.readText() }
+                ?: return "Could not open file"
+
+            val gson = com.google.gson.Gson()
+            val keys = gson.fromJson(text, ImportedKeys::class.java)
+                ?: return "File isn't valid JSON"
+
+            val imported = mutableListOf<String>()
+            keys.channel3_api_key?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                secureKeyStore.setChannel3Key(it)
+                imported += "Channel3 key"
+            }
+            // ebay_client_id / hobbyDB are accepted for forward-compat but not yet
+            // applied; note them so the user knows they were seen but skipped.
+            val skipped = mutableListOf<String>()
+            if (!keys.ebay_client_id.isNullOrBlank()) skipped += "eBay (not yet wired)"
+            if (!keys.hobbyDB.isNullOrBlank())        skipped += "HobbyDB (not yet wired)"
+
+            viewModelScope.launch {
+                context.catalogDataStore.edit { /* force config reread */ }
+            }
+
+            when {
+                imported.isEmpty() && skipped.isEmpty() -> "No keys found in file"
+                imported.isEmpty() -> "No keys applied (${skipped.joinToString()})"
+                skipped.isEmpty()  -> "Imported: ${imported.joinToString()}"
+                else -> "Imported: ${imported.joinToString()} · skipped: ${skipped.joinToString()}"
+            }
+        } catch (e: Exception) {
+            "Import failed: ${e.message ?: "unknown error"}"
+        }
+    }
     fun setHobbyDbEnabled(v: Boolean)= update { it[HOBBYDB_KEY] = v }
 
     fun refreshNow() {
@@ -147,3 +191,13 @@ sealed class RefreshUiState {
     data object Failed   : RefreshUiState()
     data class  Added(val newItems: Int, val mergedUpcs: Int) : RefreshUiState()
 }
+
+/**
+ * Shape of the importable keys JSON file. All fields optional; only non-blank
+ * ones are applied. Field names match the funkodex_keys.json template.
+ */
+data class ImportedKeys(
+    val channel3_api_key: String? = null,
+    val ebay_client_id: String? = null,
+    val hobbyDB: String? = null,
+)

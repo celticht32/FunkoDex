@@ -37,6 +37,16 @@ manual-key UI was hidden (its tiers still run).
   and matches handle → UPC → title, so a record finds its existing twin even when
   handles differ (e.g. a PriceCharting-sourced record vs the same Pop under a
   HobbyDB handle) instead of inserting a duplicate.
+- **Approximate base-price fallback for unlisted variants** (enricher +
+  `marketValueIsApproximate` threaded through the model to the UI). When a
+  variant record (e.g. "Krillin (Metallic)") matches the *exact same base figure*
+  on PriceCharting that doesn't list the variant separately, it takes the base
+  price flagged approximate rather than skipping. An **exact** core-name match is
+  required (set-equal, not just covered), so fuller-named different figures like
+  "Orange Piccolo" for "Piccolo" or "Robin as Nightwing" for "Robin" are still
+  rejected. The Detail screen shows "Market avg (approx)" with a `~` prefix; the
+  flag persists on catalog and owned docs. Recovers same-character variants the
+  strict gate was skipping without attaching wrong-figure prices.
 
 ### Changed
 

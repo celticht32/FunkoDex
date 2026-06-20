@@ -16,7 +16,13 @@ the enricher carries `marketValueComplete`/UPCs/metadata into the catalog,
 scan-by-UPC now reads the Couchbase catalog (not the bundled JSON seed), a
 live PriceCharting refresh tier re-scrapes the stored product page, import
 gained UPC-based de-dup and merges instead of skipping priced-but-incomplete
-records, and the Channel3 manual-key UI was hidden (its tiers still run).
+records, and the Channel3 manual-key UI was hidden (its tiers still run). The
+enricher's variant matcher also gained an approximate base-price fallback
+(`marketValueIsApproximate`, shown as "Market avg (approx)" with a `~`): a
+variant the catalog has but PriceCharting lists only as a base figure takes the
+base price, flagged, when the core name matches exactly — wrong-figure matches
+still skip. A full production crawl run (1000 new scannable Pops, ~94% with UPCs)
+validated the pipeline end to end.
 Full functional/device test pass remains the standing focus — see Testing
 below; on-device confirmation of the scan-from-catalog and live-refresh paths
 is the immediate Session 13 verification. A Community Catalog Distribution
@@ -198,7 +204,11 @@ lookups don't use it (a UPC is already variant-specific).
 is scannable. The bundled `funko_data.json` is a fallback seed only. Catalog docs
 become `FunkoItem`s via the shared `catalogDocToFunkoItem` builder (also used by
 name-search), which seeds `marketAvg` from the catalog's `marketValueComplete`
-and carries `pricechartingUrl` for the live refresh tier.
+and carries `pricechartingUrl` for the live refresh tier. It also reads
+`marketValueIsApproximate` — set by the enricher when a variant was priced from
+its base figure (PriceCharting didn't list the variant). DetailScreen's
+`MarketPriceCard` shows such values as "Market avg (approx)" with a `~` prefix so
+an estimated price is never mistaken for an exact one.
 
 ### OAuth flow (`auth/` package)
 PKCE (RFC 7636) — no client secret in APK. Code verifier stored in `OAuthSession` (memory only).

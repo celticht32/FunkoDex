@@ -32,8 +32,17 @@ data class EnrichedRecord(
     val popType:          String?       = null,    // e.g. "Pop!", "Pop! Deluxe", "Pop! Rides"
 
     // ── PriceCharting enriched fields ──────────────────────────────────────
-    val marketValueLoose: String?       = null,
-    val marketValueNew:   String?       = null,
-    val pricechartingId:  String?       = null,
-    val pricechartingUrl: String?       = null,
+    val marketValueLoose:    String?    = null,    // out-of-box / loose price
+    val marketValueComplete: String?    = null,    // in-box price — PRIMARY market value
+    val marketValueNew:      String?    = null,    // mint / sealed price
+    val pricechartingId:     String?    = null,
+    val pricechartingUrl:    String?    = null,
+    // PriceCharting metadata (enricher Pass 3 harvest)
+    val releaseDate:         String?    = null,    // ISO yyyy-MM-dd
+    val ebayEpid:            String?    = null,    // eBay product id
+    val amazonAsin:          String?    = null,
+    val printRun:            String?    = null,
+    val publisher:           String?    = null,
+    val pcSeries:            String?    = null,    // PriceCharting's series label
+    val pcDescription:       String?    = null,
 )

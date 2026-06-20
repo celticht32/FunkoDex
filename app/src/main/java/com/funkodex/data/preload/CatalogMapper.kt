@@ -39,10 +39,18 @@ object CatalogMapper {
     const val FIELD_FUNKO_SHOP_ID   = "funkoShopId"     // Funko's internal SFCC product ID (pid)
     const val FIELD_FUNKO_NUMBER    = "funkoNumber"      // HobbyDB Funko item number — display only, may be shared
     const val FIELD_POP_TYPE        = "popType"          // e.g. "Pop!", "Pop! Deluxe"
-    const val FIELD_MKT_VALUE_LOOSE = "marketValueLoose" // PriceCharting OOB / loose price
-    const val FIELD_MKT_VALUE_NEW   = "marketValueNew"   // PriceCharting sealed / new price
-    const val FIELD_PC_ID           = "pricechartingId"  // PriceCharting product ID
-    const val FIELD_PC_URL          = "pricechartingUrl" // PriceCharting page URL
+    const val FIELD_MKT_VALUE_LOOSE    = "marketValueLoose"    // PriceCharting OOB / loose price
+    const val FIELD_MKT_VALUE_COMPLETE = "marketValueComplete" // PriceCharting in-box price — PRIMARY
+    const val FIELD_MKT_VALUE_NEW      = "marketValueNew"      // PriceCharting sealed / new price
+    const val FIELD_PC_ID              = "pricechartingId"     // PriceCharting product ID
+    const val FIELD_PC_URL             = "pricechartingUrl"    // PriceCharting page URL
+    const val FIELD_RELEASE_DATE       = "releaseDate"         // ISO yyyy-MM-dd
+    const val FIELD_EBAY_EPID          = "ebayEpid"            // eBay product id
+    const val FIELD_AMAZON_ASIN        = "amazonAsin"
+    const val FIELD_PRINT_RUN          = "printRun"
+    const val FIELD_PUBLISHER          = "publisher"
+    const val FIELD_PC_SERIES          = "pcSeries"            // PriceCharting series label
+    const val FIELD_PC_DESCRIPTION     = "pcDescription"
 
     private val EXCLUSIVE_KEYWORDS = listOf(
         "exclusive", "funko-shop", "sdcc", "nycc", "eccc", "c2e2",
@@ -101,10 +109,18 @@ object CatalogMapper {
         funkoNumber:      String?       = null,
         popType:          String?       = null,
         // Enriched fields — PriceCharting
-        marketValueLoose: String?       = null,
-        marketValueNew:   String?       = null,
-        pricechartingId:  String?       = null,
-        pricechartingUrl: String?       = null,
+        marketValueLoose:    String?    = null,
+        marketValueComplete: String?    = null,
+        marketValueNew:      String?    = null,
+        pricechartingId:     String?    = null,
+        pricechartingUrl:    String?    = null,
+        releaseDate:         String?    = null,
+        ebayEpid:            String?    = null,
+        amazonAsin:          String?    = null,
+        printRun:            String?    = null,
+        publisher:           String?    = null,
+        pcSeries:            String?    = null,
+        pcDescription:       String?    = null,
     ): Map<String, Any> {
 
         val primarySeries = seriesList.firstOrNull { s ->
@@ -159,10 +175,18 @@ object CatalogMapper {
             if (!funkoNumber.isNullOrBlank())         put(FIELD_FUNKO_NUMBER,    funkoNumber)
             if (!popType.isNullOrBlank())             put(FIELD_POP_TYPE,        popType)
             // Enriched — PriceCharting
-            if (!marketValueLoose.isNullOrBlank())    put(FIELD_MKT_VALUE_LOOSE, marketValueLoose)
-            if (!marketValueNew.isNullOrBlank())      put(FIELD_MKT_VALUE_NEW,   marketValueNew)
-            if (!pricechartingId.isNullOrBlank())     put(FIELD_PC_ID,           pricechartingId)
-            if (!pricechartingUrl.isNullOrBlank())    put(FIELD_PC_URL,          pricechartingUrl)
+            if (!marketValueLoose.isNullOrBlank())    put(FIELD_MKT_VALUE_LOOSE,    marketValueLoose)
+            if (!marketValueComplete.isNullOrBlank()) put(FIELD_MKT_VALUE_COMPLETE, marketValueComplete)
+            if (!marketValueNew.isNullOrBlank())      put(FIELD_MKT_VALUE_NEW,      marketValueNew)
+            if (!pricechartingId.isNullOrBlank())     put(FIELD_PC_ID,              pricechartingId)
+            if (!pricechartingUrl.isNullOrBlank())    put(FIELD_PC_URL,             pricechartingUrl)
+            if (!releaseDate.isNullOrBlank())         put(FIELD_RELEASE_DATE,       releaseDate)
+            if (!ebayEpid.isNullOrBlank())            put(FIELD_EBAY_EPID,          ebayEpid)
+            if (!amazonAsin.isNullOrBlank())          put(FIELD_AMAZON_ASIN,        amazonAsin)
+            if (!printRun.isNullOrBlank())            put(FIELD_PRINT_RUN,          printRun)
+            if (!publisher.isNullOrBlank())           put(FIELD_PUBLISHER,          publisher)
+            if (!pcSeries.isNullOrBlank())            put(FIELD_PC_SERIES,          pcSeries)
+            if (!pcDescription.isNullOrBlank())       put(FIELD_PC_DESCRIPTION,     pcDescription)
         }
     }
 

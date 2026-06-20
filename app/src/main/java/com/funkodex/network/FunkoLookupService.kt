@@ -184,6 +184,12 @@ class FunkoLookupService @Inject constructor(
                     val series = doc.getString("series") ?: ""
                     // Require ALL query tokens to match against title + series combined.
                     if (!matchesAllTokens(query, "$title $series")) return@mapNotNull null
+                    // Seed market value from the catalog's PriceCharting in-box
+                    // (Complete) price when present. This is a baseline; a live
+                    // price refresh or a manual value can still override it later.
+                    val pcComplete = doc.getString(
+                        com.funkodex.data.preload.CatalogMapper.FIELD_MKT_VALUE_COMPLETE)
+                        ?.replace(Regex("[^0-9.]"), "")?.toDoubleOrNull() ?: 0.0
                     com.funkodex.data.model.FunkoItem(
                         id           = docId,
                         upc          = doc.getString("upc") ?: "",
@@ -196,6 +202,7 @@ class FunkoLookupService @Inject constructor(
                         isExclusive  = doc.getBoolean("isExclusive"),
                         exclusiveRetailer = doc.getString("exclusiveRetailer") ?: "",
                         isVaulted    = doc.getBoolean("isVaulted"),
+                        marketAvg    = pcComplete,
                     )
                 }
                 .take(20)

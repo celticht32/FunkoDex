@@ -42,6 +42,7 @@ object CatalogMapper {
     const val FIELD_MKT_VALUE_LOOSE    = "marketValueLoose"    // PriceCharting OOB / loose price
     const val FIELD_MKT_VALUE_COMPLETE = "marketValueComplete" // PriceCharting in-box price — PRIMARY
     const val FIELD_MKT_VALUE_NEW      = "marketValueNew"      // PriceCharting sealed / new price
+    const val FIELD_MKT_IS_APPROX      = "marketValueIsApproximate" // base price for unlisted variant
     const val FIELD_PC_ID              = "pricechartingId"     // PriceCharting product ID
     const val FIELD_PC_URL             = "pricechartingUrl"    // PriceCharting page URL
     const val FIELD_RELEASE_DATE       = "releaseDate"         // ISO yyyy-MM-dd
@@ -112,6 +113,7 @@ object CatalogMapper {
         marketValueLoose:    String?    = null,
         marketValueComplete: String?    = null,
         marketValueNew:      String?    = null,
+        marketValueIsApproximate: Boolean = false,
         pricechartingId:     String?    = null,
         pricechartingUrl:    String?    = null,
         releaseDate:         String?    = null,
@@ -178,6 +180,7 @@ object CatalogMapper {
             if (!marketValueLoose.isNullOrBlank())    put(FIELD_MKT_VALUE_LOOSE,    marketValueLoose)
             if (!marketValueComplete.isNullOrBlank()) put(FIELD_MKT_VALUE_COMPLETE, marketValueComplete)
             if (!marketValueNew.isNullOrBlank())      put(FIELD_MKT_VALUE_NEW,      marketValueNew)
+            if (marketValueIsApproximate)             put(FIELD_MKT_IS_APPROX,      true)
             if (!pricechartingId.isNullOrBlank())     put(FIELD_PC_ID,              pricechartingId)
             if (!pricechartingUrl.isNullOrBlank())    put(FIELD_PC_URL,             pricechartingUrl)
             if (!releaseDate.isNullOrBlank())         put(FIELD_RELEASE_DATE,       releaseDate)

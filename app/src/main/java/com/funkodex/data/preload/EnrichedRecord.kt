@@ -35,6 +35,7 @@ data class EnrichedRecord(
     val marketValueLoose:    String?    = null,    // out-of-box / loose price
     val marketValueComplete: String?    = null,    // in-box price — PRIMARY market value
     val marketValueNew:      String?    = null,    // mint / sealed price
+    val marketValueIsApproximate: Boolean = false, // base price used for an unlisted variant
     val pricechartingId:     String?    = null,
     val pricechartingUrl:    String?    = null,
     // PriceCharting metadata (enricher Pass 3 harvest)

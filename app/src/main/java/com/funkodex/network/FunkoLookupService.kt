@@ -167,6 +167,7 @@ class FunkoLookupService @Inject constructor(
             exclusiveRetailer = doc.getString("exclusiveRetailer") ?: "",
             isVaulted    = doc.getBoolean("isVaulted"),
             marketAvg    = pcComplete,
+            marketValueIsApproximate = doc.getBoolean(com.funkodex.data.preload.CatalogMapper.FIELD_MKT_IS_APPROX),
             pricechartingUrl = doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_PC_URL) ?: "",
         )
     }

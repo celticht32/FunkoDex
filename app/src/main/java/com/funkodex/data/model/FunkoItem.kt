@@ -56,6 +56,9 @@ data class FunkoItem(
     val marketAvg: Double = 0.0,         // Current market average / estimated value
     val marketValueIsManual: Boolean = false, // true = user set marketAvg by hand;
                                           // price refresh must NOT overwrite it.
+    val marketValueIsApproximate: Boolean = false, // marketAvg is a base-figure
+                                          // estimate (PriceCharting didn't list this
+                                          // exact variant); show with a "~" / "approx".
     val priceLastUpdated: LocalDate? = null, // When market prices were last fetched
     val pricechartingUrl: String = "",   // Catalog-stored PriceCharting product page,
                                           // if known. Lets the live refresh re-scrape the

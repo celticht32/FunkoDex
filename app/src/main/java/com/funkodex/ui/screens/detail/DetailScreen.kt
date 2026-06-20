@@ -543,7 +543,7 @@ private fun ViewContent(
         }
 
         // B3: Market price card
-        MarketPriceCard(priceState = priceState, noNewData = noNewPrice, onRefresh = onRefreshPrices)
+        MarketPriceCard(priceState = priceState, noNewData = noNewPrice, isApproximate = item.marketValueIsApproximate, onRefresh = onRefreshPrices)
 
         // Missing original banner — context only, action is on the chip above
         if (item.isMissingOriginal) {
@@ -1120,6 +1120,7 @@ fun AlertBottomSheet(
 private fun MarketPriceCard(
     priceState: PriceUiState,
     noNewData:  Boolean,
+    isApproximate: Boolean = false,
     onRefresh:  () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -1158,7 +1159,10 @@ private fun MarketPriceCard(
                     val p = priceState.price
                     if (p.marketLow > 0)  DetailRow("Market low",  "$${"%.2f".format(p.marketLow)}")
                     if (p.marketHigh > 0) DetailRow("Market high", "$${"%.2f".format(p.marketHigh)}")
-                    if (p.marketAvg > 0)  DetailRow("Market avg",  "$${"%.2f".format(p.marketAvg)}")
+                    if (p.marketAvg > 0)  DetailRow(
+                        if (isApproximate) "Market avg (approx)" else "Market avg",
+                        "${if (isApproximate) "~" else ""}$${"%.2f".format(p.marketAvg)}"
+                    )
                     if (p.retail > 0)     DetailRow("Retail",       "$${"%.2f".format(p.retail)}")
 
                     val staleLabel = when {

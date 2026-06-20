@@ -36,6 +36,7 @@ object FunkoMapper {
         doc.setDouble(FunkoDexDatabase.FIELD_MARKET_HIGH,    item.marketHigh)
         doc.setDouble(FunkoDexDatabase.FIELD_MARKET_AVG,     item.marketAvg)
         doc.setBoolean(FunkoDexDatabase.FIELD_MARKET_VALUE_IS_MANUAL, item.marketValueIsManual)
+        if (item.marketValueIsApproximate) doc.setBoolean(FunkoDexDatabase.FIELD_MARKET_VALUE_IS_APPROX, true)
         item.priceLastUpdated?.let { doc.setString(FunkoDexDatabase.FIELD_PRICE_UPDATED, it.toString()) }
         if (item.pricechartingUrl.isNotEmpty()) {
             doc.setString(FunkoDexDatabase.FIELD_PRICECHARTING_URL, item.pricechartingUrl)
@@ -104,6 +105,7 @@ object FunkoMapper {
         marketHigh       = doc.getDouble(FunkoDexDatabase.FIELD_MARKET_HIGH),
         marketAvg        = doc.getDouble(FunkoDexDatabase.FIELD_MARKET_AVG),
         marketValueIsManual = doc.getBoolean(FunkoDexDatabase.FIELD_MARKET_VALUE_IS_MANUAL),
+        marketValueIsApproximate = doc.getBoolean(FunkoDexDatabase.FIELD_MARKET_VALUE_IS_APPROX),
         priceLastUpdated = runCatching {
             doc.getString(FunkoDexDatabase.FIELD_PRICE_UPDATED)?.let { LocalDate.parse(it) }
         }.getOrNull(),

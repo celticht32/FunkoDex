@@ -181,6 +181,7 @@ class CatalogImporter @Inject constructor(
         record.marketValueLoose?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_MKT_VALUE_LOOSE, it) }
         record.marketValueComplete?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_MKT_VALUE_COMPLETE, it) }
         record.marketValueNew?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_MKT_VALUE_NEW, it) }
+        if (record.marketValueIsApproximate) mutable.setBoolean(CatalogMapper.FIELD_MKT_IS_APPROX, true)
         record.pricechartingId?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_PC_ID, it) }
         record.pricechartingUrl?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_PC_URL, it) }
         // PriceCharting metadata — fill only when missing on the existing doc.
@@ -388,6 +389,7 @@ class CatalogImporter @Inject constructor(
                                 marketValueLoose    = record.marketValueLoose,
                                 marketValueComplete = record.marketValueComplete,
                                 marketValueNew      = record.marketValueNew,
+                                marketValueIsApproximate = record.marketValueIsApproximate,
                                 pricechartingId     = record.pricechartingId,
                                 pricechartingUrl    = record.pricechartingUrl,
                                 releaseDate         = record.releaseDate,

@@ -19,6 +19,7 @@ and get notified when market prices drop.
 - **Export** — Excel (4 sheets) or CSV via email / Files / Drive
 - **Home screen widget** — owned count + top market value
 - **Offline-first** — Funko records bundled; no network needed for common items
+- **Enriched catalog** — import an enriched catalog JSON, then re-link your collection so owned items pick up UPCs, market values, images, and categories (your manual edits are preserved)
 - **Google Drive backup** — automatic daily backup on Wi-Fi
 - **Community UPC database** — opt-in anonymous contribution of UPC→product matches
 - **OAuth token management** — silent refresh + weekly background keep-alive

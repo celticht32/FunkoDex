@@ -5,6 +5,63 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — Session 14 — 2026-06-20
+
+Catalog data quality and owned-item enrichment. Re-running the enricher and
+re-importing now upgrades records already in the catalog (not just new ones), a
+new re-link action brings owned items up to catalog quality without overwriting
+manual edits, and an import-parser fix recovers market/metadata fields that were
+being silently dropped.
+
+### Added
+
+- **Re-link collection to catalog.** New Settings → Catalog action
+  (`CollectionRelinkService`) that walks every owned item, matches it to its
+  catalog entry (by catalog reference, then UPC), and fills/refreshes UPC,
+  retail price, market value, PriceCharting URL, Funko number, franchise,
+  category, and image from the enriched catalog. Run it after importing an
+  enriched catalog JSON. Progress and a result summary
+  (enriched / unmatched / already-complete) are shown in a dialog.
+- **Field-protection marker.** Owned items now record which fields the user
+  edited by hand (`userEditedFields`); the re-link refreshes a user-editable
+  field (franchise, category, UPC, image) only when the user has not edited it,
+  and never touches a manually-set market value. Items that predate this marker
+  fall back to safe fill-only behaviour so an earlier edit is never overwritten.
+
+### Changed
+
+- **Catalog import is now last-enricher-wins.** Re-importing an enriched JSON
+  overwrites enricher-derived fields on existing catalog records and recomputes
+  the series-derived fields (category, series list, exclusivity, chase, series
+  number) from the incoming tags, so an improved enricher run propagates onto
+  records already in the catalog. Display anchors (handle, title, image) are
+  preserved. The series→category derivation is now a single shared routine used
+  by both insert and re-import, so the two cannot drift.
+
+### Fixed
+
+- **Enriched-import parser dropped nine fields.** The hand-rolled JSON reader in
+  `CatalogImporter` did not read `marketValueComplete` (the primary in-box market
+  value) or `releaseDate`, `ebayEpid`, `amazonAsin`, `printRun`, `publisher`,
+  `pcSeries`, `pcDescription`, so they were silently lost on every import despite
+  being present in the enriched data and on the data model. All nine are now read.
+  (This is the actual delivery of the in-box market value the Session 13 entry
+  described as flowing end-to-end — it was being parsed out at the import step.)
+
+### Notes
+
+- Backup / restore / force-restore were audited against the current document
+  shape and needed no change: the serializer is field-agnostic, so all new
+  enriched fields and the edit marker round-trip automatically.
+- The catalog work is what builds the golden master (enrich → import). The
+  re-link and field-protection are on-device runtime features; the master ships
+  catalog-only with an empty collection.
+- Unit tests for the re-link refresh/protect/migration paths and the marker
+  round-trip are specified (`RELINK_FIELD_PROTECTION_SPEC.md`) but not yet
+  written.
+
+---
+
 ## [Unreleased] — Session 13 — 2026-06-20
 
 PriceCharting end-to-end: catalog enrichment now carries in-box (Complete) market

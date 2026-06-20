@@ -5,7 +5,60 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased] — Session 14 — 2026-06-20
+## [Unreleased] — Session 15 — 2026-06-20
+
+Series completion, franchise/property grouping, and an auto want-list. The
+Reports screen now shows true "owned of total" per group sourced from the
+catalog (not owned-count), the figures you're missing in a group you're
+completing populate a want list, and you can mark any franchise or named set as
+"complete the set" or "just this one." Compiles clean on-device.
+
+### Added
+
+- **Two-level series completion.** Figures group by franchise/property
+  (e.g. "Hocus Pocus") and by named set (e.g. "Haunted Mansion Mini Vinyl
+  Figures"). Each group shows a real X-of-Y fraction and progress bar, sourced
+  from a catalog scan rather than the owned count.
+- **Per-group completion intent.** A Complete / Just-this-one toggle on the
+  detail screen, stored in `group_pref::{LEVEL}::{key}` docs (user data; backs
+  up via the existing export denylist, no backup-code change). Default is
+  Complete. Cherry-picked groups show their fraction but auto-want nothing.
+- **Auto want-list.** Missing catalog figures in every Complete group appear in
+  each group's want list (manual wants are always kept). Want-list rows show the
+  Pop number when known, name-only otherwise.
+- **Enricher grouping fields.** `enrich.js` POST-PROCESS 5 emits `setTag`
+  (most-specific named set) and `franchiseSuggestion` (the property from the
+  PriceCharting `pcSeries` row, cleaned of retailer/event suffixes; falls back to
+  a property-specific console). Verified on a live run: Haunted Mansion resolves
+  19/19 to its set; franchise coverage rose 57 → 630, including small properties
+  like Hocus Pocus that the console alone bucketed under "disney".
+
+### Changed
+
+- **`FunkoItem.franchise` is now the user-authoritative property field.** It is
+  no longer seeded from the raw catalog `series` tag (a format/line, not a
+  property). It seeds from `franchiseSuggestion` / a property-specific console,
+  is left blank otherwise, and is protected by the existing `userEditedFields`
+  marker so re-link never overwrites a hand-set value.
+- **`getCollectionStats()` rewritten** to scan the catalog for per-franchise and
+  per-set denominators, diff against owned items by catalog handle, and apply
+  group intent. CHERRY_PICK groups contribute zero wants.
+- **Pop number display.** The PriceCharting Box Number (`funkoNumber`) is now
+  preferred over the title-regex `seriesNumber` for display (they agree
+  375/377 where both exist; Box Number wins the rare conflict), so the captured
+  number actually appears on want-list and detail rows.
+- **Re-link** now refreshes `setTag` (pure enrichment) and refreshes franchise
+  only from a property-specific source, never from the raw series tag.
+
+### Notes
+
+- New grouping/number/franchise data only populates after re-running the
+  enricher and re-importing the catalog.
+- Deferred: the first-scan auto-prompt and the spec §9 unit tests.
+
+---
+
+## [Session 14] — 2026-06-20
 
 Catalog data quality and owned-item enrichment. Re-running the enricher and
 re-importing now upgrades records already in the catalog (not just new ones), a

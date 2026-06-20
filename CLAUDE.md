@@ -6,8 +6,8 @@ FunkoDex is an Android Kotlin/Jetpack Compose app for managing a Funko Pop colle
 Built entirely in Claude across multiple sessions. This file gives Claude the full
 context needed to work on the codebase without re-explaining architecture.
 
-**72 Kotlin source files. Feature-complete at the code level through
-Sessions 1–14.** Sessions 7–8 (CBL Collection API + Keystore migrations) and
+**75 Kotlin source files. Feature-complete at the code level through
+Sessions 1–15.** Sessions 7–8 (CBL Collection API + Keystore migrations) and
 Session 11 (scanner/manual-add/pricing/image work) were the prior big code
 changes; Session 12 added manual-UPC validation, variant-aware pricing, an
 "enter details manually" entry point, and two resource-leak fixes (HTTP
@@ -104,6 +104,54 @@ from the Collection API migration. Run Part C last (it wipes the database).
   `SettingsScreen.kt`. B1–B3, B6 unblocked.
 
 Both wired and verified working as of Session 9; no longer open gaps.
+
+---
+
+**Session 15 — series completion, franchise grouping, auto want-list (compiles on-device).**
+Turns the Reports "series completion" figure from an owned-count into a true
+catalog-sourced X-of-Y, adds the property-level grouping the collector actually
+thinks in, and builds an automatic want-list. Spec: `SERIES_COMPLETION_SPEC_v0.2.md`.
+
+Two grouping levels:
+- **Franchise / property** (e.g. "Hocus Pocus", "Harry Potter") — the primary
+  grouping. User-authoritative: stored on `FunkoItem.franchise`, protected by the
+  `userEditedFields` marker. No longer seeded from the raw catalog `series` tag
+  (a format/line); seeded instead from the enricher's `franchiseSuggestion` (the
+  cleaned PriceCharting `pcSeries` property, falling back to a property-specific
+  console; umbrella consoles like disney/animation yield nothing → user assigns).
+- **Named set** (e.g. "Haunted Mansion Mini Vinyl Figures") — secondary. Stored
+  on the new `FunkoItem.setTag`, a pure-enrichment field refreshed on re-link.
+
+Per-group completion intent (`COMPLETE` default / `CHERRY_PICK`) is stored in a
+new `group_pref::{LEVEL}::{groupKey}` doc type via `GroupPrefRepository` (mirrors
+`cat_pref`). It is user data and rides the existing backup denylist unchanged.
+`GroupModels.kt` defines `GroupIntent` and `GroupLevel`; `ConsoleFranchise.kt`
+holds the pcSeries-cleanup + umbrella-console logic (the app-side mirror of the
+enricher rule).
+
+`FunkoRepository.getCollectionStats()` was rewritten: it scans `catalog::` docs
+(`loadCatalogGroupingRows`) for real per-franchise and per-set denominators,
+diffs against owned items by catalog handle, applies each group's intent, and
+emits `SeriesSummary` rows (now carrying `level`/`groupKey`/`intent`). A
+`getWantList()` helper aggregates missing figures from COMPLETE groups (de-duped
+to the most-specific group; manual `isOwned == false` wants always kept). The
+Reports UI renders Option-A rows (fraction, progress bar — gray for cherry-pick,
+intent pill, "Set" badge) with the want list inline; the detail screen gains a
+Complete / Just-this-one toggle per group. The PriceCharting Box Number
+(`funkoNumber`) is now preferred over the title-regex `seriesNumber` for display.
+
+Files: new `data/model/GroupModels.kt`, `data/util/ConsoleFranchise.kt`,
+`data/repository/GroupPrefRepository.kt`; changed `FunkoItem` (+`setTag`,
+`SeriesSummary` +fields, +`WantListGroup`), `FunkoDexDatabase` (+`TYPE_GROUP_PREF`,
++`FIELD_SET_TAG`, +group-pref fields), `FunkoMapper` (+`setTag`),
+`EnrichedRecord`/`CatalogMapper`/`CatalogImporter` (+`setTag`/`franchiseSuggestion`
+carry-through), `CollectionRelinkService` (setTag refresh; franchise from
+property source), `FunkoLookupService` (franchise seed + Box-Number display),
+`FunkoRepository` (stats rewrite + want list), `ReportsScreen`,
+`DetailViewModel`/`DetailScreen`. Enricher (`funko_enrich`): POST-PROCESS 5 emits
+`setTag` + `franchiseSuggestion`. **Deferred:** first-scan auto-prompt; spec §9
+unit tests. New grouping/number/franchise data populates only after an enricher
+re-run + catalog re-import.
 
 ---
 

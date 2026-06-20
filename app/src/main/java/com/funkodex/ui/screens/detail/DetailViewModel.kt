@@ -225,16 +225,26 @@ class DetailViewModel @Inject constructor(
     // ─── Edit actions ─────────────────────────────────────────────────────────
 
     fun updateName(value: String)            = updateDraft { it.copy(name = value) }
-    fun updateFranchise(value: String)       = updateDraft { it.copy(franchise = value) }
+    fun updateFranchise(value: String) {
+        updateDraft { it.copy(franchise = value) }
+        markEdited(com.funkodex.data.db.FunkoDexDatabase.FIELD_FRANCHISE)
+    }
     fun updateNumber(value: String)          = updateDraft { it.copy(seriesNumber = value) }
     fun updatePricePaid(value: String)       = updateDraft { it.copy(pricePaid = value.toDoubleOrNull() ?: it.pricePaid) }
     fun updateCondition(value: Condition)    = updateDraft { it.copy(condition = value) }
     fun updateNotes(value: String)           = updateDraft { it.copy(notes = value) }
-    fun updateCategory(value: String)        = updateDraft {
-        it.copy(category = value, genre = FunkoGenre.fromCategory(value))
+    fun updateCategory(value: String) {
+        updateDraft { it.copy(category = value, genre = FunkoGenre.fromCategory(value)) }
+        markEdited(com.funkodex.data.db.FunkoDexDatabase.FIELD_CATEGORY)
     }
-    fun updateUpc(value: String)             = updateDraft { it.copy(upc = value) }
-    fun updateImageUrl(value: String)        = updateDraft { it.copy(imageUrl = value) }
+    fun updateUpc(value: String) {
+        updateDraft { it.copy(upc = value) }
+        markEdited(com.funkodex.data.db.FunkoDexDatabase.FIELD_UPC)
+    }
+    fun updateImageUrl(value: String) {
+        updateDraft { it.copy(imageUrl = value) }
+        markEdited(com.funkodex.data.db.FunkoDexDatabase.FIELD_IMAGE_URL)
+    }
 
     /**
      * Manually set the market value. Marks it as user-set so price refresh won't
@@ -578,5 +588,17 @@ class DetailViewModel @Inject constructor(
     private fun updateDraft(transform: (FunkoItem) -> FunkoItem) {
         val editing = state.value as? DetailUiState.Editing ?: return
         _state.value = editing.copy(draft = transform(editing.draft))
+    }
+
+    /**
+     * Stamp a FIELD_ key into the draft's userEditedFields so the re-link pass
+     * will not overwrite this field from the catalog. Initializes the set from
+     * null → empty on first edit (which also flips the doc from "pre-marker" to
+     * "marker present"). Deduped. Pass the FunkoDexDatabase.FIELD_ constant.
+     */
+    private fun markEdited(fieldKey: String) = updateDraft { item ->
+        val current = item.userEditedFields ?: emptyList()
+        if (fieldKey in current) item
+        else item.copy(userEditedFields = current + fieldKey)
     }
 }

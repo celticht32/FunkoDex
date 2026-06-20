@@ -38,21 +38,24 @@ import javax.inject.Singleton
  * An item that resolves to no catalog doc is left untouched and counted as
  * "unmatched".
  *
- * Fill-only rule (mirrors CatalogImporter.mergeRecordInto):
- *   - A catalog value is written onto the owned item ONLY when the item's own
- *     field is empty / default / unset.
+ * Refresh rule (marker-aware):
+ *   - Pure-enrichment fields not editable in the detail screen (retailPrice,
+ *     pricechartingUrl, funkoId, and market value when not user-managed) are
+ *     REFRESHED from the catalog whenever the catalog has a newer value.
+ *   - User-editable fields (upc, franchise, category, imageUrl) are refreshed
+ *     only when the item's userEditedFields marker is PRESENT and does not list
+ *     that field; otherwise they are fill-only (written just when blank). When
+ *     the marker is ABSENT (null — a doc created before the marker existed),
+ *     these fall back to fill-only so a pre-marker edit is never clobbered.
  *   - User-authored data is NEVER overwritten: pricePaid, condition, notes,
- *     userPhoto, dateAcquired, isOwned, and a manually-set market value
- *     (marketValueIsManual == true) are not touched.
- *   - imageUrl is filled from the catalog only when the item has no image URL
- *     of its own; a user-entered URL is preserved.
- *   - marketAvg is filled (complete → loose → new precedence, matching
- *     PriceService) only when the item has no market value and the value is not
- *     user-managed; priceLastUpdated is stamped when we set it.
+ *     userPhoto, dateAcquired, isOwned, variants, and a manually-set market
+ *     value (marketValueIsManual == true) are not touched.
+ *   - catalogRef is backfilled when the item matched only via UPC; isVaulted is
+ *     one-way (never un-vaulted).
  *
- * The pass runs inside database.inBatch() in chunks and is fully idempotent —
- * running it twice changes nothing the second time, because every target field
- * is already populated.
+ * The pass runs inside database.inBatch() in chunks and is idempotent — once a
+ * field matches the catalog it is left alone (every write is guarded by a
+ * value-changed check), so a second run with no catalog changes does nothing.
  *
  * MIT License — Copyright (c) 2026 Chris Ahrendt
  */
@@ -162,43 +165,68 @@ class CollectionRelinkService @Inject constructor(
                         val mutable = item.toMutable()
                         var changed = false
 
+                        // ── Field-protection marker ──────────────────────────
+                        // Read the user-edited field set. ABSENT (null) means a
+                        // pre-marker doc: fall back to safe fill-only for the
+                        // user-editable fields so we never clobber an edit made
+                        // before the marker was tracked. PRESENT (even empty)
+                        // means we can refresh any field the user hasn't edited.
+                        val editedJson = item.getString(FunkoDexDatabase.FIELD_USER_EDITED)
+                        val markerPresent = editedJson != null
+                        val editedFields: Set<String> = editedJson?.let { json ->
+                            runCatching {
+                                val arr = org.json.JSONArray(json)
+                                (0 until arr.length()).map { arr.getString(it) }.toSet()
+                            }.getOrElse { emptySet() }
+                        } ?: emptySet()
+                        // A user-editable field may be REFRESHED (overwritten) only
+                        // when the marker is present and the user hasn't edited it.
+                        fun canRefresh(fieldKey: String): Boolean =
+                            markerPresent && fieldKey !in editedFields
+
                         // catalogRef itself — backfill if the item matched only via UPC.
                         if (catalogRef.isBlank()) {
                             mutable.setString(FunkoDexDatabase.FIELD_CATALOG_REF, catalog.id)
                             changed = true
                         }
 
-                        // UPC — fill only when the item has none.
-                        if (itemUpc == null) {
-                            catalog.getString(CatalogMapper.FIELD_UPC)
-                                ?.trim()?.takeIf { it.isNotBlank() }
-                                ?.let { mutable.setString(FunkoDexDatabase.FIELD_UPC, it); changed = true }
+                        // UPC — user-editable. Refresh when allowed, else fill-only.
+                        // (UPC is identity-critical for scanning; only overwrite a
+                        // user's value when they did NOT set it by hand.)
+                        run {
+                            val catUpc = catalog.getString(CatalogMapper.FIELD_UPC)?.trim()?.takeIf { it.isNotBlank() }
+                            if (catUpc != null) {
+                                val refresh = canRefresh(FunkoDexDatabase.FIELD_UPC)
+                                if ((itemUpc == null || refresh) && catUpc != itemUpc) {
+                                    mutable.setString(FunkoDexDatabase.FIELD_UPC, catUpc); changed = true
+                                }
+                            }
                         }
 
-                        // Retail price — fill only when item has 0.
-                        if (item.getDouble(FunkoDexDatabase.FIELD_RETAIL_PRICE) <= 0.0) {
+                        // Retail price — pure enrichment (not edited in the edit
+                        // screen): refresh from catalog whenever the catalog has one.
+                        run {
                             val retail = catalog.getDouble(CatalogMapper.FIELD_RETAIL_PRICE)
-                            if (retail > 0.0) { mutable.setDouble(FunkoDexDatabase.FIELD_RETAIL_PRICE, retail); changed = true }
+                            if (retail > 0.0 && retail != item.getDouble(FunkoDexDatabase.FIELD_RETAIL_PRICE)) {
+                                mutable.setDouble(FunkoDexDatabase.FIELD_RETAIL_PRICE, retail); changed = true
+                            }
                         }
 
-                        // PriceCharting URL — fill only when blank.
-                        if (item.getString(FunkoDexDatabase.FIELD_PRICECHARTING_URL).isNullOrBlank()) {
-                            catalog.getString(CatalogMapper.FIELD_PC_URL)
-                                ?.takeIf { it.isNotBlank() }
-                                ?.let { mutable.setString(FunkoDexDatabase.FIELD_PRICECHARTING_URL, it); changed = true }
-                        }
+                        // PriceCharting URL — pure enrichment: refresh.
+                        catalog.getString(CatalogMapper.FIELD_PC_URL)
+                            ?.takeIf { it.isNotBlank() && it != item.getString(FunkoDexDatabase.FIELD_PRICECHARTING_URL) }
+                            ?.let { mutable.setString(FunkoDexDatabase.FIELD_PRICECHARTING_URL, it); changed = true }
 
-                        // Market value — fill only when the item has no value AND the
-                        // user hasn't set one manually. complete → loose → new, matching
-                        // PriceService's marketValueComplete-primary convention.
+                        // Market value — pure enrichment, but never touch a value
+                        // the user set by hand (marketValueIsManual). When not
+                        // manual, refresh from catalog. complete → loose → new.
                         val isManual = item.getBoolean(FunkoDexDatabase.FIELD_MARKET_VALUE_IS_MANUAL)
-                        val currentAvg = item.getDouble(FunkoDexDatabase.FIELD_MARKET_AVG)
-                        if (!isManual && currentAvg <= 0.0) {
+                        if (!isManual) {
                             val complete = parseMoney(catalog.getString(CatalogMapper.FIELD_MKT_VALUE_COMPLETE))
                             val loose    = parseMoney(catalog.getString(CatalogMapper.FIELD_MKT_VALUE_LOOSE))
                             val mint     = parseMoney(catalog.getString(CatalogMapper.FIELD_MKT_VALUE_NEW))
                             val avg = complete ?: loose ?: mint
-                            if (avg != null) {
+                            if (avg != null && avg != item.getDouble(FunkoDexDatabase.FIELD_MARKET_AVG)) {
                                 mutable.setDouble(FunkoDexDatabase.FIELD_MARKET_AVG, avg)
                                 loose?.let { mutable.setDouble(FunkoDexDatabase.FIELD_MARKET_LOW, it) }
                                 mint?.let { mutable.setDouble(FunkoDexDatabase.FIELD_MARKET_HIGH, it) }
@@ -207,43 +235,48 @@ class CollectionRelinkService @Inject constructor(
                             }
                         }
 
-                        // Franchise — fill only when blank. Catalog has no single
-                        // "franchise" field; the closest is the primary series tag.
-                        if (item.getString(FunkoDexDatabase.FIELD_FRANCHISE).isNullOrBlank()) {
-                            catalog.getString(CatalogMapper.FIELD_PRIMARY_SERIES)
-                                ?.takeIf { it.isNotBlank() }
-                                ?.let { mutable.setString(FunkoDexDatabase.FIELD_FRANCHISE, it); changed = true }
+                        // Franchise — user-editable. Refresh when allowed, else
+                        // fill-only. Catalog's closest field is the primary series.
+                        run {
+                            val cat = catalog.getString(CatalogMapper.FIELD_PRIMARY_SERIES)?.takeIf { it.isNotBlank() }
+                            val itemBlank = item.getString(FunkoDexDatabase.FIELD_FRANCHISE).isNullOrBlank()
+                            if (cat != null && (itemBlank || canRefresh(FunkoDexDatabase.FIELD_FRANCHISE)) &&
+                                cat != item.getString(FunkoDexDatabase.FIELD_FRANCHISE)
+                            ) {
+                                mutable.setString(FunkoDexDatabase.FIELD_FRANCHISE, cat); changed = true
+                            }
                         }
 
-                        // Category — fill only when blank; re-derive genre to match.
-                        if (item.getString(FunkoDexDatabase.FIELD_CATEGORY).isNullOrBlank()) {
-                            catalog.getString(CatalogMapper.FIELD_CATEGORY)
-                                ?.takeIf { it.isNotBlank() }
-                                ?.let { cat ->
-                                    mutable.setString(FunkoDexDatabase.FIELD_CATEGORY, cat)
-                                    mutable.setString(
-                                        FunkoDexDatabase.FIELD_GENRE,
-                                        FunkoGenre.fromCategory(cat).name
-                                    )
-                                    changed = true
-                                }
+                        // Category — user-editable. Refresh when allowed, else
+                        // fill-only. Re-derive genre to stay consistent.
+                        run {
+                            val cat = catalog.getString(CatalogMapper.FIELD_CATEGORY)?.takeIf { it.isNotBlank() }
+                            val itemBlank = item.getString(FunkoDexDatabase.FIELD_CATEGORY).isNullOrBlank()
+                            if (cat != null && (itemBlank || canRefresh(FunkoDexDatabase.FIELD_CATEGORY)) &&
+                                cat != item.getString(FunkoDexDatabase.FIELD_CATEGORY)
+                            ) {
+                                mutable.setString(FunkoDexDatabase.FIELD_CATEGORY, cat)
+                                mutable.setString(FunkoDexDatabase.FIELD_GENRE, FunkoGenre.fromCategory(cat).name)
+                                changed = true
+                            }
                         }
 
-                        // funkoId / Pop number — fill only when blank.
-                        if (item.getString(FunkoDexDatabase.FIELD_FUNKO_ID).isNullOrBlank()) {
-                            catalog.getString(CatalogMapper.FIELD_FUNKO_NUMBER)
-                                ?.takeIf { it.isNotBlank() }
-                                ?.let { mutable.setString(FunkoDexDatabase.FIELD_FUNKO_ID, it); changed = true }
-                        }
+                        // funkoId / Pop number — pure enrichment: refresh.
+                        catalog.getString(CatalogMapper.FIELD_FUNKO_NUMBER)
+                            ?.takeIf { it.isNotBlank() && it != item.getString(FunkoDexDatabase.FIELD_FUNKO_ID) }
+                            ?.let { mutable.setString(FunkoDexDatabase.FIELD_FUNKO_ID, it); changed = true }
 
-                        // Image URL — fill only when the item has no image of its own.
-                        // Try the HobbyDB CDN image first, then the funko.com image.
-                        if (item.getString(FunkoDexDatabase.FIELD_IMAGE_URL).isNullOrBlank()) {
-                            val img = catalog.getString(CatalogMapper.FIELD_IMAGE_URL)
-                                ?.takeIf { it.isNotBlank() }
-                                ?: catalog.getString(CatalogMapper.FIELD_FUNKO_IMAGE)
-                                    ?.takeIf { it.isNotBlank() }
-                            if (img != null) { mutable.setString(FunkoDexDatabase.FIELD_IMAGE_URL, img); changed = true }
+                        // Image URL — user-editable. Refresh when allowed, else
+                        // fill-only. HobbyDB image first, then funko.com image.
+                        run {
+                            val img = catalog.getString(CatalogMapper.FIELD_IMAGE_URL)?.takeIf { it.isNotBlank() }
+                                ?: catalog.getString(CatalogMapper.FIELD_FUNKO_IMAGE)?.takeIf { it.isNotBlank() }
+                            val itemBlank = item.getString(FunkoDexDatabase.FIELD_IMAGE_URL).isNullOrBlank()
+                            if (img != null && (itemBlank || canRefresh(FunkoDexDatabase.FIELD_IMAGE_URL)) &&
+                                img != item.getString(FunkoDexDatabase.FIELD_IMAGE_URL)
+                            ) {
+                                mutable.setString(FunkoDexDatabase.FIELD_IMAGE_URL, img); changed = true
+                            }
                         }
 
                         // Vaulted flag — fill from catalog only when the item is not

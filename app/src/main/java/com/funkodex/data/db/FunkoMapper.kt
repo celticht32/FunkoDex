@@ -76,6 +76,15 @@ object FunkoMapper {
         doc.setString(FunkoDexDatabase.FIELD_NOTES,          item.notes)
         doc.setString(FunkoDexDatabase.FIELD_DATE_ADDED,     item.dateAdded.toString())
         item.dateAcquired?.let { doc.setString(FunkoDexDatabase.FIELD_DATE_ACQUIRED, it.toString()) }
+        // Field-protection marker. Written as a JSON array string when present;
+        // removed entirely when null so an absent marker (pre-marker doc) stays
+        // absent and is distinguishable from "present but empty".
+        item.userEditedFields?.let { fields ->
+            doc.setString(
+                FunkoDexDatabase.FIELD_USER_EDITED,
+                org.json.JSONArray(fields).toString()
+            )
+        } ?: doc.remove(FunkoDexDatabase.FIELD_USER_EDITED)
         return doc
     }
 
@@ -150,5 +159,11 @@ object FunkoMapper {
         dateAcquired     = runCatching {
             doc.getString(FunkoDexDatabase.FIELD_DATE_ACQUIRED)?.let { LocalDate.parse(it) }
         }.getOrNull(),
+        userEditedFields = doc.getString(FunkoDexDatabase.FIELD_USER_EDITED)?.let { json ->
+            runCatching {
+                val arr = org.json.JSONArray(json)
+                (0 until arr.length()).map { arr.getString(it) }
+            }.getOrElse { emptyList() }
+        },
     )
 }

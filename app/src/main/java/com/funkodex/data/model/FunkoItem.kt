@@ -85,6 +85,16 @@ data class FunkoItem(
     // Same Funko figure, different paint/packaging version.
     // Stored on the parent record — does NOT create a separate collection entry.
     val variants: List<FunkoVariant> = emptyList(),
+
+    // ── Field-protection marker ───────────────────────────────────────────────
+    // FIELD_ keys the user has edited by hand (e.g. ["category","franchise"]).
+    // The re-link pass refreshes a catalog-derived field from the catalog ONLY
+    // when its key is NOT in this set. null means the marker is ABSENT — a doc
+    // created before this field existed — and re-link falls back to safe
+    // fill-only behaviour for the user-editable fields so it never retroactively
+    // clobbers an edit made before the marker was tracked. An empty (non-null)
+    // list means "marker present, nothing edited yet" → full refresh allowed.
+    val userEditedFields: List<String>? = null,
 ) {
     /**
      * The retail value to use for display and totals: prefers catalog-sourced

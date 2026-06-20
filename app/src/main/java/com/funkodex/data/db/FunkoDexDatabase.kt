@@ -49,6 +49,7 @@ class FunkoDexDatabase(private val context: Context) {
         const val FIELD_IS_CHASE       = "isChase"
         const val FIELD_IS_MISSING_ORIGINAL = "isMissingOriginal"
         const val FIELD_VARIANTS            = "variants"
+        const val FIELD_USER_EDITED         = "userEditedFields" // JSON array of FIELD_ keys the user edited by hand; absent on pre-marker docs
         const val FIELD_IS_EXCLUSIVE   = "isExclusive"
         const val FIELD_EXCL_RETAILER  = "exclusiveRetailer"
 

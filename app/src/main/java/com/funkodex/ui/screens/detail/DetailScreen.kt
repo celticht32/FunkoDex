@@ -595,6 +595,13 @@ private fun UpcScanDialog(
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     var scanned        by remember { mutableStateOf(false) }
 
+    // Analysis executor owned by this dialog; shut down on dismiss so the
+    // barcode-analyzer thread isn't leaked each time the scan dialog opens.
+    val cameraExecutor = remember { java.util.concurrent.Executors.newSingleThreadExecutor() }
+    DisposableEffect(Unit) {
+        onDispose { cameraExecutor.shutdown() }
+    }
+
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
         properties       = androidx.compose.ui.window.DialogProperties(
@@ -612,9 +619,10 @@ private fun UpcScanDialog(
                 factory  = { ctx ->
                     val previewView = androidx.camera.view.PreviewView(ctx)
                     com.funkodex.ui.screens.scanner.startCamera(
-                        context       = ctx,
+                        context        = ctx,
                         lifecycleOwner = lifecycleOwner,
-                        previewView   = previewView,
+                        previewView    = previewView,
+                        analysisExecutor = cameraExecutor,
                     ) { upc ->
                         if (!scanned) {
                             scanned = true
@@ -1388,6 +1396,16 @@ private fun EditContent(
             supportingText = { Text("Changing this re-downloads the picture on save") },
             singleLine    = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+            trailingIcon  = {
+                if (draft.imageUrl.isNotEmpty()) {
+                    IconButton(onClick = { onImageUrl("") }) {
+                        Icon(
+                            imageVector        = Icons.Default.Clear,
+                            contentDescription = "Clear image URL",
+                        )
+                    }
+                }
+            },
             modifier      = Modifier.fillMaxWidth(),
         )
 

@@ -6,12 +6,21 @@ repository source (master, verified in sync with GitHub). As of Session 9
 `CatalogDataSection` are present and wired — the "local-only file" caveats
 that previously applied to A9/B1–B3/B6 no longer apply.
 
-**Session 11 additions (2026-06-14):** manual add of catalog-missing items
-(A2d-2, A4i), manual market value (A4g), image URL entry + http→https (A4h,
-A4d), camera-survives-screen-saver (A4j — device only), and punctuation-tolerant
-token search (A3a). eBay pricing (Tier 2a) switched RSS→HTML but returns 403 in
-practice — for any price test, expect eBay to contribute nothing; market price
-comes from other tiers or a manual value. See CHANGELOG Session 11.
+**Session 12 additions (2026-06-19):** manual-UPC check-digit validation (the
+manual-add UPC field rejects malformed entries and shows "Valid UPC" / error —
+test A2d-3), a third "Enter details manually" button on the Add start screen
+(A2e), "Add another" now returns to the live camera not the chooser (A2f),
+variant-aware pricing for chase/exclusive items (A4k — verify a chase prices
+differently from the common version where data exists), and a camera-executor
+leak fix (no user-visible change; the camera still rebinds on resume — A4j).
+
+**eBay pricing (Tier 2a) status — corrected Session 12:** the HTML-scrape parser
+is *not* broken. It was verified against a live sold-listings page and parses
+current eBay markup correctly. The 403s seen earlier are a fetch-time bot
+challenge from datacenter IPs, not a parse failure — on a real device's
+residential connection the fetch may well succeed, so eBay *may* contribute
+prices during device testing. Do not assume eBay returns nothing; check the logs.
+See CHANGELOG Session 12.
 
 Recommended order: **Part A** (core) → **Part B** (integrations) → **Part C**
 (backup/restore — LAST, force-restore wipes the database) → **Part D**

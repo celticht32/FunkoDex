@@ -11,7 +11,7 @@ Items are grouped by theme and ordered by rough implementation priority within e
 ## Community Catalog Distribution (major initiative — design complete, not built)
 
 A full architecture & design document was produced in Session 11:
-**`FunkoDex_Catalog_Distribution_Architecture_v1.0.docx`** (in repo root / docs).
+**`FunkoDex_Catalog_Distribution_Architecture_v1.2.docx`** (in repo root / docs).
 Design only; nothing implemented. Summary:
 
 - **Golden master base.** Bundle the enriched catalog + maintainer's accumulated
@@ -41,14 +41,17 @@ Design only; nothing implemented. Summary:
 ## Authentication & OAuth
 
 ### F-AUTH-1: Silent eBay token refresh via Browse API (not RSS)
-**Current state (updated Session 11):** The RSS feed (`_rss=1`) is retired by eBay;
-Tier 2a was switched to scraping the HTML sold-listings page, but eBay returns
-**403 (bot block)** to the app's request even with a browser User-Agent. So Tier 2a
-is effectively non-functional. eBay OAuth is implemented but the Browse API is never
-called. NOTE: the Browse API returns only *active* listings, not sold comps — so it
-is not a drop-in replacement for sold-price data. Recommended direction (Session 11):
-rely on manual market value + HobbyDB/Channel3 rather than eBay; only pursue Browse
-API if active asking prices are acceptable.
+**Current state (updated Session 12):** The RSS feed (`_rss=1`) is retired; Tier 2a
+scrapes the sold-listings HTML. **The parser is current and correct** — verified
+Session 12 against a real captured sold-listings page (57 valid prices parsed). The
+403s seen in logs are a *fetch-time* bot challenge against datacenter/test IPs, not a
+parse failure, and may not occur on a real device's residential connection — so Tier
+2a is *possibly* functional on-device and should be tested there before being written
+off. eBay OAuth is implemented but the Browse API is never called. NOTE: the Browse
+API returns only *active* listings, not sold comps — so it is not a drop-in
+replacement for sold-price data. If the HTML scrape proves reliably blocked on real
+devices, the Browse API (active asking prices) or the Marketplace Insights API (sold
+comps, requires application approval) are the alternatives.
 **What to build:** Once `isEbayTokenValid()` is true, `PriceService` should attempt a
 Browse API call before falling back. Return a `PriceSnapshot` with
 `source = PriceSource.EBAY_BROWSE`.

@@ -42,6 +42,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.funkodex.ui.help.HelpBanner
 import com.funkodex.util.toHttpsImageUrl
+import com.funkodex.util.UpcValidation
 import com.funkodex.ui.help.HelpContent
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.Lifecycle
@@ -125,7 +126,8 @@ fun ScannerScreen(
                         if (cameraGranted) viewModel.startScanning()
                         else permissionState.launchMultiplePermissionRequest()
                     },
-                    onManualSearch = viewModel::openManualSearch
+                    onManualSearch = viewModel::openManualSearch,
+                    onAddManually = viewModel::openManualAddBlank,
                 )
             }
             is ScanState.Scanning -> {
@@ -178,7 +180,7 @@ fun ScannerScreen(
             is ScanState.Saved -> {
                 SavedConfirmation(
                     item          = s.item,
-                    onNext        = viewModel::reset,
+                    onNext        = viewModel::startScanning,
                     onDone        = viewModel::reset,
                     onMarkVariant = viewModel::markVariantMissingOriginal,
                 )
@@ -239,14 +241,23 @@ private fun CameraPreview(
     // re-attach — leaving a black preview until the screen is left and re-entered.
     val previewView = remember { PreviewView(context) }
 
+    // Single analysis executor owned by this composable. Created once and shut
+    // down on dispose. Previously startCamera() created a new executor on every
+    // ON_RESUME and never shut any of them down, leaking a background thread per
+    // resume.
+    val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                startCamera(context, lifecycleOwner, previewView, onBarcodeDetected)
+                startCamera(context, lifecycleOwner, previewView, cameraExecutor, onBarcodeDetected)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            cameraExecutor.shutdown()
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -334,7 +345,11 @@ private fun LookingUpOverlay() {
 // ─── Start prompt ──────────────────────────────────────────────────────────────
 
 @Composable
-private fun ScannerStartPrompt(onStartScan: () -> Unit, onManualSearch: () -> Unit) {
+private fun ScannerStartPrompt(
+    onStartScan: () -> Unit,
+    onManualSearch: () -> Unit,
+    onAddManually: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -367,6 +382,12 @@ private fun ScannerStartPrompt(onStartScan: () -> Unit, onManualSearch: () -> Un
             Icon(Icons.Default.Search, null)
             Spacer(Modifier.width(8.dp))
             Text("Search by name")
+        }
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(onClick = onAddManually, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Default.Edit, null)
+            Spacer(Modifier.width(8.dp))
+            Text("Enter details manually")
         }
     }
 }
@@ -784,6 +805,7 @@ internal fun startCamera(
     context: Context,
     lifecycleOwner: LifecycleOwner,
     previewView: PreviewView,
+    analysisExecutor: java.util.concurrent.ExecutorService,
     onBarcodeDetected: (String) -> Unit,
 ) {
     val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
@@ -809,7 +831,7 @@ internal fun startCamera(
             .build()
             .also { imageAnalysis ->
                 imageAnalysis.setAnalyzer(
-                    Executors.newSingleThreadExecutor(),
+                    analysisExecutor,
                     BarcodeAnalyzer(onBarcodeDetected)
                 )
             }
@@ -1096,7 +1118,9 @@ private fun ManualAddSheet(
                 }
                 IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Close") }
             }
-            Text("Future scans of this barcode will match instantly.",
+            Text(
+                if (upc.isNotBlank()) "Future scans of this barcode will match instantly."
+                else "Enter the Funko's details to add it to your collection.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
 
@@ -1113,12 +1137,37 @@ private fun ManualAddSheet(
                     modifier = Modifier.fillMaxWidth(),
                 )
             } else {
+                val upcEntered = upc.trim().isNotEmpty()
+                val upcValid   = upcEntered && UpcValidation.isValid(upc)
+                val upcInvalid = upcEntered && !upcValid
                 OutlinedTextField(
                     value = upc,
                     onValueChange = { upc = it },
                     label = { Text("UPC (optional)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
+                    isError = upcInvalid,
+                    trailingIcon = if (upcValid) {
+                        {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = "Valid UPC",
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    } else null,
+                    supportingText = when {
+                        upcInvalid -> { { Text("Not a valid 12-digit UPC or 13-digit EAN") } }
+                        upcValid   -> {
+                            {
+                                Text(
+                                    "Valid UPC",
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                        else -> null
+                    },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -1315,7 +1364,8 @@ private fun ManualAddSheet(
                         )
                     )
                 },
-                enabled = name.isNotBlank(),
+                enabled = name.isNotBlank() &&
+                        (upc.isBlank() || UpcValidation.isValid(upc)),
                 modifier = Modifier.fillMaxWidth().height(44.dp),
             ) {
                 Text("Add to collection")

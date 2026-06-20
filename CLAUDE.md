@@ -6,10 +6,12 @@ FunkoDex is an Android Kotlin/Jetpack Compose app for managing a Funko Pop colle
 Built entirely in Claude across multiple sessions. This file gives Claude the full
 context needed to work on the codebase without re-explaining architecture.
 
-**67+ Kotlin source files. Feature-complete at the code level through
-Sessions 1–11. Sessions 7–8 (CBL Collection API + Keystore migrations) and
-Session 11 (scanner/manual-add/pricing/image work + manual market value) are
-the most recent code changes; full functional/device test pass remains the
+**71 Kotlin source files. Feature-complete at the code level through
+Sessions 1–12. Sessions 7–8 (CBL Collection API + Keystore migrations) and
+Session 11 (scanner/manual-add/pricing/image work) were the prior big code
+changes; Session 12 added manual-UPC validation, variant-aware pricing, an
+"enter details manually" entry point, and two resource-leak fixes (HTTP
+responses + camera executor). Full functional/device test pass remains the
 standing focus — see Testing below. A Community Catalog Distribution
 architecture (golden-master base + GitHub update packets) is designed but not
 built — see FUTURE.md.**
@@ -157,10 +159,20 @@ All constants in `FunkoDexDatabase.kt`. The Mapper handles `FunkoItem` ↔ Docum
 
 ### Price waterfall — 5 tiers (`PriceService.kt`)
 1. **Retail** — instant, from catalog data
-2. **eBay RSS** — real sold prices, XmlPullParser, no auth
-3. **UPCitemdb** — 100/day free, UPC required
-4. **Channel3** — free tier (100/day) then premium with user's API key
-5. **HobbyDB** — `TokenRefreshManager.getValidHobbyDbToken()`, silent refresh
+2. **eBay sold listings** — real sold prices, scraped from the sold-listings HTML
+   (`s-card__price` spans; the `_rss=1` feed is retired, so the `EBAY_RSS` enum
+   name is historical). No auth. Parser verified live Session 12. Chase/exclusive
+   items query the variant's listings first, falling back to the broad query.
+3. **UPCitemdb** — 100/day free, UPC required. Typed gson parsing (Session 12).
+4. **Channel3** — free tier (100/day) then premium with user's API key. **Dormant
+   unless a Channel3 key is configured.** Its parser's flat price-field names look
+   stale vs the current API — re-verify against a captured response before use.
+5. **HobbyDB** — `TokenRefreshManager.getValidHobbyDbToken()`, silent refresh.
+   Searches by name (variant terms appended Session 12); takes top relevance hit.
+
+All four network tiers close their `Response` via `.use {}` (Session 12 leak fix).
+The eBay/HobbyDB/Channel3 name queries share a `variantSuffix` helper; UPC-keyed
+lookups don't use it (a UPC is already variant-specific).
 
 ### OAuth flow (`auth/` package)
 PKCE (RFC 7636) — no client secret in APK. Code verifier stored in `OAuthSession` (memory only).
@@ -279,8 +291,11 @@ Collection features, Platform, Data/Sync, QA, UI/UX, Security, Performance, i18n
 ## Remaining limitations
 
 - Couchbase Lite Community is unencrypted on disk (accepted — collector data, not financial)
-- eBay pricing (Tier 2a) is effectively non-functional: the RSS feed is retired and the
-  HTML sold-listings scrape gets 403 (bot block). Other tiers + manual market value cover it.
+- eBay pricing (Tier 2a): the `_rss=1` feed is retired; the app scrapes the
+  sold-listings HTML. The parser is current (verified live Session 12). The 403s
+  seen in logs are a fetch-time bot challenge from datacenter IPs — it may work on
+  a real device's residential connection. Don't assume the tier is dead; verify
+  on-device. Pricing is variant-aware for chase/exclusive items.
 - Play Integrity API in Cloudflare Worker not yet implemented (optional hardening)
 - eBay `CLIENT_ID` requires developer.ebay.com registration
 - Wear OS companion, tablet two-pane layout, value-over-time chart not built
@@ -300,4 +315,8 @@ Collection features, Platform, Data/Sync, QA, UI/UX, Security, Performance, i18n
         symbol against the pin too
 31–33: `Int.MAX_VALUE` staleDays overflows LocalDate.plusDays() (broke manual market value);
         CameraX preview goes black after screen-off (rebind on ON_RESUME); eBay price RSS retired
-        and HTML scrape 403s — treat eBay pricing as unreliable
+        — HTML scrape works (parser verified live Session 12), 403s are fetch-time bot blocks
+34–36: Close every OkHttp `Response` with `.use {}` even on error-return paths (leak);
+        a per-`ON_RESUME` `newSingleThreadExecutor()` with no shutdown leaks a thread —
+        own it in `remember` + `onDispose`; price a variant against its own listings
+        (append chase/exclusive to the *name* query) — a mixed result set under-prices it

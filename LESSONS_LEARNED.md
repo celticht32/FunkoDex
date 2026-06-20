@@ -378,14 +378,44 @@ Compose, hold the `PreviewView` in `remember` and add a
 `Lifecycle.Event.ON_RESUME` (and removes the observer in `onDispose`).
 `bindToLifecycle` alone does not survive a surface teardown.
 
-### 33. eBay deprecated the price RSS feed and 403s scraping; treat as unreliable
-The completed-listings RSS feed (`_rss=1`) is retired. Switching to scraping the
-HTML results page works against a saved page but returns **403 (bot block)** to
-the app's OkHttp request even with a browser User-Agent — eBay fingerprints more
-than the UA. **Lesson:** eBay sold-price scraping is fundamentally fragile; the
-official Browse API returns only *active* listings (not sold comps), so neither
-path is a clean win. The durable answer is the manual market-value fallback plus
-relying on other tiers (HobbyDB/Channel3) — see CHANGELOG Session 11. Don't sink
-effort into hardening the scraper.
+### 33. eBay retired the price RSS feed; the HTML scrape works, the *fetch* is the risk
+The completed-listings RSS feed (`_rss=1`) is retired; the app scrapes the
+sold-listings HTML (`s-card__price` spans). **Session 12 correction to the earlier
+"treat as unreliable" verdict:** the *parser* is not the problem. Verified against a
+real captured sold-listings page (Pepe #1678) — 67 price spans matched, 57 valid
+after filters, sensible median. The 403s seen in logs are a *fetch-time* bot
+challenge against datacenter/test IPs, not a parse failure; from a real device on a
+residential connection the request may well succeed. **Lesson:** when a scrape
+"fails," separate the fetch from the parse before concluding it's broken — capture
+the raw response and run the parser against it offline. A saved-page test is the
+cheapest way to tell "they changed the markup" (parser bug, fix it) from "they
+blocked my IP" (fetch bug, different fix). The official Browse API returns only
+*active* listings (not sold comps), so it's not a drop-in replacement.
+
+### 34. Close every OkHttp `Response` — especially on the error-return path
+`PriceService` did `.execute()` then `response.body?.string()` and returned early on
+`!isSuccessful` without ever closing the response, leaking the connection. The
+success path happened to close the body (`.string()` reads to completion) but the
+error path didn't. **Lesson:** wrap the response in `.use { response -> ... }` so it
+closes on every exit, including early returns and exceptions. Reading `.string()` is
+not a substitute for closing. `FunkoLookupService` already did this — match it.
+
+### 35. An executor created per lifecycle event with no shutdown leaks a thread
+The camera screens created `Executors.newSingleThreadExecutor()` for the barcode
+analyzer inside the camera-start path — which in `ScannerScreen` ran on every
+`ON_RESUME` — and never called `shutdown()`. Each background/foreground cycle
+leaked a live thread. **Lesson:** a resource with a lifecycle (executor, listener,
+scope) created in a composable must be owned by that composable: create it once in
+`remember`, release it in `onDispose`. Don't create it inside an effect that re-runs.
+
+### 36. Price a variant against its own listings, not the common version
+A name search like "funko pop Pepe 1678" returns the common *and* the chase/exclusive
+in one bucket; the median is dominated by whichever is more common (usually the common
+one), badly under-pricing a valuable variant — and no after-the-fact statistical trim
+can separate them. **Lesson:** fix it upstream in the query, not downstream in the
+stats. Append the variant's distinguishing terms (chase, retailer + "exclusive") to
+the *name* query so the result set is the right population. UPC-keyed lookups don't
+need this (a UPC is already variant-specific) — unless the variant shares the common
+UPC, in which case no query change helps and it's a data-model limit.
 
 *Document maintained by Celtic Heart Steamworks. Update after each significant change.*

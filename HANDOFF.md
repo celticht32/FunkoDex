@@ -1,7 +1,7 @@
 # FunkoDex — Session Handoff
-**Date:** 2026-06-14
-**Sessions completed:** 1 (initial build), 2 (enricher/catalog import), 3 (UI/variant/photo/backup), 4 (enriched catalog import implementation + handle repair), 5 (16 KB page-size compliance + Drive auth migration), 6 (Photo Picker migration + P3 deprecation cleanup), 7 (CBL Collection API migration), 8 (Keystore/security-crypto migration), 9 (wiring gaps closed — Reports/CatalogDataSection; enriched-import parse fix + on-device verification; category data/filter bugfix; deprecation cleanup), 10 (UPC scan-only enforcement; Funko ID row removal; category-key search fix), 11 (scanner retry/frame-confirmation; punctuation-tolerant search; manual add of catalog-missing items + community contribution; image URL entry + http→https fix; eBay RSS→HTML pricing; manual market value with feed-overwrite; multiple bugfixes; community-distribution architecture design doc)
-**Next session focus:** Decide whether to start Phase 1 of the Community Catalog Distribution architecture (`FunkoDex_Catalog_Distribution_Architecture_v1.0.docx`) — golden-master bundled base + preloader enriched-schema read. Carried over from Session 10: full functional/device test pass per `TEST_TRACKER.md`. Known-unresolved from Session 11: eBay pricing returns 403 (bot block) — the HTML scrape is fragile; recommended direction is manual market value + HobbyDB/Channel3 rather than hardening the scrape. Open question: is HobbyDB pricing (tier 4) actually connected — it never fired in Session 11 logs.
+**Date:** 2026-06-19
+**Sessions completed:** 1 (initial build), 2 (enricher/catalog import), 3 (UI/variant/photo/backup), 4 (enriched catalog import implementation + handle repair), 5 (16 KB page-size compliance + Drive auth migration), 6 (Photo Picker migration + P3 deprecation cleanup), 7 (CBL Collection API migration), 8 (Keystore/security-crypto migration), 9 (wiring gaps closed — Reports/CatalogDataSection; enriched-import parse fix + on-device verification; category data/filter bugfix; deprecation cleanup), 10 (UPC scan-only enforcement; Funko ID row removal; category-key search fix), 11 (scanner retry/frame-confirmation; punctuation-tolerant search; manual add of catalog-missing items + community contribution; image URL entry + http→https fix; eBay RSS→HTML pricing; manual market value with feed-overwrite; multiple bugfixes; community-distribution architecture design doc), 12 (image-URL clear on edit; scan-again goes straight to camera; manual-UPC check-digit validation; third "enter details manually" button on Add screen; conditional manual-add subtitle; variant-aware pricing across eBay/HobbyDB/Channel3; eBay price-band ceiling raise; OkHttp response-leak fixes in PriceService; UPCitemdb regex→gson rewrite; camera-executor thread-leak fix; enriched-data malformed-UPC salvage)
+**Next session focus:** Decide whether to start Phase 1 of the Community Catalog Distribution architecture (`FunkoDex_Catalog_Distribution_Architecture_v1.2.docx`) — golden-master bundled base + preloader enriched-schema read. Carried over: full functional/device test pass per `TEST_TRACKER.md`. **eBay pricing reassessed Session 12:** the HTML scrape parser is *not* broken — verified against a live sold-listings page (Pepe #1678), `s-card__price` layout still current, 57 valid prices parsed. The 403s are a fetch-time bot challenge (datacenter/UA), not a parse failure; on a real device residential IP it may succeed. Pricing is now variant-aware (chase/exclusive query the variant's listings first). **Channel3 confirmed dormant** — no API key configured, so that tier never runs; its parser was left as-is (and its field names look stale vs the current API — re-verify against a captured response when a key is added). **Open question still open:** is HobbyDB pricing (tier 4) actually connected — it never fired in Session 11 logs; Session 12 added a variant-aware query + leak fix but didn't verify it fires on-device.
 
 ---
 
@@ -40,6 +40,48 @@ re-enter Channel3 key and re-link HobbyDB/eBay once on upgrade. `security-crypto
 dependency removed entirely from `libs.versions.toml`/`build.gradle.kts`.
 
 Both sessions build and run clean.
+
+### Session 12 (2026-06-19) — pricing, scanner UX, leak fixes
+
+Code changes only; no functional/device test run this session. Files touched:
+`ScannerScreen.kt`, `PreScanScreen.kt`, `DetailScreen.kt`, `PriceService.kt`,
+new `util/UpcValidation.kt`, and the enriched data file (`funko_data_enriched.json`).
+
+- **Scanner/Add UX.** Image-URL field on detail edit gained a clear (✕) button.
+  "Add another" after a save now goes straight to the live camera
+  (`startScanning`) instead of the Idle chooser. A third button, "Enter details
+  manually," was added to the Add-to-Collection start screen (opens
+  `openManualAddBlank`). The manual-add subtitle is now conditional — it only
+  promises "future scans will match" when a UPC is present.
+- **Manual UPC validation.** New `UpcValidation` object validates UPC-A (12) and
+  EAN-13 (13) by check digit. The editable manual-UPC field shows an error when
+  a non-empty entry is malformed and a check-circle + "Valid UPC" when valid; the
+  Add button is blocked on a non-blank invalid UPC (blank still allowed).
+- **Variant-aware pricing.** `PriceService` now appends chase/exclusive terms to
+  the eBay, HobbyDB, and Channel3 *name* queries via a shared `variantSuffix`
+  helper, so a valuable variant is priced against its own listings rather than
+  the common version. eBay tries the variant query first and falls back to the
+  broad query if it returns fewer than `MIN_VARIANT_SALES` (3) sales. The
+  UPC-based lookups (UPCitemdb, Channel3-by-UPC) are unchanged — a UPC is already
+  variant-specific. The eBay price band ceiling was raised $500 → $5000 so a
+  correctly-priced expensive variant isn't clipped (the $3 floor stays).
+- **Robustness.** All four `PriceService` HTTP calls now close their `Response`
+  via `.use {}` (they previously leaked the connection on the error path).
+  UPCitemdb parsing moved from regex to typed gson — and in the process dropped a
+  bogus `retail` read from a `price` field that doesn't exist at item level on the
+  trial plan. Channel3's regex was deliberately left as-is (tier is dormant).
+- **Camera thread leak fixed.** `ScannerScreen` and `PreScanScreen` created a
+  `newSingleThreadExecutor()` per camera start (per `ON_RESUME` in Scanner) and
+  never shut it down. The executor is now `remember`-ed once per composable and
+  shut down in `onDispose`. Behavior-neutral; removes an accumulating thread leak.
+- **Enriched data cleanup.** In `funko_data_enriched.json`, 10 malformed 11-digit
+  UPCs were salvaged by zero-padding to a check-digit-valid UPC-A; 57 unrecoverable
+  malformed UPCs had their `upc` field removed (record kept). UPC count 9,440 → 9,383.
+
+Verified by static reading + brace/symbol checks; **not compiled against the pinned
+toolchain and not run on device.** The eBay parser was verified against a real
+captured sold-listings page; the live fetch and the HobbyDB/Channel3 paths were not
+(eBay/those APIs unreachable from the work environment).
 
 Ready for: full Session 7 + 8 functional/device test pass, then Cloud Console
 OAuth client confirmation, device tests T-D1–T-D5 (Drive auth), Photo Picker

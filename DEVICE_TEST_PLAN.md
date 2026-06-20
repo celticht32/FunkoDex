@@ -345,3 +345,10 @@ image URL (see test 13). A `.html` page URL will not render; it must be a direct
 | 11. Camera survives screen-saver | | Session 11 — new (was black-screen bug; fix applied) |
 | 12. Manual market value | | Session 11 — new (incl. staleDays-overflow regression check) |
 | 13. Image URL entry + http→https | | Session 11 — new |
+| 14. Image URL clear (✕) on detail edit | | Session 12 — new |
+| 15. "Enter details manually" button on Add screen | | Session 12 — new |
+| 16. "Add another" returns to live camera | | Session 12 — new |
+| 17. Manual-UPC validation (valid/error states) | | Session 12 — new; try a known-good UPC and a transposed one |
+| 18. Variant-aware pricing (chase vs common) | | Session 12 — new; needs a flagged chase/exclusive with sold comps |
+| 19. eBay price tier fires on-device | | Session 12 — confirm whether the HTML scrape returns prices on real-device IP (logs) |
+| 20. Camera rebind after leave/return (executor leak fix) | | Session 12 — leave scanner + return repeatedly; camera must still bind |

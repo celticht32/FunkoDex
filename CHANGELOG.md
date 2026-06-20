@@ -5,7 +5,79 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased] — Session 11 — 2026-06-14
+## [Unreleased] — Session 12 — 2026-06-19
+
+Pricing accuracy (variant-aware queries), scanner/Add-screen UX, manual-UPC
+validation, and two resource-leak fixes (HTTP responses + camera executor).
+
+### Added
+
+- **Manual UPC check-digit validation.** New `util/UpcValidation.kt` validates
+  UPC-A (12 digits) and EAN-13 (13 digits) by their modulo-10 check digit. The
+  editable manual-UPC field in `ManualAddSheet` shows an error state for a
+  malformed non-empty entry and a check-circle + "Valid UPC" affirmation when
+  valid; the Add button is disabled on a non-blank invalid UPC. Blank is still
+  allowed (UPC is optional).
+- **"Enter details manually" button** on the Add-to-Collection start screen
+  (`ScannerStartPrompt`) — a third option below "Start scanning" and "Search by
+  name," opening the blank manual-add form (`openManualAddBlank`).
+- **Clear button on the detail-edit Image URL field** — a trailing ✕ that empties
+  the field when non-empty.
+
+### Changed
+
+- **Variant-aware pricing.** `PriceService` appends chase/exclusive search terms
+  (via a shared `variantSuffix` helper) to the eBay, HobbyDB, and Channel3 *name*
+  queries, so a chase or retailer-exclusive is priced against its own listings
+  rather than the common version (which would dominate a mixed result set and
+  under-price the variant). eBay queries the variant first and falls back to the
+  broad query when the variant query returns fewer than 3 sales. UPC-keyed lookups
+  are unchanged.
+- **eBay price band ceiling $500 → $5000.** The old cap clipped genuinely valuable
+  variants once they were priced correctly; the $3 floor (shipping/junk guard)
+  stays.
+- **"Add another" goes straight to the camera.** After a save, the confirmation's
+  "Add another" calls `startScanning` (live camera) instead of `reset` (the Idle
+  chooser). "Done" still resets to Idle.
+- **Conditional manual-add subtitle.** Shows "Future scans of this barcode will
+  match instantly" only when a UPC is present; otherwise "Enter the Funko's
+  details to add it to your collection."
+- **UPCitemdb parsing: regex → typed gson.** Reads `lowest_recorded_price` /
+  `highest_recorded_price` from a typed model. Removed a `retail` value that was
+  scraped from a `price` field that doesn't exist at item level on the trial plan
+  (it only appears in `offers[]`, omitted on trial) — so that tier no longer
+  reports a bogus retail number.
+
+### Fixed
+
+- **OkHttp response leak in `PriceService`.** All four network calls (eBay,
+  HobbyDB, UPCitemdb, Channel3) now wrap the response in `.use {}`. Previously the
+  response was never closed on the `!isSuccessful` early-return path, leaking the
+  connection. (`FunkoLookupService` already did this correctly.)
+- **Camera executor thread leak.** `ScannerScreen` and `PreScanScreen` created a
+  `newSingleThreadExecutor()` for the barcode analyzer on every camera start — in
+  Scanner, on every `ON_RESUME` — and never shut it down. The executor is now
+  created once per composable via `remember` and shut down in `onDispose`.
+
+### Data
+
+- **`funko_data_enriched.json` malformed-UPC salvage.** 10 malformed 11-digit
+  UPCs zero-padded to check-digit-valid UPC-A; 57 unrecoverable malformed UPCs
+  (8/9/10/14/17-digit) had their `upc` removed (records kept). With-UPC count
+  9,440 → 9,383. This file is the manual-import source, not the bundled asset.
+
+### Notes
+
+- **eBay pricing is not broken.** The HTML-scrape parser was verified against a
+  live sold-listings page (Pepe #1678) — 67 `s-card__price` spans matched, 57
+  valid prices after filters, low $3.25 / median $19.99 / high $400. The 403s
+  seen in logs are a fetch-time bot challenge, not a parse failure.
+- **Channel3 tier is dormant** (no API key configured) and was left untouched.
+  Its parser's flat price-field names (`lowest_price`, etc.) appear stale against
+  the current Channel3 API — re-verify against a captured response before relying
+  on that tier.
+
+
 
 Scanner, manual-add, image-handling, and pricing work, plus a market-value
 field and an architecture design document for community catalog distribution.

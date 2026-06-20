@@ -298,6 +298,14 @@ private fun CornerBracket(
 private fun PreScanCameraPreview(onBarcodeDetected: (String) -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Analysis executor owned by this composable; shut down on dispose. Without
+    // this the executor (and its background thread) leaked when the preview left.
+    val cameraExecutor = remember { java.util.concurrent.Executors.newSingleThreadExecutor() }
+    DisposableEffect(Unit) {
+        onDispose { cameraExecutor.shutdown() }
+    }
+
     AndroidView(
         factory = { ctx ->
             val previewView = PreviewView(ctx)
@@ -321,7 +329,7 @@ private fun PreScanCameraPreview(onBarcodeDetected: (String) -> Unit) {
                     .build()
                     .also { ia ->
                         ia.setAnalyzer(
-                            java.util.concurrent.Executors.newSingleThreadExecutor(),
+                            cameraExecutor,
                             BarcodeAnalyzer(onBarcodeDetected)
                         )
                     }

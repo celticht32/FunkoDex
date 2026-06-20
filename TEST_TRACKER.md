@@ -18,6 +18,25 @@ they're untested like everything else in this tracker.
   `SettingsScreen.kt`, reusing the existing `catalogSettingsViewModel`
   instance. Was previously affecting **B1, B2, B3, B6**.
 
+## Session 12 changes (2026-06-19)
+
+Code-only; nothing tested on device this session. New/changed test surface:
+
+- **Manual-UPC validation** — the editable UPC field on manual-add now rejects
+  malformed entries (bad check digit / wrong length) and shows "Valid UPC" when
+  good; Add is blocked on a non-blank invalid UPC. New `util/UpcValidation.kt`.
+- **"Enter details manually" button** on the Add start screen → blank manual-add.
+- **"Add another"** after a save now goes straight to the live camera, not the
+  start chooser.
+- **Variant-aware pricing** (eBay/HobbyDB/Channel3 name queries) — a chase or
+  exclusive should price against its own listings where data exists.
+- **eBay parser confirmed working** against a live page; earlier 403s are a
+  fetch-time bot block, not a parse bug. eBay may contribute prices on a real
+  device.
+- **Channel3 is dormant** (no key) — that tier won't fire in testing.
+- **Leak fixes** (HTTP responses, camera executor) — no user-visible behavior
+  change expected; the camera-rebind-on-resume path (A4j) is the one to spot-check.
+
 ## Session 9 fixes (2026-06-13, commit `d69a4ec`)
 
 - Enriched catalog import (D1b) was broken (`ArrayList cannot be cast to
@@ -93,9 +112,11 @@ New/changed surface that affects existing items and adds new ones. See
   A2a/A2d.**
 - **Camera black after screen-saver — FIXED** — scanner now rebinds the camera on
   `ON_RESUME`. New device test, DEVICE_TEST_PLAN §3 addendum / §11.
-- **eBay pricing** — RSS→HTML scrape; returns **403 (bot block)** in practice, so
-  Tier 2a is effectively non-functional. **B3 / price tests:** expect eBay to
-  contribute nothing; market price comes from other tiers or manual value.
+- **eBay pricing** — RSS→HTML scrape; parser **verified working** Session 12
+  against a live page. Earlier 403s are a fetch-time bot block (datacenter IP),
+  not a parse failure. **B3 / price tests:** eBay *may* contribute prices on a
+  real device — check the logs rather than assuming it returns nothing. Variant-
+  aware for chase/exclusive items.
 - **Manual market value wipe-on-refresh — FIXED** (staleDays `Int.MAX_VALUE`
   overflow). Regression: enter a manual market value, hit refresh on an item with
   no feed data, confirm the value survives.

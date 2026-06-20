@@ -13,7 +13,7 @@ and get notified when market prices drop.
 - **Manual add** — add items not in the catalog (e.g. convention exclusives), with optional community contribution
 - **Store check** — pre-purchase scanner: "do I already own this?"
 - **Collection grid** — searchable (punctuation-tolerant), filterable by category and franchise, sortable
-- **Price tracking** — Channel3, HobbyDB (with sign-in); manual market value when no source has data
+- **Price tracking** — eBay sold listings, UPCitemdb, Channel3, HobbyDB (with sign-in); variant-aware for chase/exclusive items; manual market value when no source has data
 - **Price drop alerts** — daily background checks, notification at target price
 - **Reports** — cost breakdown, series completion, want list, market value
 - **Export** — Excel (4 sheets) or CSV via email / Files / Drive
@@ -170,11 +170,16 @@ Indexes: `idx_owned`, `idx_upc`, `idx_franchise`, `idx_category`, `idx_genre`,
 | Tier | Source | Auth | Notes |
 |------|--------|------|-------|
 | 1 | Retail (catalog) | None | Instant |
-| 2a | eBay completed-listings RSS | None | Real sold prices |
+| 2a | eBay sold listings (HTML scrape) | None | Real sold prices; variant-aware query for chase/exclusive items |
 | 2b | UPCitemdb | None (100/day) | UPC required |
-| 2c | Channel3 free | None (100/day) | — |
+| 2c | Channel3 free | None (100/day) | Dormant until an API key is configured |
 | 3 | Channel3 premium | User's API key | Higher limits |
 | 4 | HobbyDB | OAuth sign-in | Silent token refresh via TokenRefreshManager |
+
+> The eBay tier scrapes the sold-listings HTML (the `_rss=1` feed was retired by
+> eBay; the `PriceSource.EBAY_RSS` enum name is historical). As of Session 12 the
+> eBay, HobbyDB, and Channel3 name queries append chase/exclusive terms so a
+> valuable variant is priced against its own listings, not the common version.
 
 A price refresh (Detail screen "Market Price" card) persists the resolved
 `marketAvg` and `resolvedRetail` onto the item, so Reports' "Est. Market

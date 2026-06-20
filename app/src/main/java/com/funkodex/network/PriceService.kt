@@ -46,6 +46,8 @@ class PriceService @Inject constructor(
     private val secureKeyStore: SecureKeyStore,
     private val tokenRefresh: TokenRefreshManager,
 ) {
+    private val gson = com.google.gson.Gson()
+
     companion object {
         private const val TAG = "PriceService"
         private const val USER_AGENT = "FunkoDex/1.0 Android (price lookup)"
@@ -71,6 +73,11 @@ class PriceService @Inject constructor(
         // Channel3
         private const val CHANNEL3_BASE   = "https://api.trychannel3.com/v1"
         private const val CHANNEL3_SEARCH = "$CHANNEL3_BASE/products/search"
+
+        // Minimum sold listings a variant-specific eBay query must return before
+        // we trust its median; below this we fall back to the broad query rather
+        // than price off one or two sales.
+        private const val MIN_VARIANT_SALES = 3
     }
 
     // ─── Public entry point ────────────────────────────────────────────────────
@@ -135,24 +142,28 @@ class PriceService @Inject constructor(
     // ─── Tier 4: HobbyDB ─────────────────────────────────────────────────────
 
     private fun fetchHobbyDb(item: FunkoItem, token: String): PriceSnapshot? = runCatching {
-        // HobbyDB search by name — returns an array of matching items with pricing
-        val nameEnc = java.net.URLEncoder.encode(item.name, "UTF-8")
+        // HobbyDB search by name — returns an array of matching items with pricing.
+        // Append variant terms (chase / exclusive) so a valuable variant isn't
+        // mis-priced as the common version; this tier takes the top relevance hit,
+        // so steering the query toward the owned variant matters here.
+        val queryText = "${item.name} ${variantSuffix(item)}".trim()
+        val nameEnc = java.net.URLEncoder.encode(queryText, "UTF-8")
         val url     = "$HOBBYDB_BASE/items?q=$nameEnc&category=pop&per_page=5"
 
-        val response = client.newCall(
+        val body = client.newCall(
             Request.Builder()
                 .url(url)
                 .header("Authorization", "Bearer $token")
                 .header("User-Agent", USER_AGENT)
                 .build()
-        ).execute()
-
-        if (!response.isSuccessful) {
-            FunkoDexLogger.w(TAG, "HobbyDB returned HTTP ${response.code}")
-            return@runCatching null
+        ).execute().use { response ->
+            if (!response.isSuccessful) {
+                FunkoDexLogger.w(TAG, "HobbyDB returned HTTP ${response.code}")
+                return@runCatching null
+            }
+            response.body?.string() ?: return@runCatching null
         }
 
-        val body = response.body?.string() ?: return@runCatching null
         val json = com.google.gson.JsonParser.parseString(body).asJsonObject
 
         // Find the best matching item (highest name similarity)
@@ -185,12 +196,26 @@ class PriceService @Inject constructor(
     // ─── Tier 2a: eBay sold/completed listings (HTML) ─────────────────────────
 
     private fun fetchEbaySold(item: FunkoItem): PriceSnapshot? {
-        return runCatching {
-            // Build search query: "funko pop {name} {number}" — specific enough to avoid noise
-            val query = buildEbayQuery(item)
-            val url   = EBAY_SOLD_BASE + URLEncoder.encode(query, "UTF-8")
+        // For chase/exclusive items, query the variant-specific listings first so
+        // the median reflects the variant the user actually owns — not the common
+        // version, which would otherwise dominate the result set and badly
+        // under-price a valuable variant. If that variant query comes back empty
+        // or too thin to trust (sellers don't tag listings consistently), fall
+        // back to the broad query rather than report a price from one or two sales.
+        if (hasVariantInfo(item)) {
+            val variantSnap = fetchEbayForQuery(item, buildEbayQuery(item, includeVariant = true))
+            if (variantSnap != null && variantSnap.saleCount >= MIN_VARIANT_SALES) {
+                return variantSnap
+            }
+        }
+        return fetchEbayForQuery(item, buildEbayQuery(item, includeVariant = false))
+    }
 
-            val response = client.newCall(
+    private fun fetchEbayForQuery(item: FunkoItem, query: String): PriceSnapshot? {
+        return runCatching {
+            val url = EBAY_SOLD_BASE + URLEncoder.encode(query, "UTF-8")
+
+            val html = client.newCall(
                 Request.Builder()
                     .url(url)
                     // eBay serves the s-card results page to browser-like clients;
@@ -198,16 +223,16 @@ class PriceService @Inject constructor(
                     .header("User-Agent", EBAY_BROWSER_UA)
                     .header("Accept", "text/html,application/xhtml+xml")
                     .build()
-            ).execute()
-
-            if (!response.isSuccessful) return@runCatching null
-            val html = response.body?.string() ?: return@runCatching null
+            ).execute().use { response ->
+                if (!response.isSuccessful) return@runCatching null
+                response.body?.string() ?: return@runCatching null
+            }
 
             parseEbaySold(item.id, html)
         }.getOrNull()
     }
 
-    private fun buildEbayQuery(item: FunkoItem): String {
+    private fun buildEbayQuery(item: FunkoItem, includeVariant: Boolean): String {
         val parts = mutableListOf("funko pop")
         if (item.name.isNotEmpty()) {
             // Strip series number from name if already in seriesNumber field
@@ -218,8 +243,30 @@ class PriceService @Inject constructor(
             parts.add(cleanName)
         }
         if (item.seriesNumber.isNotEmpty()) parts.add(item.seriesNumber)
+        if (includeVariant) parts.add(variantSuffix(item))
+        return parts.joinToString(" ").trim()
+    }
+
+    /**
+     * Search terms that narrow a name-based query to the specific variant the
+     * user owns (chase / retailer exclusive), so name-searching price tiers
+     * return the variant's listings rather than the common version's. Returns an
+     * empty string for a standard item. Shared by the eBay, HobbyDB, and Channel3
+     * name-search paths; UPC-based lookups don't need it (a UPC is already
+     * variant-specific).
+     */
+    private fun variantSuffix(item: FunkoItem): String {
+        val parts = mutableListOf<String>()
+        if (item.isChase) parts.add("chase")
+        if (item.isExclusive && item.exclusiveRetailer.isNotEmpty()) {
+            parts.add(item.exclusiveRetailer)
+            parts.add("exclusive")
+        }
         return parts.joinToString(" ")
     }
+
+    private fun hasVariantInfo(item: FunkoItem): Boolean =
+        item.isChase || (item.isExclusive && item.exclusiveRetailer.isNotEmpty())
 
     /**
      * Parse eBay's sold-listings HTML (the current `s-card` results layout; the
@@ -248,8 +295,10 @@ class PriceService @Inject constructor(
             m.groupValues[2].replace(",", "").toDoubleOrNull()
         }
             // Filter out obviously wrong prices: below $3 is almost always a
-            // shipping fee or junk match, above $500 a misfire.
-            .filter { it in 3.0..500.0 }
+            // shipping fee or junk match. The $5000 ceiling guards against typo
+            // listings while still admitting genuinely valuable chase/exclusive
+            // variants (the old $500 cap clipped those).
+            .filter { it in 3.0..5000.0 }
             .toList()
 
         if (prices.isEmpty()) return null
@@ -273,30 +322,32 @@ class PriceService @Inject constructor(
 
     private fun fetchUpcItemDb(item: FunkoItem): PriceSnapshot? {
         return runCatching {
-            val response = client.newCall(
+            val body = client.newCall(
                 Request.Builder()
                     .url("$UPCITEMDB${item.upc}")
                     .header("User-Agent", USER_AGENT)
                     .build()
-            ).execute()
+            ).execute().use { response ->
+                if (!response.isSuccessful) return@runCatching null
+                response.body?.string() ?: return@runCatching null
+            }
 
-            if (!response.isSuccessful) return@runCatching null
-            val body = response.body?.string() ?: return@runCatching null
+            // UPCitemdb returns { code, total, offset, items:[ {item} ] }. Price
+            // data lives at the item level as lowest/highest_recorded_price; there
+            // is no usable item-level "price" on the trial plan (it only appears in
+            // offers[], which the trial plan omits), so we don't read it.
+            val parsed = gson.fromJson(body, UpcItemDbPriceResponse::class.java)
+                ?: return@runCatching null
+            val first = parsed.items?.firstOrNull() ?: return@runCatching null
 
-            // Parse JSON manually to avoid an extra dep — only need two fields
-            val lowestMatch  = Regex(""""lowest_recorded_price"\s*:\s*(\d+\.?\d*)""").find(body)
-            val highestMatch = Regex(""""highest_recorded_price"\s*:\s*(\d+\.?\d*)""").find(body)
-            val retail       = Regex(""""price"\s*:\s*"?\$?(\d+\.?\d*)""").find(body)
-
-            val low    = lowestMatch?.groupValues?.get(1)?.toDoubleOrNull() ?: return@runCatching null
-            val high   = highestMatch?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
-            val avg    = if (low > 0 && high > 0) (low + high) / 2.0 else low
-            val retailP = retail?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+            val low = first.lowest_recorded_price ?: return@runCatching null
+            if (low <= 0.0) return@runCatching null
+            val high = first.highest_recorded_price ?: 0.0
+            val avg  = if (low > 0 && high > 0) (low + high) / 2.0 else low
 
             PriceSnapshot(
                 itemId    = item.id,
                 source    = PriceSource.UPCITEMDB,
-                retail    = retailP,
                 low       = low,
                 high      = high,
                 avg       = avg,
@@ -315,7 +366,11 @@ class PriceService @Inject constructor(
             val url = if (item.upc.isNotEmpty()) {
                 "$CHANNEL3_SEARCH?upc=${item.upc}"
             } else {
-                val q = URLEncoder.encode("${item.name} ${item.seriesNumber}".trim(), "UTF-8")
+                // No UPC to uniquely identify the variant — append variant terms so
+                // the name search narrows to the owned variant, not the common one.
+                val qText = "${item.name} ${item.seriesNumber} ${variantSuffix(item)}".trim()
+                    .replace(Regex("""\s+"""), " ")
+                val q = URLEncoder.encode(qText, "UTF-8")
                 "$CHANNEL3_SEARCH?q=$q&brand=Funko"
             }
 
@@ -324,9 +379,10 @@ class PriceService @Inject constructor(
                 .header("User-Agent", USER_AGENT)
             if (key.isNotEmpty()) builder.header("Authorization", "Bearer $key")
 
-            val response = client.newCall(builder.build()).execute()
-            if (!response.isSuccessful) return@runCatching null
-            val body = response.body?.string() ?: return@runCatching null
+            val body = client.newCall(builder.build()).execute().use { response ->
+                if (!response.isSuccessful) return@runCatching null
+                response.body?.string() ?: return@runCatching null
+            }
 
             // Parse just the price fields from the JSON response
             val lowestMatch  = Regex(""""lowest_price"\s*:\s*(\d+\.?\d*)""").find(body)
@@ -352,4 +408,22 @@ class PriceService @Inject constructor(
             )
         }.getOrNull()
     }
+
+    // ─── Response models ──────────────────────────────────────────────────────
+
+    /**
+     * UPCitemdb lookup response (price subset). Schema:
+     * { code, total, offset, items:[ { lowest_recorded_price, highest_recorded_price, ... } ] }.
+     * gson leaves missing fields null, matching the prior regex's null-on-no-match
+     * behavior. There is no usable item-level retail "price" on the trial plan, so
+     * it is intentionally not modeled here.
+     */
+    private data class UpcItemDbPriceResponse(
+        val items: List<UpcItemDbPriceItem>? = null,
+    )
+
+    private data class UpcItemDbPriceItem(
+        val lowest_recorded_price: Double? = null,
+        val highest_recorded_price: Double? = null,
+    )
 }

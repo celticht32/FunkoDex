@@ -154,12 +154,40 @@ class FunkoLookupService @Inject constructor(
         val pcComplete = doc.getString(
             com.funkodex.data.preload.CatalogMapper.FIELD_MKT_VALUE_COMPLETE)
             ?.replace(Regex("[^0-9.]"), "")?.toDoubleOrNull() ?: 0.0
+        val pcUrl = doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_PC_URL) ?: ""
+        // Franchise is the user's property grouping. Seed it from the enricher's
+        // property-specific franchiseSuggestion when present, else derive one from
+        // the PriceCharting console (umbrella consoles yield none). Do NOT seed it
+        // from the raw catalog "series" tag — that is a format/line, not a property,
+        // and would mis-group the item. A blank here lets the first-scan prompt ask.
+        val franchiseSeed =
+            doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_FRANCHISE_SUGGESTION)
+                ?.takeIf { it.isNotBlank() }
+                ?: com.funkodex.data.util.ConsoleFranchise.resolve(
+                    doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_PC_SERIES),
+                    pcUrl,
+                )
+                ?: ""
+        // Pop number: prefer the PriceCharting Box Number (funkoNumber, the
+        // authoritative structured value) over the title-regex seriesNumber.
+        // Verified: where both exist they agree 375/377; the box number wins the
+        // rare conflict. Normalised to a leading "#".
+        val rawNumber = doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_FUNKO_NUMBER)
+            ?.takeIf { it.isNotBlank() }
+            ?: doc.getString("seriesNumber")?.takeIf { it.isNotBlank() }
+            ?: ""
+        val displayNumber = when {
+            rawNumber.isBlank() -> ""
+            rawNumber.startsWith("#") -> rawNumber
+            else -> "#$rawNumber"
+        }
         return com.funkodex.data.model.FunkoItem(
             id           = docId,
             upc          = doc.getString("upc") ?: "",
             name         = doc.getString("title") ?: "",
-            franchise    = doc.getString("series") ?: "",
-            seriesNumber = doc.getString("seriesNumber") ?: "",
+            franchise    = franchiseSeed,
+            seriesNumber = displayNumber,
+            setTag       = doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_SET_TAG) ?: "",
             category     = doc.getString("category") ?: "",
             imageUrl     = doc.getString("imageUrl") ?: "",
             retailPrice  = doc.getDouble("retailPrice"),
@@ -168,7 +196,7 @@ class FunkoLookupService @Inject constructor(
             isVaulted    = doc.getBoolean("isVaulted"),
             marketAvg    = pcComplete,
             marketValueIsApproximate = doc.getBoolean(com.funkodex.data.preload.CatalogMapper.FIELD_MKT_IS_APPROX),
-            pricechartingUrl = doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_PC_URL) ?: "",
+            pricechartingUrl = pcUrl,
         )
     }
 

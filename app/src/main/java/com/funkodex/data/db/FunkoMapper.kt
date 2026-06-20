@@ -23,6 +23,12 @@ object FunkoMapper {
         doc.setString(FunkoDexDatabase.FIELD_GENRE,          item.genre.name)
         doc.setString(FunkoDexDatabase.FIELD_SERIES_NUM,     item.seriesNumber)
         doc.setInt(FunkoDexDatabase.FIELD_SERIES_NUM_INT,    item.seriesNumberInt)
+        // Named-set membership — pure enrichment; written when present, removed when blank.
+        if (item.setTag.isNotBlank()) {
+            doc.setString(FunkoDexDatabase.FIELD_SET_TAG, item.setTag)
+        } else {
+            doc.remove(FunkoDexDatabase.FIELD_SET_TAG)
+        }
         doc.setString(FunkoDexDatabase.FIELD_IMAGE_URL,      item.imageUrl)
         // Thumbnail blob — stored as Couchbase Blob for offline display
         item.thumbnailBlob?.let {
@@ -103,6 +109,7 @@ object FunkoMapper {
         seriesNumberInt  = doc.getInt(FunkoDexDatabase.FIELD_SERIES_NUM_INT).let {
             if (it == 0 && doc.getString(FunkoDexDatabase.FIELD_SERIES_NUM).isNullOrEmpty()) -1 else it
         },
+        setTag           = doc.getString(FunkoDexDatabase.FIELD_SET_TAG)        ?: "",
         imageUrl         = doc.getString(FunkoDexDatabase.FIELD_IMAGE_URL)      ?: "",
         thumbnailBlob    = doc.getBlob(FunkoDexDatabase.FIELD_THUMBNAIL_BLOB)?.content,
         userPhoto        = doc.getBlob(com.funkodex.data.repository.PhotoRepository.FIELD_USER_PHOTO)?.content,

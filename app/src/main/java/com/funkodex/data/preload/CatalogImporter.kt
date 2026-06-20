@@ -225,6 +225,9 @@ class CatalogImporter @Inject constructor(
         record.publisher?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_PUBLISHER, it) }
         record.pcSeries?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_PC_SERIES, it) }
         record.pcDescription?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_PC_DESCRIPTION, it) }
+        // Collection-grouping enrichment — overwrite when supplied (last-enricher-wins).
+        record.setTag?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_SET_TAG, it) }
+        record.franchiseSuggestion?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_FRANCHISE_SUGGESTION, it) }
 
         mutable.setString(CatalogMapper.FIELD_LAST_UPDATED, LocalDate.now().toString())
         return mutable
@@ -407,6 +410,8 @@ class CatalogImporter @Inject constructor(
                                 publisher           = record.publisher,
                                 pcSeries            = record.pcSeries,
                                 pcDescription       = record.pcDescription,
+                                setTag              = record.setTag,
+                                franchiseSuggestion = record.franchiseSuggestion,
                             )
                             collection.save(MutableDocument(insertDocId, mapped))
                             // Register this new doc's UPC so a later record in the
@@ -527,4 +532,7 @@ private fun com.google.gson.JsonObject.toEnrichedRecord(): EnrichedRecord = Enri
     publisher         = optString("publisher"),
     pcSeries          = optString("pcSeries"),
     pcDescription     = optString("pcDescription"),
+    // Collection-grouping fields (enricher POST-PROCESS 5)
+    setTag            = optString("setTag"),
+    franchiseSuggestion = optString("franchiseSuggestion"),
 )

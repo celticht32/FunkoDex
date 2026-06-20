@@ -46,4 +46,8 @@ data class EnrichedRecord(
     val publisher:           String?    = null,
     val pcSeries:            String?    = null,    // PriceCharting's series label
     val pcDescription:       String?    = null,
+
+    // ── Collection-grouping fields (enricher POST-PROCESS 5) ───────────────
+    val setTag:              String?    = null,    // most-specific named set, or null
+    val franchiseSuggestion: String?    = null,    // property-specific console franchise, or null
 )

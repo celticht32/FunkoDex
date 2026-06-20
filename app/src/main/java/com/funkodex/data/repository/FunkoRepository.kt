@@ -26,6 +26,7 @@ class FunkoRepository @Inject constructor(
     private val db: FunkoDexDatabase,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context,
     private val categoryPrefs: CategoryPreferenceRepository,
+    private val groupPrefs: GroupPrefRepository,
 ) {
     private val collection get() = db.getCollection()
 
@@ -153,45 +154,206 @@ class FunkoRepository @Inject constructor(
     suspend fun getCollectionStats(): CollectionStats = withContext(Dispatchers.IO) {
         val allItems = getAllItems()
         val owned    = allItems.filter { it.isOwned }
-        val wanted   = allItems.filter { !it.isOwned }
+        val manualWanted = allItems.filter { !it.isOwned }
 
-        // Group by franchise for series completion
-        val franchiseMap = owned.groupBy { "${it.franchise}|${it.category}" }
-        val seriesSummaries = franchiseMap.map { (key, ownedInFranchise) ->
-            val franchiseName = key.substringBefore("|")
-            val wantedInFranchise = wanted.filter { it.franchise == franchiseName && it.category == ownedInFranchise.first().category }
-            // Also include owned items flagged as missing their original — show original as wanted
-            val missingOriginals  = ownedInFranchise.filter { it.isMissingOriginal }
-                .map { it.copy(isOwned = false, name = "${it.name} (original)", variants = emptyList()) }
-            val firstCategory     = ownedInFranchise.firstOrNull()?.category ?: ""
-            val genre             = ownedInFranchise.firstOrNull()?.genre ?: FunkoGenre.OTHER
-            SeriesSummary(
-                franchise      = franchiseName,
-                category       = firstCategory,
+        val intents = groupPrefs.getAllIntents()
+        val catalog = loadCatalogGroupingRows()
+
+        // Owned handles (catalog::{handle}) for diffing against the catalog. An
+        // owned item's catalogRef is its catalog doc id; fall back to none.
+        val ownedHandles = owned.mapNotNull { it.catalogRef.takeIf { r -> r.isNotBlank() } }.toHashSet()
+
+        fun intentFor(level: GroupLevel, key: String): GroupIntent =
+            intents[level to key] ?: GroupIntent.COMPLETE
+
+        // ── Build a SeriesSummary for one group (franchise or set) ──────────
+        fun summaryFor(
+            level: GroupLevel,
+            key: String,
+            ownedInGroup: List<FunkoItem>,
+            catalogRows: List<CatalogGroupingRow>,
+        ): SeriesSummary {
+            val intent       = intentFor(level, key)
+            val totalCatalog = catalogRows.size
+            val ownedUnits   = ownedInGroup.size + ownedInGroup.sumOf { it.variants.size }
+            // Missing = catalog rows in this group whose handle the user doesn't own.
+            // Only COMPLETE groups surface a want list; CHERRY_PICK shows 0 wants.
+            val missing = if (intent == GroupIntent.COMPLETE) {
+                catalogRows
+                    .filter { it.handle !in ownedHandles }
+                    .map { it.toWantItem() }
+            } else emptyList()
+            val genre = ownedInGroup.firstOrNull()?.genre ?: FunkoGenre.OTHER
+            val cat   = ownedInGroup.firstOrNull()?.category ?: ""
+            return SeriesSummary(
+                franchise      = if (level == GroupLevel.FRANCHISE) key else (ownedInGroup.firstOrNull()?.franchise ?: ""),
+                category       = cat,
                 genre          = genre,
-                totalInCatalog = ownedInFranchise.size + wantedInFranchise.size,
-                ownedCount     = ownedInFranchise.size + ownedInFranchise.sumOf { it.variants.size },
-                wantedCount    = wantedInFranchise.size + missingOriginals.size,
-                missingItems   = wantedInFranchise + missingOriginals,
-                totalCostPaid  = ownedInFranchise.sumOf { it.pricePaid + it.variants.sumOf { v -> v.pricePaid } },
-                marketValue    = ownedInFranchise.sumOf { it.marketAvg },
-                imageUrls      = ownedInFranchise.take(4).map { it.imageUrl }.filter { it.isNotEmpty() },
+                level          = level,
+                groupKey       = key,
+                intent         = intent,
+                totalInCatalog = totalCatalog,
+                ownedCount     = ownedUnits,
+                wantedCount    = missing.size,
+                missingItems   = missing,
+                totalCostPaid  = ownedInGroup.sumOf { it.pricePaid + it.variants.sumOf { v -> v.pricePaid } },
+                marketValue    = ownedInGroup.sumOf { it.marketAvg },
+                imageUrls      = ownedInGroup.take(4).map { it.imageUrl }.filter { it.isNotEmpty() },
             )
-        }.sortedByDescending { it.ownedCount }
+        }
+
+        // ── Franchise-level groups ──────────────────────────────────────────
+        val catalogByFranchise = catalog.filter { it.franchise.isNotBlank() }.groupBy { it.franchise }
+        val ownedByFranchise   = owned.filter { it.franchise.isNotBlank() }.groupBy { it.franchise }
+        val franchiseKeys      = (catalogByFranchise.keys + ownedByFranchise.keys).toSet()
+        val franchiseSummaries = franchiseKeys.map { key ->
+            summaryFor(GroupLevel.FRANCHISE, key,
+                ownedByFranchise[key] ?: emptyList(),
+                catalogByFranchise[key] ?: emptyList())
+        }
+
+        // ── Named-set groups ────────────────────────────────────────────────
+        val catalogBySet = catalog.filter { it.setTag.isNotBlank() }.groupBy { it.setTag }
+        val ownedBySet   = owned.filter { it.setTag.isNotBlank() }.groupBy { it.setTag }
+        val setKeys      = (catalogBySet.keys + ownedBySet.keys).toSet()
+        val setSummaries = setKeys.map { key ->
+            summaryFor(GroupLevel.SET, key,
+                ownedBySet[key] ?: emptyList(),
+                catalogBySet[key] ?: emptyList())
+        }
+
+        // Franchise groups first (primary), then named sets; each sorted by ownedCount.
+        val seriesSummaries =
+            franchiseSummaries.sortedByDescending { it.ownedCount } +
+            setSummaries.sortedByDescending { it.ownedCount }
 
         CollectionStats(
             totalOwned          = owned.size + owned.sumOf { it.variants.size },
-            totalWanted         = wanted.size + owned.count { it.isMissingOriginal },
+            totalWanted         = manualWanted.size + owned.count { it.isMissingOriginal },
             totalPaid           = owned.sumOf { it.pricePaid + it.variants.sumOf { v -> v.pricePaid } },
             totalRetailValue    = owned.sumOf { it.effectiveRetail },
             totalMarketValue    = owned.sumOf { it.marketAvg },
-            uniqueFranchises    = franchiseMap.keys.size,
+            uniqueFranchises    = franchiseKeys.size,
             mostExpensivePaid   = owned.maxByOrNull { it.pricePaid + it.variants.sumOf { v -> v.pricePaid } },
             highestMarketValue  = owned.maxByOrNull { it.marketAvg },
             recentlyAdded       = owned.sortedByDescending { it.dateAdded }.take(10),
             seriesSummaries     = seriesSummaries,
             byGenre             = owned.groupBy { it.genre }.mapValues { it.value.size },
         )
+    }
+
+    /**
+     * Build the auto + manual want list for the reports screen.
+     *
+     * Auto wants = catalog figures missing from every COMPLETE group (franchise
+     * or named set), de-duplicated to the most-specific group (a figure missing
+     * from both a completing set and a completing franchise is attributed to the
+     * set). Manual wants = the user's explicit `isOwned == false` items, always
+     * kept regardless of group intent. Returned grouped by display group key.
+     */
+    suspend fun getWantList(): List<WantListGroup> = withContext(Dispatchers.IO) {
+        val stats        = getCollectionStats()
+        val manualWanted = getAllItems().filter { !it.isOwned }
+
+        val groups = LinkedHashMap<String, MutableList<FunkoItem>>()
+        // Named sets first so a figure is attributed to its set, not its franchise.
+        val ordered = stats.seriesSummaries
+            .filter { it.intent == GroupIntent.COMPLETE && it.missingItems.isNotEmpty() }
+            .sortedBy { if (it.level == GroupLevel.SET) 0 else 1 }
+        val claimed = HashSet<String>()   // catalog handle (id) already placed
+        for (summary in ordered) {
+            val bucket = groups.getOrPut(summary.groupKey) { mutableListOf() }
+            for (item in summary.missingItems) {
+                if (claimed.add(item.id)) bucket.add(item)
+            }
+        }
+        // Manual wants appended under their own group label.
+        if (manualWanted.isNotEmpty()) {
+            groups.getOrPut("Manually added") { mutableListOf() }.addAll(manualWanted)
+        }
+        groups.entries
+            .filter { it.value.isNotEmpty() }
+            .map { (key, items) -> WantListGroup(groupKey = key, items = items) }
+    }
+
+    /** A lightweight catalog row used only for series-completion grouping. */
+    private data class CatalogGroupingRow(
+        val handle: String,          // catalog doc id ("catalog::{handle}")
+        val name: String,
+        val seriesNumber: String,
+        val imageUrl: String,
+        val marketAvg: Double,
+        val franchise: String,       // resolved property (suggestion/console), "" if umbrella/none
+        val setTag: String,
+    ) {
+        fun toWantItem(): FunkoItem = FunkoItem(
+            id           = handle,
+            catalogRef   = handle,
+            name         = name,
+            seriesNumber = seriesNumber,
+            imageUrl     = imageUrl,
+            marketAvg    = marketAvg,
+            franchise    = franchise,
+            setTag       = setTag,
+            isOwned      = false,
+        )
+    }
+
+    /**
+     * Scan the catalog once, resolving each doc's franchise (property) and setTag
+     * for grouping. Franchise comes from the enricher's franchiseSuggestion, else
+     * the PriceCharting console (umbrella consoles → blank). Blank-franchise,
+     * blank-setTag rows still load (they simply join no completable group).
+     */
+    private fun loadCatalogGroupingRows(): List<CatalogGroupingRow> {
+        val rows = ArrayList<CatalogGroupingRow>()
+        val query = QueryBuilder
+            .select(SelectResult.expression(Meta.id).`as`("id"), SelectResult.all())
+            .from(DataSource.collection(collection))
+            .where(
+                Expression.property(FunkoDexDatabase.FIELD_TYPE)
+                    .equalTo(Expression.string(FunkoDexDatabase.TYPE_CATALOG))
+            )
+        query.execute().use { rs ->
+            rs.allResults().forEach { result ->
+                val id  = result.getString("id") ?: return@forEach
+                val doc = collection.getDocument(id) ?: return@forEach
+                val pcUrl = doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_PC_URL) ?: ""
+                val franchise =
+                    doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_FRANCHISE_SUGGESTION)
+                        ?.takeIf { it.isNotBlank() }
+                        ?: com.funkodex.data.util.ConsoleFranchise.resolve(
+                            doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_PC_SERIES),
+                            pcUrl,
+                        )
+                        ?: ""
+                val mkt = doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_MKT_VALUE_COMPLETE)
+                    ?.replace(Regex("[^0-9.]"), "")?.toDoubleOrNull() ?: 0.0
+                // Pop number: prefer PriceCharting Box Number (funkoNumber) over
+                // the title-regex seriesNumber; normalise to a leading "#".
+                val rawNum = doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_FUNKO_NUMBER)
+                    ?.takeIf { it.isNotBlank() }
+                    ?: doc.getString("seriesNumber")?.takeIf { it.isNotBlank() }
+                    ?: ""
+                val dispNum = when {
+                    rawNum.isBlank() -> ""
+                    rawNum.startsWith("#") -> rawNum
+                    else -> "#$rawNum"
+                }
+                rows.add(
+                    CatalogGroupingRow(
+                        handle       = id,
+                        name         = doc.getString("title") ?: "",
+                        seriesNumber = dispNum,
+                        imageUrl     = doc.getString("imageUrl") ?: "",
+                        marketAvg    = mkt,
+                        franchise    = franchise,
+                        setTag       = doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_SET_TAG) ?: "",
+                    )
+                )
+            }
+        }
+        return rows
     }
 
     // ─── Price cache (B2) ────────────────────────────────────────────────────

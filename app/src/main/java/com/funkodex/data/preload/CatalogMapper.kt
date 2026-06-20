@@ -52,6 +52,8 @@ object CatalogMapper {
     const val FIELD_PUBLISHER          = "publisher"
     const val FIELD_PC_SERIES          = "pcSeries"            // PriceCharting series label
     const val FIELD_PC_DESCRIPTION     = "pcDescription"
+    const val FIELD_SET_TAG            = "setTag"              // enricher: most-specific named set
+    const val FIELD_FRANCHISE_SUGGESTION = "franchiseSuggestion" // enricher: property-specific console franchise
 
     private val EXCLUSIVE_KEYWORDS = listOf(
         "exclusive", "funko-shop", "sdcc", "nycc", "eccc", "c2e2",
@@ -123,6 +125,8 @@ object CatalogMapper {
         publisher:           String?    = null,
         pcSeries:            String?    = null,
         pcDescription:       String?    = null,
+        setTag:              String?    = null,
+        franchiseSuggestion: String?    = null,
     ): Map<String, Any> {
 
         val derived = deriveSeriesFields(seriesList, title)
@@ -172,6 +176,8 @@ object CatalogMapper {
             if (!publisher.isNullOrBlank())           put(FIELD_PUBLISHER,          publisher)
             if (!pcSeries.isNullOrBlank())            put(FIELD_PC_SERIES,          pcSeries)
             if (!pcDescription.isNullOrBlank())       put(FIELD_PC_DESCRIPTION,     pcDescription)
+            if (!setTag.isNullOrBlank())              put(FIELD_SET_TAG,            setTag)
+            if (!franchiseSuggestion.isNullOrBlank()) put(FIELD_FRANCHISE_SUGGESTION, franchiseSuggestion)
         }
     }
 

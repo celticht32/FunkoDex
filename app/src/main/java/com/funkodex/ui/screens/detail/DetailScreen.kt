@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.funkodex.data.model.GroupIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -57,6 +58,8 @@ fun DetailScreen(
     val photoBytes  by viewModel.photoBytes.collectAsState()
     val photoError  by viewModel.photoError.collectAsState()
     val alertState  by viewModel.alertState.collectAsState()
+    val franchiseIntent by viewModel.franchiseIntent.collectAsState()
+    val setIntent       by viewModel.setIntent.collectAsState()
     val fetchState             by viewModel.fetchState.collectAsState()
     val pendingPhotoUri        by viewModel.pendingPhotoUri.collectAsState()
     val pendingUpcContribution by viewModel.pendingUpcContribution.collectAsState()
@@ -282,7 +285,8 @@ fun DetailScreen(
                         Button(onClick = onNavigateBack) { Text("Go back") }
                     }
                 }
-                is DetailUiState.Viewing -> ViewContent(item = s.item,
+                is DetailUiState.Viewing -> {
+                    ViewContent(item = s.item,
                     onToggleOwned  = viewModel::toggleOwned,
                     alertState     = alertState,
                     onAlertTap     = { showAlertSheet = true },
@@ -293,6 +297,15 @@ fun DetailScreen(
                     onRefreshPrices= viewModel::refreshPrices,
                     onClearMissingOriginal = viewModel::clearMissingOriginal,
                     onMarkVariantOnly      = viewModel::markVariantOnly)
+                    SeriesIntentSection(
+                        franchise = s.item.franchise,
+                        setTag = s.item.setTag,
+                        franchiseIntent = franchiseIntent,
+                        setIntent = setIntent,
+                        onFranchiseIntent = viewModel::setFranchiseIntent,
+                        onSetIntent = viewModel::setSetIntent,
+                    )
+                }
                 is DetailUiState.Editing -> EditContent(
                     draft      = s.draft,
                     onName     = viewModel::updateName,
@@ -1492,5 +1505,80 @@ private fun EditContent(
         }
 
         Spacer(Modifier.height(32.dp))
+    }
+}
+
+/**
+ * Per-group completion-intent control shown on the detail screen. Lets the user
+ * set whether they are completing a franchise (and named set, if any) or just
+ * cherry-picking from it. Hidden entirely when the item has neither a franchise
+ * nor a set to govern. Intent is per-group: changing it here governs every
+ * figure in that franchise/set.
+ */
+@Composable
+private fun SeriesIntentSection(
+    franchise: String,
+    setTag: String,
+    franchiseIntent: GroupIntent?,
+    setIntent: GroupIntent?,
+    onFranchiseIntent: (GroupIntent) -> Unit,
+    onSetIntent: (GroupIntent) -> Unit,
+) {
+    if (franchise.isBlank() && setTag.isBlank()) return
+
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        Text(
+            "Collecting",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Choose whether the missing figures in a group are added to your want list.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+
+        if (franchise.isNotBlank() && franchiseIntent != null) {
+            IntentRow(
+                label = franchise,
+                intent = franchiseIntent,
+                onIntent = onFranchiseIntent,
+            )
+        }
+        if (setTag.isNotBlank() && setIntent != null) {
+            Spacer(Modifier.height(8.dp))
+            IntentRow(
+                label = setTag,
+                intent = setIntent,
+                onIntent = onSetIntent,
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun IntentRow(
+    label: String,
+    intent: GroupIntent,
+    onIntent: (GroupIntent) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = intent == GroupIntent.COMPLETE,
+                onClick = { onIntent(GroupIntent.COMPLETE) },
+                label = { Text("Complete the set") },
+            )
+            FilterChip(
+                selected = intent == GroupIntent.CHERRY_PICK,
+                onClick = { onIntent(GroupIntent.CHERRY_PICK) },
+                label = { Text("Just this one") },
+            )
+        }
     }
 }

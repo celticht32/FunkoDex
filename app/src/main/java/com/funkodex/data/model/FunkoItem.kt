@@ -44,6 +44,9 @@ data class FunkoItem(
     val genre: FunkoGenre = FunkoGenre.OTHER, // Top-level genre for filtering/reporting
     val seriesNumber: String = "",       // Number within the Pop! line: "#01", "#196"
     val seriesNumberInt: Int = -1,       // Parsed integer for sorting (-1 = no number)
+    val setTag: String = "",             // Named-set membership (e.g. "Haunted Mansion
+                                          // Mini Vinyl Figures"); "" = not in a named set.
+                                          // Pure-enrichment field — refreshed from catalog on re-link.
 
     // ── Pricing ───────────────────────────────────────────────────────────────
     val pricePaid: Double = 0.0,         // What the user actually paid
@@ -188,6 +191,9 @@ data class SeriesSummary(
     val franchise: String,
     val category: String,
     val genre: FunkoGenre,
+    val level: GroupLevel = GroupLevel.FRANCHISE, // which grouping this summary is for
+    val groupKey: String = "",                    // franchise name or set tag (the group identity)
+    val intent: GroupIntent = GroupIntent.COMPLETE,
     val totalInCatalog: Int,       // total known items in this franchise/category
     val ownedCount: Int,
     val wantedCount: Int,
@@ -211,6 +217,13 @@ data class CollectionStats(
     val recentlyAdded: List<FunkoItem>,
     val seriesSummaries: List<SeriesSummary>,
     val byGenre: Map<FunkoGenre, Int>,
+)
+
+/** A display group on the want-list screen: a franchise, a named set, or the
+ *  catch-all "Manually added" bucket, with the missing/wanted figures under it. */
+data class WantListGroup(
+    val groupKey: String,
+    val items: List<FunkoItem>,
 )
 
 /**

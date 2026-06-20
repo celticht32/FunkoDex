@@ -1,6 +1,7 @@
 package com.funkodex.ui.screens.reports
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,6 +21,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.funkodex.data.export.ExportButton
 import com.funkodex.data.model.CollectionStats
+import com.funkodex.data.model.GroupIntent
+import com.funkodex.data.model.GroupLevel
 import com.funkodex.data.model.SeriesSummary
 import com.funkodex.ui.help.HelpCard
 import com.funkodex.ui.help.HelpContent
@@ -118,7 +121,7 @@ private fun ReportsContent(
                 )
             }
         } else {
-            items(stats.seriesSummaries, key = { "${it.franchise}|${it.category}" }) { series ->
+            items(stats.seriesSummaries, key = { "${it.level}|${it.groupKey}" }) { series ->
                 SeriesSummaryCard(series = series, onItemClick = onItemClick)
             }
         }
@@ -252,21 +255,50 @@ private fun SeriesSummaryCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(series.franchise, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(series.category, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (series.level == GroupLevel.SET) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = RoundedCornerShape(6.dp),
+                            ) {
+                                Text(
+                                    "Set",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                )
+                            }
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Text(
+                            series.groupKey.ifBlank { series.franchise },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    if (series.category.isNotBlank()) {
+                        Text(series.category, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
                 Text(
-                    "${series.completionPct}%",
+                    "${series.ownedCount} / ${series.totalInCatalog}",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = if (series.intent == GroupIntent.COMPLETE)
+                        MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
             Spacer(Modifier.height(8.dp))
 
+            // Bar fill: primary (green-ish) when completing; muted gray when
+            // cherry-picking, so an opted-out group doesn't read as "incomplete".
             LinearProgressIndicator(
                 progress = { (series.completionPct / 100f).coerceIn(0f, 1f) },
+                color = if (series.intent == GroupIntent.COMPLETE)
+                    MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
             )
 
@@ -275,10 +307,25 @@ private fun SeriesSummaryCard(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Owned: ${series.ownedCount} / ${series.totalInCatalog}", style = MaterialTheme.typography.bodySmall)
-                Text("Spent: ${currencyFmt.format(series.totalCostPaid)}", style = MaterialTheme.typography.bodySmall)
-                Text("Value: ${currencyFmt.format(series.marketValue)}", style = MaterialTheme.typography.bodySmall)
+                Text("${series.completionPct}% complete", style = MaterialTheme.typography.bodySmall)
+                // Intent pill
+                Surface(
+                    color = if (series.intent == GroupIntent.COMPLETE)
+                        MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(6.dp),
+                ) {
+                    Text(
+                        if (series.intent == GroupIntent.COMPLETE) "Completing" else "Cherry-pick",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (series.intent == GroupIntent.COMPLETE)
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
             }
 
             if (series.missingItems.isNotEmpty()) {

@@ -15,6 +15,7 @@ class FunkoDexDatabase(private val context: Context) {
         const val TYPE_PRICE_CACHE     = "price"      // cached market pricing per item
         const val TYPE_PRICE_ALERT     = "alert"      // price alert per wanted item
         const val TYPE_CONTRIBUTION    = "contrib"    // pending community UPC contribution
+        const val TYPE_GROUP_PREF      = "group_pref" // per-group completion intent (franchise/set)
 
         // ── Common ──────────────────────────────────────────────────────────
         const val FIELD_TYPE           = "type"
@@ -28,6 +29,7 @@ class FunkoDexDatabase(private val context: Context) {
         const val FIELD_CATEGORY       = "category"    // Pop! product line
         const val FIELD_GENRE          = "genre"       // FunkoGenre enum name
         const val FIELD_SERIES_NUM     = "seriesNumber"
+        const val FIELD_SET_TAG        = "setTag"      // named-set membership (e.g. "Haunted Mansion Mini Vinyl Figures"); "" = no set
         const val FIELD_SERIES_NUM_INT = "seriesNumberInt"
         const val FIELD_IMAGE_URL      = "imageUrl"
 
@@ -92,6 +94,11 @@ class FunkoDexDatabase(private val context: Context) {
         const val FIELD_CONTRIB_RETAIL    = "contribRetailPrice"
         const val FIELD_CONTRIB_VAULTED   = "contribIsVaulted"
         const val FIELD_CONTRIB_CHASE     = "contribIsChase"
+
+        // ── Group preference fields (series completion) ─────────────────────
+        const val FIELD_GROUP_LEVEL    = "level"        // GroupLevel enum name
+        const val FIELD_GROUP_KEY      = "groupKey"     // franchise name or set tag
+        const val FIELD_GROUP_INTENT   = "groupIntent"  // GroupIntent enum name
         const val FIELD_CONTRIB_EXCLUSIVE = "contribIsExclusive"
         const val FIELD_CONTRIB_RETAILER  = "contribExclusiveRetailer"
         const val FIELD_CONTRIB_IMAGE_URL = "contribImageUrl"

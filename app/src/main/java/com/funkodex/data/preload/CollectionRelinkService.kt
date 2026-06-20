@@ -235,17 +235,31 @@ class CollectionRelinkService @Inject constructor(
                             }
                         }
 
-                        // Franchise — user-editable. Refresh when allowed, else
-                        // fill-only. Catalog's closest field is the primary series.
+                        // Franchise — user-authoritative property grouping.
+                        // Refresh ONLY from a property-specific source (the
+                        // enricher's franchiseSuggestion, else the PriceCharting
+                        // console). Never from the raw "series" tag — that is a
+                        // format/line, not a property, and would mis-group the item.
                         run {
-                            val cat = catalog.getString(CatalogMapper.FIELD_PRIMARY_SERIES)?.takeIf { it.isNotBlank() }
+                            val pcUrl = catalog.getString(CatalogMapper.FIELD_PC_URL) ?: ""
+                            val suggested =
+                                catalog.getString(CatalogMapper.FIELD_FRANCHISE_SUGGESTION)?.takeIf { it.isNotBlank() }
+                                    ?: com.funkodex.data.util.ConsoleFranchise.resolve(
+                                        catalog.getString(CatalogMapper.FIELD_PC_SERIES),
+                                        pcUrl,
+                                    )
                             val itemBlank = item.getString(FunkoDexDatabase.FIELD_FRANCHISE).isNullOrBlank()
-                            if (cat != null && (itemBlank || canRefresh(FunkoDexDatabase.FIELD_FRANCHISE)) &&
-                                cat != item.getString(FunkoDexDatabase.FIELD_FRANCHISE)
+                            if (suggested != null && (itemBlank || canRefresh(FunkoDexDatabase.FIELD_FRANCHISE)) &&
+                                suggested != item.getString(FunkoDexDatabase.FIELD_FRANCHISE)
                             ) {
-                                mutable.setString(FunkoDexDatabase.FIELD_FRANCHISE, cat); changed = true
+                                mutable.setString(FunkoDexDatabase.FIELD_FRANCHISE, suggested); changed = true
                             }
                         }
+
+                        // Named-set tag — pure enrichment: refresh.
+                        catalog.getString(CatalogMapper.FIELD_SET_TAG)
+                            ?.takeIf { it.isNotBlank() && it != item.getString(FunkoDexDatabase.FIELD_SET_TAG) }
+                            ?.let { mutable.setString(FunkoDexDatabase.FIELD_SET_TAG, it); changed = true }
 
                         // Category — user-editable. Refresh when allowed, else
                         // fill-only. Re-derive genre to stay consistent.

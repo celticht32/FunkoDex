@@ -44,6 +44,7 @@ class DetailViewModel @Inject constructor(
     private val imageBlobs: com.funkodex.data.repository.ImageBlobRepository,
     private val db: com.funkodex.data.db.FunkoDexDatabase,
     private val contribRepo: com.funkodex.data.repository.ContributionRepository,
+    private val groupPrefs: com.funkodex.data.repository.GroupPrefRepository,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
 
@@ -74,6 +75,13 @@ class DetailViewModel @Inject constructor(
     private val _alertState = MutableStateFlow<PriceAlert?>(null)
     val alertState: StateFlow<PriceAlert?> = _alertState.asStateFlow()
 
+    // Completion intent for this item's franchise and named set (if any).
+    // null entry = group not applicable (blank franchise / no set).
+    private val _franchiseIntent = MutableStateFlow<com.funkodex.data.model.GroupIntent?>(null)
+    val franchiseIntent: StateFlow<com.funkodex.data.model.GroupIntent?> = _franchiseIntent.asStateFlow()
+    private val _setIntent = MutableStateFlow<com.funkodex.data.model.GroupIntent?>(null)
+    val setIntent: StateFlow<com.funkodex.data.model.GroupIntent?> = _setIntent.asStateFlow()
+
     init {
         loadItem()
     }
@@ -89,6 +97,13 @@ class DetailViewModel @Inject constructor(
                 _photoBytes.value = photoRepository.getPhotoBytes(itemId)
                 // Load price alert state (D4)
                 _alertState.value = alertRepository.getAlert(itemId)
+                // Load completion intent for this item's franchise + named set
+                _franchiseIntent.value = item.franchise.takeIf { it.isNotBlank() }?.let {
+                    groupPrefs.getIntent(com.funkodex.data.model.GroupLevel.FRANCHISE, it)
+                }
+                _setIntent.value = item.setTag.takeIf { it.isNotBlank() }?.let {
+                    groupPrefs.getIntent(com.funkodex.data.model.GroupLevel.SET, it)
+                }
                 // Auto-fetch prices if stale or not yet loaded
                 loadCachedPriceThenRefreshIfStale(item)
             } else {
@@ -600,5 +615,30 @@ class DetailViewModel @Inject constructor(
         val current = item.userEditedFields ?: emptyList()
         if (fieldKey in current) item
         else item.copy(userEditedFields = current + fieldKey)
+    }
+
+    /** Set the completion intent for the current item's franchise group. */
+    fun setFranchiseIntent(intent: com.funkodex.data.model.GroupIntent) {
+        val franchise = currentItem()?.franchise?.takeIf { it.isNotBlank() } ?: return
+        viewModelScope.launch {
+            groupPrefs.setIntent(com.funkodex.data.model.GroupLevel.FRANCHISE, franchise, intent)
+            _franchiseIntent.value = intent
+        }
+    }
+
+    /** Set the completion intent for the current item's named-set group. */
+    fun setSetIntent(intent: com.funkodex.data.model.GroupIntent) {
+        val setTag = currentItem()?.setTag?.takeIf { it.isNotBlank() } ?: return
+        viewModelScope.launch {
+            groupPrefs.setIntent(com.funkodex.data.model.GroupLevel.SET, setTag, intent)
+            _setIntent.value = intent
+        }
+    }
+
+    /** The item as currently shown, whether viewing or editing. */
+    private fun currentItem(): FunkoItem? = when (val s = _state.value) {
+        is DetailUiState.Viewing -> s.item
+        is DetailUiState.Editing -> s.draft
+        else -> null
     }
 }

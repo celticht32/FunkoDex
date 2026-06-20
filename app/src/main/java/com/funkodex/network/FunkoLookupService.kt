@@ -84,7 +84,12 @@ class FunkoLookupService @Inject constructor(
 
     /** Primary entry point: look up by UPC barcode. */
     suspend fun lookupByUpc(upc: String): FunkoItem? = withContext(Dispatchers.IO) {
-        lookupLocalByUpc(upc)
+        // Couchbase catalog is the source of truth (holds all imported/enriched
+        // records). The bundled JSON is only a preload seed, so it's a fallback
+        // for the rare case the catalog hasn't been populated yet. External APIs
+        // are last resorts for UPCs absent from the catalog entirely.
+        lookupCatalogByUpc(upc)
+            ?: lookupLocalByUpc(upc)
             ?: lookupChannel3ByUpc(upc)
             ?: lookupUpcItemDb(upc)
             ?: lookupBarcodeSpider(upc)
@@ -136,6 +141,76 @@ class FunkoLookupService @Inject constructor(
         }
     }
 
+    /**
+     * Build a [FunkoItem] from a catalog document. Shared by the UPC lookup and
+     * the name-search path so both produce identical items. Seeds marketAvg from
+     * the catalog's PriceCharting in-box (Complete) price when present — a
+     * non-manual baseline a live refresh or manual value can still override.
+     */
+    private fun catalogDocToFunkoItem(
+        docId: String,
+        doc: com.couchbase.lite.Document,
+    ): com.funkodex.data.model.FunkoItem {
+        val pcComplete = doc.getString(
+            com.funkodex.data.preload.CatalogMapper.FIELD_MKT_VALUE_COMPLETE)
+            ?.replace(Regex("[^0-9.]"), "")?.toDoubleOrNull() ?: 0.0
+        return com.funkodex.data.model.FunkoItem(
+            id           = docId,
+            upc          = doc.getString("upc") ?: "",
+            name         = doc.getString("title") ?: "",
+            franchise    = doc.getString("series") ?: "",
+            seriesNumber = doc.getString("seriesNumber") ?: "",
+            category     = doc.getString("category") ?: "",
+            imageUrl     = doc.getString("imageUrl") ?: "",
+            retailPrice  = doc.getDouble("retailPrice"),
+            isExclusive  = doc.getBoolean("isExclusive"),
+            exclusiveRetailer = doc.getString("exclusiveRetailer") ?: "",
+            isVaulted    = doc.getBoolean("isVaulted"),
+            marketAvg    = pcComplete,
+        )
+    }
+
+    /**
+     * Primary scan lookup: query the Couchbase catalog (the live data store) for
+     * a doc whose UPC matches. The bundled funko_data.json is only a preload seed,
+     * not the source of truth, so the catalog — which holds every imported/enriched
+     * record — is searched first. Leading zeros are normalised both ways since UPC
+     * encodings vary (UPC-A vs the value stored). Returns the matching item or null.
+     */
+    private fun lookupCatalogByUpc(upc: String): com.funkodex.data.model.FunkoItem? {
+        val trimmed = upc.trimStart('0')
+        return try {
+            val results = com.couchbase.lite.QueryBuilder
+                .select(
+                    com.couchbase.lite.SelectResult.expression(com.couchbase.lite.Meta.id).`as`("id"),
+                    com.couchbase.lite.SelectResult.property("upc").`as`("upc"),
+                )
+                .from(com.couchbase.lite.DataSource.collection(db.getCollection()))
+                .where(
+                    com.couchbase.lite.Expression.property("type")
+                        .equalTo(com.couchbase.lite.Expression.string(
+                            com.funkodex.data.preload.CatalogPreloader.TYPE_CATALOG))
+                        .and(
+                            com.couchbase.lite.Expression.property("upc")
+                                .equalTo(com.couchbase.lite.Expression.string(upc))
+                            .or(
+                                com.couchbase.lite.Expression.property("upc")
+                                    .equalTo(com.couchbase.lite.Expression.string(trimmed))
+                            )
+                        )
+                )
+                .limit(com.couchbase.lite.Expression.intValue(1))
+                .execute()
+                .allResults()
+            val docId = results.firstOrNull()?.getString("id") ?: return null
+            val doc = db.getCollection().getDocument(docId) ?: return null
+            catalogDocToFunkoItem(docId, doc)
+        } catch (e: Exception) {
+            android.util.Log.e("FunkoLookup", "Catalog UPC lookup failed: ${e.message}")
+            null
+        }
+    }
+
     private fun lookupLocalByUpc(upc: String): FunkoItem? {
         return loadLocalDb()
             .firstOrNull { it.upc == upc || it.upc?.trimStart('0') == upc.trimStart('0') }
@@ -184,26 +259,7 @@ class FunkoLookupService @Inject constructor(
                     val series = doc.getString("series") ?: ""
                     // Require ALL query tokens to match against title + series combined.
                     if (!matchesAllTokens(query, "$title $series")) return@mapNotNull null
-                    // Seed market value from the catalog's PriceCharting in-box
-                    // (Complete) price when present. This is a baseline; a live
-                    // price refresh or a manual value can still override it later.
-                    val pcComplete = doc.getString(
-                        com.funkodex.data.preload.CatalogMapper.FIELD_MKT_VALUE_COMPLETE)
-                        ?.replace(Regex("[^0-9.]"), "")?.toDoubleOrNull() ?: 0.0
-                    com.funkodex.data.model.FunkoItem(
-                        id           = docId,
-                        upc          = doc.getString("upc") ?: "",
-                        name         = title,
-                        franchise    = series,
-                        seriesNumber = doc.getString("seriesNumber") ?: "",
-                        category     = doc.getString("category") ?: "",
-                        imageUrl     = doc.getString("imageUrl") ?: "",
-                        retailPrice  = doc.getDouble("retailPrice"),
-                        isExclusive  = doc.getBoolean("isExclusive"),
-                        exclusiveRetailer = doc.getString("exclusiveRetailer") ?: "",
-                        isVaulted    = doc.getBoolean("isVaulted"),
-                        marketAvg    = pcComplete,
-                    )
+                    catalogDocToFunkoItem(docId, doc)
                 }
                 .take(20)
 

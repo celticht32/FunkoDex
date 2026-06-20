@@ -5,6 +5,60 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — Session 13 — 2026-06-20
+
+PriceCharting end-to-end: catalog enrichment now carries in-box (Complete) market
+values, UPCs, and metadata into the app; barcode scan reads the live Couchbase
+catalog instead of the bundled seed; a live PriceCharting refresh tier re-scrapes
+the stored product page; and import gained UPC-based de-duplication. Channel3's
+manual-key UI was hidden (its tiers still run).
+
+### Added
+
+- **PriceCharting market value through the whole pipeline.** The enricher now
+  stores `marketValueComplete` (in-box, the primary displayed value) plus
+  `releaseDate`, `ebayEpid`, `amazonAsin`, `printRun`, `publisher`, `pcSeries`,
+  `pcDescription`, and `pricechartingUrl`. `EnrichedRecord` and `CatalogMapper`
+  carry these into the catalog; `FunkoItem` gained `pricechartingUrl`; the catalog
+  read seeds `marketAvg` from `marketValueComplete` as a non-manual baseline a
+  live refresh or manual value can still override.
+- **Scan reads the Couchbase catalog.** New `lookupCatalogByUpc` queries the
+  catalog by UPC first (leading-zero tolerant) via a shared `catalogDocToFunkoItem`
+  builder, so every imported/enriched record is scannable. The bundled
+  `funko_data.json` is now a fallback seed only. Name-search uses the same builder.
+- **Live PriceCharting refresh tier** in `PriceService`. When an item carries a
+  `pricechartingUrl`, the refresh re-scrapes that exact page (no search, no
+  variant-matching risk) and parses the three grade prices from
+  `#used_price`/`#complete_price`/`#new_price`. Plain OkHttp works — verified that
+  PriceCharting serves the page to an Android-UA GET with no JS challenge. New
+  `PRICECHARTING` price source. Runs before the retail short-circuit, since retail
+  (MSRP) is not a market value.
+- **UPC-based import de-duplication.** `CatalogImporter` builds a UPC→docId index
+  and matches handle → UPC → title, so a record finds its existing twin even when
+  handles differ (e.g. a PriceCharting-sourced record vs the same Pop under a
+  HobbyDB handle) instead of inserting a duplicate.
+
+### Changed
+
+- **Import no longer skips priced-but-incomplete records.** The old "never
+  clobber" insert collision now *merges* (fill-only, never overwriting identity)
+  via a shared `mergeRecordInto`, so a colliding record contributes its
+  price/metadata instead of being dropped. `pricechartingUrl` persists on owned
+  items through `FunkoMapper` for later refresh.
+- **Channel3 manual-key UI hidden.** `SettingsScreen` gates the Channel3 key row
+  and dialog behind `SHOW_CHANNEL3_KEY_UI = false`. The free Channel3 tier and the
+  `funkodex_keys.json` import path still work; only the manual key-entry UI is
+  suppressed. HobbyDB and eBay OAuth rows left visible (account logins, not keys).
+
+### Notes
+
+- The enricher (`funko_enrich` repo) did all PriceCharting scraping offline via
+  Puppeteer; the in-app refresh tier is a lighter OkHttp re-scrape of the already-
+  identified page. On-device confirmation of the OkHttp fetch (residential IP) is
+  the one thing still to verify by hitting refresh on a real device.
+
+---
+
 ## [Unreleased] — Session 12 — 2026-06-19
 
 Pricing accuracy (variant-aware queries), scanner/Add-screen UX, manual-UPC

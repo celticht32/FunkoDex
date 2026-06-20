@@ -7,12 +7,19 @@ Built entirely in Claude across multiple sessions. This file gives Claude the fu
 context needed to work on the codebase without re-explaining architecture.
 
 **71 Kotlin source files. Feature-complete at the code level through
-Sessions 1–12. Sessions 7–8 (CBL Collection API + Keystore migrations) and
+Sessions 1–13. Sessions 7–8 (CBL Collection API + Keystore migrations) and
 Session 11 (scanner/manual-add/pricing/image work) were the prior big code
 changes; Session 12 added manual-UPC validation, variant-aware pricing, an
 "enter details manually" entry point, and two resource-leak fixes (HTTP
-responses + camera executor). Full functional/device test pass remains the
-standing focus — see Testing below. A Community Catalog Distribution
+responses + camera executor). Session 13 wired PriceCharting end-to-end:
+the enricher carries `marketValueComplete`/UPCs/metadata into the catalog,
+scan-by-UPC now reads the Couchbase catalog (not the bundled JSON seed), a
+live PriceCharting refresh tier re-scrapes the stored product page, import
+gained UPC-based de-dup and merges instead of skipping priced-but-incomplete
+records, and the Channel3 manual-key UI was hidden (its tiers still run).
+Full functional/device test pass remains the standing focus — see Testing
+below; on-device confirmation of the scan-from-catalog and live-refresh paths
+is the immediate Session 13 verification. A Community Catalog Distribution
 architecture (golden-master base + GitHub update packets) is designed but not
 built — see FUTURE.md.**
 
@@ -99,8 +106,8 @@ com.funkodex/
 │                               ContributionRepository, ImageBlobRepository, PhotoRepository
 ├── di/AppModule.kt             All @Provides — 13 providers; OkHttp writeTimeout(30s)
 ├── network/                    ConnectivityObserver (+POST_NOTIF guard), FunkoLookupService,
-│                               PriceService (5-tier: retail → eBay RSS → UPCitemdb →
-│                               Channel3 free/premium → HobbyDB via TokenRefreshManager)
+│                               PriceService (PriceCharting re-scrape → retail →
+│                               eBay → UPCitemdb → Channel3 → HobbyDB)
 ├── security/                   SecureKeyStore (AES-256-GCM via AndroidKeyStore,
 │                               Session 8 — Channel3, HobbyDB, eBay tokens,
 │                               install ID; prefs file funkodex_secure_prefs_v2),
@@ -147,7 +154,8 @@ com.funkodex/
 ### Database — Couchbase Lite Community
 No server, no sync subscription, 100% offline. Document types:
 - `funko::{upc|uuid}` — personal collection items
-- `catalog::{handle}` — global product catalog (Kenny Chan + Channel3 + community UPCs)
+- `catalog::{handle}` — global product catalog (Kenny Chan + PriceCharting market
+  values/UPCs/metadata + community UPCs)
 - `price::{itemId}::{source}` — cached market price snapshots
 - `alert::{itemId}` — price drop alerts (includes `upc` field)
 - `pending_upc::{upc}` — offline UPC scan queue
@@ -157,22 +165,40 @@ No server, no sync subscription, 100% offline. Document types:
 
 All constants in `FunkoDexDatabase.kt`. The Mapper handles `FunkoItem` ↔ Document conversion.
 
-### Price waterfall — 5 tiers (`PriceService.kt`)
-1. **Retail** — instant, from catalog data
+### Price waterfall (`PriceService.kt`)
+0. **PriceCharting (live re-scrape)** — *Session 13.* When an item carries a
+   `pricechartingUrl` (set by the enricher and stored in the catalog), the refresh
+   re-fetches that exact product page via OkHttp and parses the three grades from
+   `#used_price`/`#complete_price`/`#new_price`. Complete (in-box) is the displayed
+   market value. No search, no variant-matching risk — it re-reads the already-
+   identified page. Runs *before* retail, since retail (MSRP) is not a market value
+   and would otherwise short-circuit the market tiers. Verified PriceCharting serves
+   the page to a plain Android-UA GET (no JS challenge); on-device residual-IP
+   confirmation is the standing Session 13 to-do. Source enum `PRICECHARTING`.
+1. **Retail** — instant, from catalog data. Returns and stops (retail only).
 2. **eBay sold listings** — real sold prices, scraped from the sold-listings HTML
    (`s-card__price` spans; the `_rss=1` feed is retired, so the `EBAY_RSS` enum
    name is historical). No auth. Parser verified live Session 12. Chase/exclusive
    items query the variant's listings first, falling back to the broad query.
 3. **UPCitemdb** — 100/day free, UPC required. Typed gson parsing (Session 12).
 4. **Channel3** — free tier (100/day) then premium with user's API key. **Dormant
-   unless a Channel3 key is configured.** Its parser's flat price-field names look
-   stale vs the current API — re-verify against a captured response before use.
+   unless a Channel3 key is configured.** Its manual-key settings UI was hidden in
+   Session 13 (`SHOW_CHANNEL3_KEY_UI = false`); the free tier and the
+   `funkodex_keys.json` import path still function.
 5. **HobbyDB** — `TokenRefreshManager.getValidHobbyDbToken()`, silent refresh.
    Searches by name (variant terms appended Session 12); takes top relevance hit.
 
-All four network tiers close their `Response` via `.use {}` (Session 12 leak fix).
+The network tiers close their `Response` via `.use {}` (Session 12 leak fix).
 The eBay/HobbyDB/Channel3 name queries share a `variantSuffix` helper; UPC-keyed
 lookups don't use it (a UPC is already variant-specific).
+
+### Scan / UPC lookup (`FunkoLookupService.kt`)
+*Session 13:* `lookupByUpc` now queries the **Couchbase catalog** first
+(`lookupCatalogByUpc`, leading-zero tolerant), so every imported/enriched record
+is scannable. The bundled `funko_data.json` is a fallback seed only. Catalog docs
+become `FunkoItem`s via the shared `catalogDocToFunkoItem` builder (also used by
+name-search), which seeds `marketAvg` from the catalog's `marketValueComplete`
+and carries `pricechartingUrl` for the live refresh tier.
 
 ### OAuth flow (`auth/` package)
 PKCE (RFC 7636) — no client secret in APK. Code verifier stored in `OAuthSession` (memory only).

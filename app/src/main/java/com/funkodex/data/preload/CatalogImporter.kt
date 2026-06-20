@@ -26,8 +26,11 @@ import javax.inject.Singleton
  * User-triggered import of funko_data_enriched.json into the live Couchbase catalog.
  *
  * Behaviour:
- *   - Existing catalog docs → merge: only writes non-null new fields, never overwrites
- *     imageUrl, title, handle, or seriesList.
+ *   - Existing catalog docs → merge (last-enricher-wins): overwrites every
+ *     enricher-derived field the incoming record supplies, and recomputes the
+ *     series-derived fields (seriesList, category, etc.) from the new tags, so
+ *     re-running enrich.js and re-importing upgrades existing records. Preserves
+ *     only handle, title, and imageUrl. See mergeRecordInto for the full rule.
  *   - Missing docs → insert: full record via CatalogMapper.mapRecord().
  *   - Runs in batches of 500 inside database.inBatch() for performance.
  *   - Emits ImportProgress updates so the UI can show a live counter.
@@ -142,13 +145,34 @@ class CatalogImporter @Inject constructor(
 
     /**
      * Merge an incoming [record]'s fields into an [existing] catalog document.
-     * Rule: only ever FILL — write a field when the record supplies it and (for
-     * identity-ish fields like UPC and the display image) only when the existing
-     * doc lacks it. Never overwrites a present identity value, never touches user
-     * data (that lives in funko:: docs the importer doesn't open). Returns the
-     * mutable document to be saved by the caller. Used by both the matched-
-     * existing path and the insert-collision path so a colliding record
-     * contributes its price/metadata instead of being dropped.
+     *
+     * Catalog docs hold NO user data — every field is enricher-derived — so the
+     * rule here is LAST-ENRICHER-WINS: overwrite each enrichment field whenever
+     * the incoming record supplies a value (non-null / non-blank), so that
+     * re-running enrich.js and re-importing actually upgrades existing records
+     * with richer data (e.g. a series list that grew from 12 to 20+ tags, a
+     * corrected category, newly-found UPC/market values). A missing incoming
+     * value never erases a good stored one — we only ever write when we have
+     * something to write.
+     *
+     * The series-derived fields (seriesList, primarySeries, category,
+     * isExclusive, exclusiveRetailer, isChase, seriesNumber) are RECOMPUTED from
+     * the incoming series via CatalogMapper.deriveSeriesFields whenever the
+     * incoming list is non-empty — the same code path inserts use, so the two
+     * can't drift. This is what propagates improved parsing onto existing docs.
+     *
+     * Three fields are deliberately preserved and never overwritten:
+     *   - handle  — it is the document identity (catalog::{handle}); changing it
+     *               would orphan the doc and every funko:: catalogRef pointing at it.
+     *   - title   — display name; the base dataset's title is canonical and a
+     *               funko.com/PriceCharting scrape title is not reliably "better".
+     *   - imageUrl — the primary (HobbyDB) image; image quality is not monotonic
+     *               across sources, so we don't risk regressing a good image.
+     *               (funkoImageUrl, the funko.com image, IS refreshed below.)
+     *
+     * This never touches funko:: user docs — the importer doesn't open them.
+     * Owned items pick up these catalog improvements via the separate re-link
+     * pass (run after import).
      */
     private fun mergeRecordInto(
         existing: com.couchbase.lite.Document,
@@ -156,22 +180,30 @@ class CatalogImporter @Inject constructor(
     ): MutableDocument {
         val mutable = existing.toMutable()
 
+        // ── Series-derived fields — recompute from the incoming series list ──
+        // Only when the incoming list is non-empty; an empty incoming list must
+        // not wipe a good stored seriesList/category.
+        if (record.series.isNotEmpty()) {
+            val derived = CatalogMapper.deriveSeriesFields(record.series, record.title ?: existing.getString(CatalogMapper.FIELD_TITLE) ?: "")
+            mutable.setValue(CatalogMapper.FIELD_SERIES_LIST, record.series)
+            mutable.setString(CatalogMapper.FIELD_PRIMARY_SERIES, derived.primarySeries)
+            mutable.setString(CatalogMapper.FIELD_CATEGORY, derived.category)
+            mutable.setBoolean(CatalogMapper.FIELD_IS_EXCLUSIVE, derived.isExclusive)
+            mutable.setString(CatalogMapper.FIELD_EXCL_RETAILER, derived.exclusiveRetailer)
+            mutable.setBoolean(CatalogMapper.FIELD_IS_CHASE, derived.isChase)
+            if (derived.seriesNumber.isNotBlank()) {
+                mutable.setString(CatalogMapper.FIELD_NUMBER, derived.seriesNumber)
+            }
+        }
+
+        // ── Enrichment scalars — overwrite whenever the record supplies one ──
         record.available?.let { mutable.setBoolean(CatalogMapper.FIELD_IS_AVAILABLE, it) }
         record.productUrl?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_PRODUCT_URL, it) }
         record.funkoPrimaryImage?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_FUNKO_IMAGE, it) }
         record.pid?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_FUNKO_SHOP_ID, it) }
         record.funkoNumber?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_FUNKO_NUMBER, it) }
         record.popType?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_POP_TYPE, it) }
-        record.upc?.takeIf { it.isNotBlank() }?.let {
-            if (existing.getString(CatalogMapper.FIELD_UPC).isNullOrBlank()) {
-                mutable.setString(CatalogMapper.FIELD_UPC, it)
-            }
-        }
-        record.imageName?.takeIf { it.isNotBlank() }?.let {
-            if (existing.getString(CatalogMapper.FIELD_IMAGE_URL).isNullOrBlank()) {
-                mutable.setString(CatalogMapper.FIELD_IMAGE_URL, it)
-            }
-        }
+        record.upc?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_UPC, it) }
         record.price?.let { raw ->
             val parsed = raw.replace(Regex("[^0-9.]"), "").toDoubleOrNull()
             if (parsed != null && parsed > 0.0) {
@@ -181,42 +213,18 @@ class CatalogImporter @Inject constructor(
         record.marketValueLoose?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_MKT_VALUE_LOOSE, it) }
         record.marketValueComplete?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_MKT_VALUE_COMPLETE, it) }
         record.marketValueNew?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_MKT_VALUE_NEW, it) }
-        if (record.marketValueIsApproximate) mutable.setBoolean(CatalogMapper.FIELD_MKT_IS_APPROX, true)
+        // marketValueIsApproximate is a computed flag; set it to the record's
+        // current value (true only for an unlisted-variant base price).
+        mutable.setBoolean(CatalogMapper.FIELD_MKT_IS_APPROX, record.marketValueIsApproximate)
         record.pricechartingId?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_PC_ID, it) }
         record.pricechartingUrl?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_PC_URL, it) }
-        // PriceCharting metadata — fill only when missing on the existing doc.
-        record.releaseDate?.takeIf { it.isNotBlank() }?.let {
-            if (existing.getString(CatalogMapper.FIELD_RELEASE_DATE).isNullOrBlank()) mutable.setString(CatalogMapper.FIELD_RELEASE_DATE, it)
-        }
-        record.ebayEpid?.takeIf { it.isNotBlank() }?.let {
-            if (existing.getString(CatalogMapper.FIELD_EBAY_EPID).isNullOrBlank()) mutable.setString(CatalogMapper.FIELD_EBAY_EPID, it)
-        }
-        record.amazonAsin?.takeIf { it.isNotBlank() }?.let {
-            if (existing.getString(CatalogMapper.FIELD_AMAZON_ASIN).isNullOrBlank()) mutable.setString(CatalogMapper.FIELD_AMAZON_ASIN, it)
-        }
-        record.printRun?.takeIf { it.isNotBlank() }?.let {
-            if (existing.getString(CatalogMapper.FIELD_PRINT_RUN).isNullOrBlank()) mutable.setString(CatalogMapper.FIELD_PRINT_RUN, it)
-        }
-        record.publisher?.takeIf { it.isNotBlank() }?.let {
-            if (existing.getString(CatalogMapper.FIELD_PUBLISHER).isNullOrBlank()) mutable.setString(CatalogMapper.FIELD_PUBLISHER, it)
-        }
-        record.pcSeries?.takeIf { it.isNotBlank() }?.let {
-            if (existing.getString(CatalogMapper.FIELD_PC_SERIES).isNullOrBlank()) mutable.setString(CatalogMapper.FIELD_PC_SERIES, it)
-        }
-        record.pcDescription?.takeIf { it.isNotBlank() }?.let {
-            if (existing.getString(CatalogMapper.FIELD_PC_DESCRIPTION).isNullOrBlank()) mutable.setString(CatalogMapper.FIELD_PC_DESCRIPTION, it)
-        }
-
-        // Repair the legacy bad category value ("Pop! Vinyl" → real category).
-        val storedCategory = existing.getString(CatalogMapper.FIELD_CATEGORY)
-        if (storedCategory.equals("Pop! Vinyl", ignoreCase = true)) {
-            val repaired = record.series.firstOrNull { s ->
-                s.startsWith("Pop!", ignoreCase = true) &&
-                !s.equals("Pop! Vinyl", ignoreCase = true) &&
-                !s.equals("Pop!", ignoreCase = true)
-            } ?: ""
-            mutable.setString(CatalogMapper.FIELD_CATEGORY, repaired)
-        }
+        record.releaseDate?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_RELEASE_DATE, it) }
+        record.ebayEpid?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_EBAY_EPID, it) }
+        record.amazonAsin?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_AMAZON_ASIN, it) }
+        record.printRun?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_PRINT_RUN, it) }
+        record.publisher?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_PUBLISHER, it) }
+        record.pcSeries?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_PC_SERIES, it) }
+        record.pcDescription?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_PC_DESCRIPTION, it) }
 
         mutable.setString(CatalogMapper.FIELD_LAST_UPDATED, LocalDate.now().toString())
         return mutable

@@ -125,31 +125,13 @@ object CatalogMapper {
         pcDescription:       String?    = null,
     ): Map<String, Any> {
 
-        val primarySeries = seriesList.firstOrNull { s ->
-            !s.startsWith("Pop!", ignoreCase = true) &&
-            !s.equals("Pop! Vinyl", ignoreCase = true) &&
-            !isExclusiveSeries(s) &&
-            !s.equals("Chase Pieces", ignoreCase = true)
-        } ?: seriesList.firstOrNull() ?: ""
-
-        // Category = the first series tag that is a real Pop! category, NOT a
-        // generic format descriptor. "Pop! Vinyl" (and bare "Pop!") describe the
-        // product format, not a collecting category, so they must not be stored
-        // as the category — doing so produces an un-matchable value that the
-        // category filter silently drops (e.g. funko.com-enriched records whose
-        // series is ["Pop! Vinyl", "Music"]). Falls back to "" (uncategorized)
-        // when no real category tag is present.
-        val category = seriesList
-            .firstOrNull { s ->
-                s.startsWith("Pop!", ignoreCase = true) &&
-                !s.equals("Pop! Vinyl", ignoreCase = true) &&
-                !s.equals("Pop!", ignoreCase = true)
-            } ?: ""
-
-        val isExclusive       = seriesList.any { isExclusiveSeries(it) }
-        val exclusiveRetailer = if (isExclusive) extractRetailer(seriesList) else ""
-        val isChase           = seriesList.any { it.equals("Chase Pieces", ignoreCase = true) }
-        val seriesNumber      = NUMBER_REGEX.find(title)?.value ?: ""
+        val derived = deriveSeriesFields(seriesList, title)
+        val primarySeries     = derived.primarySeries
+        val category          = derived.category
+        val isExclusive       = derived.isExclusive
+        val exclusiveRetailer = derived.exclusiveRetailer
+        val isChase           = derived.isChase
+        val seriesNumber      = derived.seriesNumber
 
         return buildMap {
             put(FIELD_TYPE,           TYPE_CATALOG)
@@ -191,6 +173,64 @@ object CatalogMapper {
             if (!pcSeries.isNullOrBlank())            put(FIELD_PC_SERIES,          pcSeries)
             if (!pcDescription.isNullOrBlank())       put(FIELD_PC_DESCRIPTION,     pcDescription)
         }
+    }
+
+    /**
+     * The bundle of fields derived purely from a record's series tags + title.
+     * Computed identically for both inserts (mapRecord) and re-imports
+     * (CatalogImporter merge) so the two paths can never drift.
+     */
+    data class SeriesDerived(
+        val primarySeries: String,
+        val category: String,
+        val isExclusive: Boolean,
+        val exclusiveRetailer: String,
+        val isChase: Boolean,
+        val seriesNumber: String,
+    )
+
+    /**
+     * Derive primarySeries, category, exclusivity, chase, and series number from
+     * a record's [seriesList] and [title]. This is the single source of truth for
+     * the series-derived catalog fields. When the enricher is re-run and produces
+     * a richer/corrected series list, re-importing recomputes all of these from
+     * the new tags (catalog docs hold no user data, so last-enricher-wins is
+     * correct here).
+     */
+    fun deriveSeriesFields(seriesList: List<String>, title: String): SeriesDerived {
+        val primarySeries = seriesList.firstOrNull { s ->
+            !s.startsWith("Pop!", ignoreCase = true) &&
+            !s.equals("Pop! Vinyl", ignoreCase = true) &&
+            !isExclusiveSeries(s) &&
+            !s.equals("Chase Pieces", ignoreCase = true)
+        } ?: seriesList.firstOrNull() ?: ""
+
+        // Category = the first series tag that is a real Pop! category, NOT a
+        // generic format descriptor. "Pop! Vinyl" (and bare "Pop!") describe the
+        // product format, not a collecting category, so they must not be stored
+        // as the category — doing so produces an un-matchable value that the
+        // category filter silently drops (e.g. funko.com-enriched records whose
+        // series is ["Pop! Vinyl", "Music"]). Falls back to "" (uncategorized)
+        // when no real category tag is present.
+        val category = seriesList.firstOrNull { s ->
+            s.startsWith("Pop!", ignoreCase = true) &&
+            !s.equals("Pop! Vinyl", ignoreCase = true) &&
+            !s.equals("Pop!", ignoreCase = true)
+        } ?: ""
+
+        val isExclusive       = seriesList.any { isExclusiveSeries(it) }
+        val exclusiveRetailer = if (isExclusive) extractRetailer(seriesList) else ""
+        val isChase           = seriesList.any { it.equals("Chase Pieces", ignoreCase = true) }
+        val seriesNumber      = NUMBER_REGEX.find(title)?.value ?: ""
+
+        return SeriesDerived(
+            primarySeries = primarySeries,
+            category = category,
+            isExclusive = isExclusive,
+            exclusiveRetailer = exclusiveRetailer,
+            isChase = isChase,
+            seriesNumber = seriesNumber,
+        )
     }
 
     fun isExclusiveSeries(s: String): Boolean =

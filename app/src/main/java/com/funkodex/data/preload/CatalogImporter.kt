@@ -502,8 +502,21 @@ private fun com.google.gson.JsonObject.toEnrichedRecord(): EnrichedRecord = Enri
     funkoSource       = optString("funkoSource"),
     funkoNumber       = optString("funkoNumber"),
     popType           = optString("popType"),
-    marketValueLoose  = optString("marketValueLoose"),
-    marketValueNew    = optString("marketValueNew"),
+    marketValueLoose    = optString("marketValueLoose"),
+    marketValueComplete = optString("marketValueComplete"),
+    marketValueNew      = optString("marketValueNew"),
     pricechartingId   = optString("pricechartingId"),
     pricechartingUrl  = optString("pricechartingUrl"),
+    // PriceCharting metadata harvest (Pass 3) — previously dropped on import
+    // because these keys weren't read here despite existing on EnrichedRecord
+    // and in funko_data_enriched.json. marketValueIsApproximate is a computed
+    // flag (default false), not present in the JSON, so it is intentionally
+    // not read from the file.
+    releaseDate       = optString("releaseDate"),
+    ebayEpid          = optString("ebayEpid"),
+    amazonAsin        = optString("amazonAsin"),
+    printRun          = optString("printRun"),
+    publisher         = optString("publisher"),
+    pcSeries          = optString("pcSeries"),
+    pcDescription     = optString("pcDescription"),
 )

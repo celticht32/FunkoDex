@@ -51,6 +51,7 @@ fun SettingsScreen(
     val logLevel       by viewModel.logLevel.collectAsState()
     val transferState  by dbTransferViewModel.state.collectAsState()
     val importProgress by viewModel.importProgress.collectAsState()
+    val relinkProgress by viewModel.relinkProgress.collectAsState()
     val context = LocalContext.current
 
     val shareLauncher = rememberLauncherForActivityResult(
@@ -262,6 +263,87 @@ fun SettingsScreen(
                 confirmButton = {},
                 dismissButton = {
                     TextButton(onClick = { viewModel.clearImportProgress() }) { Text("Done") }
+                }
+            )
+        }
+    }
+
+    // ── Collection re-link dialogs ─────────────────────────────────────────
+    relinkProgress?.let { progress ->
+        if (progress.error != null) {
+            AlertDialog(
+                onDismissRequest = { viewModel.clearRelinkProgress() },
+                icon    = { Icon(Icons.Default.Error, null, tint = MaterialTheme.colorScheme.error) },
+                title   = { Text("Re-link failed") },
+                text    = { Text(progress.error, style = MaterialTheme.typography.bodyMedium) },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { viewModel.clearRelinkProgress() }) { Text("Close") }
+                }
+            )
+        } else if (!progress.done) {
+            AlertDialog(
+                onDismissRequest = { /* non-dismissable */ },
+                icon  = { CircularProgressIndicator(modifier = Modifier.size(32.dp)) },
+                title = { Text("Re-linking collection…") },
+                text  = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (progress.total > 0) {
+                            LinearProgressIndicator(
+                                progress = { progress.processed.toFloat() / progress.total },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Text(
+                                "${progress.processed} / ${progress.total} owned items",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            Text("Scanning collection…", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {},
+            )
+        } else {
+            val result = progress.result
+            AlertDialog(
+                onDismissRequest = { viewModel.clearRelinkProgress() },
+                icon  = { Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary) },
+                title = { Text("Re-link complete") },
+                text  = {
+                    if (result != null) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("${result.enriched} items enriched",
+                                style = MaterialTheme.typography.bodyMedium)
+                            if (result.unchanged > 0)
+                                Text("${result.unchanged} already complete",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (result.unmatched > 0)
+                                Text("${result.unmatched} not matched to catalog",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (result.errors > 0)
+                                Text("${result.errors} errors",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Completed in ${result.durationMs / 1000}s",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        Text("Re-link finished.", style = MaterialTheme.typography.bodyMedium)
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { viewModel.clearRelinkProgress() }) { Text("Done") }
                 }
             )
         }
@@ -611,6 +693,26 @@ fun SettingsScreen(
                     onClick   = {
                         if (!importRunning) {
                             enrichedCatalogLauncher.launch(arrayOf("application/json", "*/*"))
+                        }
+                    }
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                // Run AFTER an enriched import so owned items pick up the new
+                // UPC / price / image / franchise data from the enriched catalog.
+                val currentRelinkProgress = relinkProgress
+                val relinkRunning = currentRelinkProgress != null
+                    && !currentRelinkProgress.done
+                    && currentRelinkProgress.error == null
+                SettingsRow(
+                    icon      = Icons.Default.Link,
+                    title     = "Re-link collection to catalog",
+                    subtitle  = "Fill missing UPC, prices, and images on items you own",
+                    isLoading = relinkRunning,
+                    onClick   = {
+                        if (!relinkRunning && !importRunning) {
+                            viewModel.relinkCollection()
                         }
                     }
                 )

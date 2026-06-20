@@ -10,7 +10,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.funkodex.data.backup.DriveAuthManager
 import com.funkodex.data.preload.CatalogImporter
+import com.funkodex.data.preload.CollectionRelinkService
 import com.funkodex.data.preload.ImportProgress
+import com.funkodex.data.preload.RelinkProgress
 import com.funkodex.security.SecureKeyStore
 import com.funkodex.util.FunkoDexLogger
 import com.funkodex.util.LogLevel
@@ -55,6 +57,7 @@ class UserPreferencesRepository @Inject constructor(
 class SettingsViewModel @Inject constructor(
     private val prefs: UserPreferencesRepository,
     private val catalogImporter: CatalogImporter,
+    private val collectionRelinkService: CollectionRelinkService,
     private val driveAuthManager: DriveAuthManager,
     private val secureKeyStore: SecureKeyStore,
 ) : ViewModel() {
@@ -89,6 +92,27 @@ class SettingsViewModel @Inject constructor(
 
     fun clearImportProgress() {
         _importProgress.value = null
+    }
+
+    // ── Collection re-link (run AFTER enriched catalog import) ─────────────────
+    // Fills missing UPC / price / market value / image / franchise / category on
+    // owned items from the now-enriched catalog. Fill-only; never overwrites user
+    // data. Must run after the enriched JSON is in the catalog.
+
+    private val _relinkProgress = MutableStateFlow<RelinkProgress?>(null)
+    val relinkProgress: StateFlow<RelinkProgress?> = _relinkProgress.asStateFlow()
+
+    fun relinkCollection() {
+        viewModelScope.launch {
+            _relinkProgress.value = RelinkProgress(total = 0, done = false)
+            collectionRelinkService.relink().collect { progress ->
+                _relinkProgress.value = progress
+            }
+        }
+    }
+
+    fun clearRelinkProgress() {
+        _relinkProgress.value = null
     }
 
     // ── Google Drive connection (AuthorizationClient-only, see spec §5) ────────

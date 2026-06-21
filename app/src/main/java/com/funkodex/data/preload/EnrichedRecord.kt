@@ -29,6 +29,7 @@ data class EnrichedRecord(
 
     // ── HobbyDB enriched fields (enricher Pass 4) ──────────────────────────
     val funkoNumber:      String?       = null,    // Funko item number, e.g. "157" — display only, may be shared across variants
+    val funkoNumberFromTitle: String?   = null,    // enricher fallback: Funko number parsed from the title (e.g. "#320"); used only when funkoNumber is absent
     val popType:          String?       = null,    // e.g. "Pop!", "Pop! Deluxe", "Pop! Rides"
 
     // ── PriceCharting enriched fields ──────────────────────────────────────

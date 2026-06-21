@@ -31,8 +31,9 @@ owned items on-device:
    keys the hand-rolled JSON mapper silently dropped are now read —
    `marketValueComplete` (the PRIMARY in-box price) plus `releaseDate`,
    `ebayEpid`, `amazonAsin`, `printRun`, `publisher`, `pcSeries`,
-   `pcDescription`. `marketValueIsApproximate` stays excluded (computed flag,
-   absent from the JSON).
+   `pcDescription`. (`marketValueIsApproximate` was ALSO wrongly excluded here
+   — a S14 mistake, the key IS in the JSON on ~198 records; fixed in S15 so the
+   approximate-price flag survives import. See CHANGELOG S15 Fixed.)
 2. **Catalog merge → last-enricher-wins** (`CatalogImporter.mergeRecordInto`):
    re-importing now OVERWRITES every enricher-derived field a record supplies
    and RECOMPUTES the series-derived fields (seriesList, category,

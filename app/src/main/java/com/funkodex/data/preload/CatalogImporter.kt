@@ -513,18 +513,29 @@ private fun com.google.gson.JsonObject.toEnrichedRecord(): EnrichedRecord = Enri
     productUrl        = optString("productUrl"),
     funkoPrimaryImage = optString("funkoPrimaryImage"),
     funkoSource       = optString("funkoSource"),
-    funkoNumber       = optString("funkoNumber"),
+    // funkoNumber is the canonical (HobbyDB/PriceCharting Box) number. When it
+    // is absent, fall back to funkoNumberFromTitle — the number the enricher
+    // extracted from the title regex. The two are mutually exclusive in the
+    // enriched data (a record has one or the other, never both), so coalescing
+    // here folds both into the single funkoNumber field that the rest of the
+    // import (mapper, merge, insert) already handles — no downstream change, and
+    // it recovers a Pop number for the ~171 records that only have the title one.
+    funkoNumber       = optString("funkoNumber") ?: optString("funkoNumberFromTitle"),
     popType           = optString("popType"),
     marketValueLoose    = optString("marketValueLoose"),
     marketValueComplete = optString("marketValueComplete"),
     marketValueNew      = optString("marketValueNew"),
+    // marketValueIsApproximate IS present in funko_data_enriched.json (true on
+    // the variant records PriceCharting priced from a base figure — ~198 in the
+    // current catalog). It must be read: mergeRecordInto writes it
+    // unconditionally, so leaving it at the default false both drops the flag on
+    // insert and overwrites a stored true with false on every re-import.
+    marketValueIsApproximate = optBoolean("marketValueIsApproximate") ?: false,
     pricechartingId   = optString("pricechartingId"),
     pricechartingUrl  = optString("pricechartingUrl"),
     // PriceCharting metadata harvest (Pass 3) — previously dropped on import
     // because these keys weren't read here despite existing on EnrichedRecord
-    // and in funko_data_enriched.json. marketValueIsApproximate is a computed
-    // flag (default false), not present in the JSON, so it is intentionally
-    // not read from the file.
+    // and in funko_data_enriched.json.
     releaseDate       = optString("releaseDate"),
     ebayEpid          = optString("ebayEpid"),
     amazonAsin        = optString("amazonAsin"),

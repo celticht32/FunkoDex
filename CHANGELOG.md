@@ -50,6 +50,25 @@ completing populate a want list, and you can mark any franchise or named set as
 - **Re-link** now refreshes `setTag` (pure enrichment) and refreshes franchise
   only from a property-specific source, never from the raw series tag.
 
+### Fixed
+
+- **Approximate-price flag was dropped on import (regression introduced in S14).**
+  `CatalogImporter.toEnrichedRecord()` did not read `marketValueIsApproximate`
+  from the enriched JSON — a S14 comment wrongly asserted the key was a computed
+  flag absent from the file. It is present (true on ~198 records: variants
+  PriceCharting priced from a base figure). Because `mergeRecordInto` writes the
+  flag unconditionally, leaving it at the default `false` both dropped it on
+  insert and overwrote a stored `true` with `false` on every re-import, so
+  approximate base-variant prices were shown as exact. The parser now reads it
+  (`optBoolean("marketValueIsApproximate")`).
+- **Title-extracted Pop numbers were dropped on import.** The enriched JSON
+  carries `funkoNumberFromTitle` (the number parsed from the title regex) on 171
+  records that have no canonical `funkoNumber`; the two are mutually exclusive.
+  `EnrichedRecord` didn't declare the key, so Gson dropped it and those 171
+  records imported with no Pop number. The parser now coalesces
+  `funkoNumber ?: funkoNumberFromTitle` into the single number field, recovering
+  them with no downstream change.
+
 ### Notes
 
 - New grouping/number/franchise data only populates after re-running the

@@ -82,8 +82,26 @@ class DetailViewModel @Inject constructor(
     private val _setIntent = MutableStateFlow<com.funkodex.data.model.GroupIntent?>(null)
     val setIntent: StateFlow<com.funkodex.data.model.GroupIntent?> = _setIntent.asStateFlow()
 
+    // Dynamic category list: curated FunkoCategories.ALL plus any distinct category
+    // discovered in the imported catalog, so a new Funko product line is selectable
+    // without a code change. Loaded once on init.
+    private val _categoryOptions =
+        MutableStateFlow(com.funkodex.data.model.FunkoCategories.ALL)
+    val categoryOptions: StateFlow<List<com.funkodex.data.model.FunkoCategories.CategoryDef>> =
+        _categoryOptions.asStateFlow()
+
     init {
         loadItem()
+        loadCategoryOptions()
+    }
+
+    /** Merge curated categories with distinct catalog categories (one-shot). */
+    private fun loadCategoryOptions() {
+        viewModelScope.launch {
+            val discovered = runCatching { repository.getDistinctCategories() }.getOrDefault(emptyList())
+            _categoryOptions.value =
+                com.funkodex.data.model.FunkoCategories.allWithDiscovered(discovered)
+        }
     }
 
     // ─── Load ─────────────────────────────────────────────────────────────────

@@ -65,6 +65,7 @@ fun ScannerScreen(
     viewModel: ScannerViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val categoryOptions by viewModel.categoryOptions.collectAsState()
     val context = LocalContext.current
 
     // F-UI-2: Haptic feedback on successful barcode scan (Preview / AlreadyOwned)
@@ -209,6 +210,7 @@ fun ScannerScreen(
                     state     = s,
                     onSave    = viewModel::confirmManualAdd,
                     onDismiss = viewModel::startScanning,
+                    categoryOptions = categoryOptions,
                 )
             }
             is ScanState.Pending -> {
@@ -1072,6 +1074,7 @@ private fun ManualAddSheet(
     state:     ScanState.ManualAdd,
     onSave:    (ManualAddInput) -> Unit,
     onDismiss: () -> Unit,
+    categoryOptions: List<com.funkodex.data.model.FunkoCategories.CategoryDef>,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -1252,7 +1255,7 @@ private fun ManualAddSheet(
                         expanded = catExpanded,
                         onDismissRequest = { catExpanded = false },
                     ) {
-                        FunkoCategories.ALL.forEach { def ->
+                        categoryOptions.forEach { def ->
                             DropdownMenuItem(
                                 text = { Text(def.displayName) },
                                 onClick = { category = def.displayName; catExpanded = false },

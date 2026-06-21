@@ -116,6 +116,21 @@ class ScannerViewModel @Inject constructor(
     private val _state = MutableStateFlow<ScanState>(ScanState.Idle)
     val state: StateFlow<ScanState> = _state.asStateFlow()
 
+    // Dynamic category list for the manual-add picker: curated + catalog-discovered,
+    // so new Funko product lines are selectable without a code change.
+    private val _categoryOptions =
+        MutableStateFlow(com.funkodex.data.model.FunkoCategories.ALL)
+    val categoryOptions: StateFlow<List<com.funkodex.data.model.FunkoCategories.CategoryDef>> =
+        _categoryOptions.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            val discovered = runCatching { repository.getDistinctCategories() }.getOrDefault(emptyList())
+            _categoryOptions.value =
+                com.funkodex.data.model.FunkoCategories.allWithDiscovered(discovered)
+        }
+    }
+
     // Suppress duplicate rapid-fire reads from the barcode analyzer
     private var lastScannedUpc: String = ""
 

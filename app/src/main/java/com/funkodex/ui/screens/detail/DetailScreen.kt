@@ -58,6 +58,7 @@ fun DetailScreen(
     val photoBytes  by viewModel.photoBytes.collectAsState()
     val photoError  by viewModel.photoError.collectAsState()
     val alertState  by viewModel.alertState.collectAsState()
+    val categoryOptions by viewModel.categoryOptions.collectAsState()
     val franchiseIntent by viewModel.franchiseIntent.collectAsState()
     val setIntent       by viewModel.setIntent.collectAsState()
     val fetchState             by viewModel.fetchState.collectAsState()
@@ -315,6 +316,7 @@ fun DetailScreen(
                     onCondition= viewModel::updateCondition,
                     onNotes    = viewModel::updateNotes,
                     onCategory = viewModel::updateCategory,
+                    categoryOptions = categoryOptions,
                     onUpc      = viewModel::updateUpc,
                     onImageUrl = viewModel::updateImageUrl,
                     onMarketValue = viewModel::updateMarketValue,
@@ -1226,6 +1228,7 @@ private fun EditContent(
     onCondition:       (Condition) -> Unit,
     onNotes:           (String) -> Unit,
     onCategory:        (String) -> Unit,
+    categoryOptions:   List<com.funkodex.data.model.FunkoCategories.CategoryDef>,
     onUpc:             (String) -> Unit,
     onImageUrl:        (String) -> Unit,
     onMarketValue:     (String) -> Unit,
@@ -1314,7 +1317,7 @@ private fun EditContent(
                 expanded         = categoryExpanded,
                 onDismissRequest = { categoryExpanded = false },
             ) {
-                FunkoCategories.ALL
+                categoryOptions
                     .groupBy { it.genre }
                     .forEach { (genre, defs) ->
                         DropdownMenuItem(

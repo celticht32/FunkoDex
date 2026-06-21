@@ -99,6 +99,29 @@ class FunkoRepository @Inject constructor(
             }
         }
 
+    /**
+     * Distinct, non-blank `category` strings present in the CATALOG. Feeds the
+     * dynamic category picker (FunkoCategories.allWithDiscovered) so any product
+     * line the enricher emits is selectable without a code change. One-shot read.
+     */
+    suspend fun getDistinctCategories(): List<String> = withContext(Dispatchers.IO) {
+        val out = LinkedHashSet<String>()
+        val query = QueryBuilder
+            .selectDistinct(SelectResult.property(FunkoDexDatabase.FIELD_CATEGORY).`as`("category"))
+            .from(DataSource.collection(collection))
+            .where(
+                Expression.property(FunkoDexDatabase.FIELD_TYPE)
+                    .equalTo(Expression.string(FunkoDexDatabase.TYPE_CATALOG))
+            )
+        query.execute().use { rs ->
+            rs.allResults().forEach { r ->
+                val c = r.getString("category")?.trim()
+                if (!c.isNullOrEmpty()) out.add(c)
+            }
+        }
+        out.toList()
+    }
+
     /** Live Flow of all owned items, re-emits whenever data changes. */
     fun collectionFlow(): Flow<List<FunkoItem>> = callbackFlow {
         val query = QueryBuilder

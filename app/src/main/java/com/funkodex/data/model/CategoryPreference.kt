@@ -111,6 +111,7 @@ object FunkoCategories {
 
         // ── OTHER / PRODUCT LINES ─────────────────────────────────────────
         CategoryDef("pop_deluxe",       "Pop! Deluxe",          FunkoGenre.OTHER),
+        CategoryDef("pop_town",         "Pop! Town",            FunkoGenre.OTHER),
         CategoryDef("pop_rides",        "Pop! Rides",           FunkoGenre.OTHER),
         CategoryDef("pop_moments",      "Pop! Moments",         FunkoGenre.OTHER),
         CategoryDef("pop_holidays",     "Pop! Holidays",        FunkoGenre.OTHER),
@@ -141,6 +142,31 @@ object FunkoCategories {
             .replace(Regex("[^a-z0-9]+"), "_")
             .trim('_')
             .let { "pop_$it" }
+
+    /**
+     * The full category list for UI pickers: the curated [ALL] list UNION any
+     * distinct category strings discovered in the imported catalog that aren't
+     * already known. Discovered categories get their genre from
+     * [FunkoGenre.fromCategory] (keyword-derived, falling back to OTHER), so a new
+     * Funko product line shows up in the dropdown automatically without a code
+     * change. Curated entries always win on key collision (they carry the
+     * hand-checked genre). Result is de-duplicated by [toKey] and the discovered
+     * extras are appended after the curated ones.
+     */
+    fun allWithDiscovered(catalogCategories: Collection<String>): List<CategoryDef> {
+        val knownKeys = ALL.map { it.key }.toHashSet()
+        val seen = HashSet<String>()
+        val extras = ArrayList<CategoryDef>()
+        for (raw in catalogCategories) {
+            val name = raw.trim()
+            if (name.isEmpty()) continue
+            val key = toKey(name)
+            if (key in knownKeys || !seen.add(key)) continue
+            extras += CategoryDef(key, name, FunkoGenre.fromCategory(name))
+        }
+        // Curated first (stable, hand-ordered), then discovered extras sorted by name.
+        return ALL + extras.sortedBy { it.displayName }
+    }
 
     /** All genres that appear in the list — for the genre-level toggle */
     val GENRES: List<FunkoGenre> = FunkoGenre.values().toList()

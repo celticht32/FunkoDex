@@ -242,36 +242,27 @@ class CatalogImporter @Inject constructor(
     fun importFromUri(uri: Uri): Flow<ImportProgress> = flow {
         val startMs = System.currentTimeMillis()
 
-        // ── 1. Read file ──────────────────────────────────────────────────
-        val json = context.contentResolver.openInputStream(uri)
-            ?.bufferedReader()
-            ?.use { it.readText() }
-            ?: run {
+        // ── 1. Count records (streaming) ──────────────────────────────────
+        // Stream the array once just to count elements (skipValue is memory-flat),
+        // so the progress bar has a denominator. We never hold the whole file in
+        // memory. total=0 on failure → UI shows an indeterminate display.
+        val total: Int = try {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                com.google.gson.stream.JsonReader(input.bufferedReader()).use { reader ->
+                    var n = 0
+                    reader.beginArray()
+                    while (reader.hasNext()) { reader.skipValue(); n++ }
+                    reader.endArray()
+                    n
+                }
+            } ?: run {
                 emit(ImportProgress(error = "Could not open file"))
                 return@flow
             }
-
-        // ── 2. Parse ──────────────────────────────────────────────────────
-        // NOTE: We intentionally do NOT use gson.fromJson(json, TypeToken<List<
-        // EnrichedRecord>>) here. That reflective path throws
-        // "java.util.ArrayList cannot be cast to java.lang.Void" on-device for
-        // this Kotlin data class — Gson mis-resolves the generic `series:
-        // List<String>` field type under Kotlin's emitted metadata. Parsing the
-        // tree and mapping each object field explicitly sidesteps Gson's
-        // reflective TypeAdapter entirely and is fully deterministic.
-        val records: List<EnrichedRecord> = try {
-            val root = com.google.gson.JsonParser.parseString(json)
-            if (!root.isJsonArray) {
-                emit(ImportProgress(error = "Expected a JSON array of records"))
-                return@flow
-            }
-            root.asJsonArray.map { element -> element.asJsonObject.toEnrichedRecord() }
         } catch (e: Exception) {
-            emit(ImportProgress(error = "JSON parse error: ${e.message}"))
-            return@flow
+            0   // non-fatal; the processing pass below will surface a real failure
         }
 
-        val total   = records.size
         var enriched = 0
         var added    = 0
         var skipped  = 0
@@ -302,40 +293,67 @@ class CatalogImporter @Inject constructor(
             HashMap()
         }
 
-        // ── 3. Upsert in batches of 500 ───────────────────────────────────
-        records.chunked(500).forEach { chunk ->
-            database.inBatch(UnitOfWork {
-                chunk.forEach { record ->
-                    val handle = record.handle?.trim()
-                    if (handle.isNullOrBlank()) {
-                        skipped++
-                        processed++
-                        return@forEach
-                    }
+        // ── 3. Stream the array, upserting in batches of 500 ──────────────
+        // Read one object at a time, map via the explicit JsonObject→Enriched
+        // mapper (avoids Gson's reflective List<EnrichedRecord> path, which
+        // mis-resolves `series: List<String>` under Kotlin metadata), and commit
+        // each full 500-record batch inside inBatch(). The file is never fully
+        // resident, so import memory is flat regardless of catalog size.
+        val gson = com.google.gson.Gson()
+        val reader = try {
+            val input = context.contentResolver.openInputStream(uri)
+                ?: run { emit(ImportProgress(error = "Could not open file")); return@flow }
+            com.google.gson.stream.JsonReader(input.bufferedReader())
+        } catch (e: Exception) {
+            emit(ImportProgress(error = "Could not open file: ${e.message}")); return@flow
+        }
+        try {
+            if (reader.peek() != com.google.gson.stream.JsonToken.BEGIN_ARRAY) {
+                emit(ImportProgress(error = "Expected a JSON array of records"))
+                return@flow
+            }
+            reader.beginArray()
+            val chunkBuf = ArrayList<EnrichedRecord>(500)
 
-                    try {
-                        val docId = "catalog::$handle"
-                        val recUpc = record.upc?.trim()?.takeIf { it.isNotBlank() }
-                        // Match precedence: exact handle → UPC (strongest cross-
-                        // source key) → unambiguous normalized-title fallback.
-                        val existing = collection.getDocument(docId)
-                            ?: recUpc?.let { upcIndex[it] }?.let { collection.getDocument(it) }
-                            ?: normalizeTitle(record.title)
-                                ?.let { titleIndex[it] }
-                                ?.let { collection.getDocument(it) }
+            // Commit the current buffer to the DB. NON-suspend and emits nothing —
+            // progress is emitted inline in the drive loop below, in the flow's own
+            // coroutine, so we never call emit() from a nested function (which can
+            // violate Flow's same-coroutine invariant).
+            fun commitBatch() {
+                if (chunkBuf.isEmpty()) return
+                val chunk = chunkBuf
+                database.inBatch(UnitOfWork {
+                    chunk.forEach { record ->
+                        val handle = record.handle?.trim()
+                        if (handle.isNullOrBlank()) {
+                            skipped++
+                            processed++
+                            return@forEach
+                        }
 
-                        if (existing != null) {
-                            // ── Merge: fill missing fields, never overwrite identity ──
-                            val mutable = mergeRecordInto(existing, record)
-                            collection.save(mutable)
-                            // Keep the UPC index current so a later record with the
-                            // same UPC merges here too.
-                            if (recUpc != null && !upcIndex.containsKey(recUpc)) {
-                                upcIndex[recUpc] = existing.id
-                            }
-                            enriched++
+                        try {
+                            val docId = "catalog::$handle"
+                            val recUpc = record.upc?.trim()?.takeIf { it.isNotBlank() }
+                            // Match precedence: exact handle → UPC (strongest cross-
+                            // source key) → unambiguous normalized-title fallback.
+                            val existing = collection.getDocument(docId)
+                                ?: recUpc?.let { upcIndex[it] }?.let { collection.getDocument(it) }
+                                ?: normalizeTitle(record.title)
+                                    ?.let { titleIndex[it] }
+                                    ?.let { collection.getDocument(it) }
 
-                        } else {
+                            if (existing != null) {
+                                // ── Merge: fill missing fields, never overwrite identity ──
+                                val mutable = mergeRecordInto(existing, record)
+                                collection.save(mutable)
+                                // Keep the UPC index current so a later record with the
+                                // same UPC merges here too.
+                                if (recUpc != null && !upcIndex.containsKey(recUpc)) {
+                                    upcIndex[recUpc] = existing.id
+                                }
+                                enriched++
+
+                            } else {
                             // ── Insert: build full document via CatalogMapper ──────────
                             // Non-Pop merchandise (tees, soda, Loungefly…) is never
                             // inserted as a net-new catalog record.
@@ -428,16 +446,38 @@ class CatalogImporter @Inject constructor(
 
                     processed++
                 }
-            })
+                })
+                chunk.clear()
+            }
 
-            // Emit progress after each batch
-            emit(ImportProgress(
-                processed = processed,
-                total     = total,
-                enriched  = enriched,
-                added     = added,
-                done      = false,
-            ))
+            // Drive the stream: read one object at a time, map, buffer, and commit
+            // every 500. emit() is called HERE, directly in the flow lambda, after
+            // each commit — never from inside commitBatch.
+            while (reader.hasNext()) {
+                val obj: com.google.gson.JsonObject =
+                    gson.fromJson(reader, com.google.gson.JsonObject::class.java)
+                chunkBuf.add(obj.toEnrichedRecord())
+                if (chunkBuf.size >= 500) {
+                    commitBatch()
+                    emit(ImportProgress(
+                        processed = processed, total = total,
+                        enriched = enriched, added = added, done = false,
+                    ))
+                }
+            }
+            if (chunkBuf.isNotEmpty()) {
+                commitBatch()                       // final partial batch
+                emit(ImportProgress(
+                    processed = processed, total = total,
+                    enriched = enriched, added = added, done = false,
+                ))
+            }
+            reader.endArray()
+        } catch (e: Exception) {
+            emit(ImportProgress(error = "JSON parse error: ${e.message}"))
+            return@flow
+        } finally {
+            try { reader.close() } catch (_: Exception) {}
         }
 
         // ── 4. Final emission ─────────────────────────────────────────────

@@ -165,24 +165,13 @@ class CollectionRelinkService @Inject constructor(
                         val mutable = item.toMutable()
                         var changed = false
 
-                        // ── Field-protection marker ──────────────────────────
-                        // Read the user-edited field set. ABSENT (null) means a
-                        // pre-marker doc: fall back to safe fill-only for the
-                        // user-editable fields so we never clobber an edit made
-                        // before the marker was tracked. PRESENT (even empty)
-                        // means we can refresh any field the user hasn't edited.
-                        val editedJson = item.getString(FunkoDexDatabase.FIELD_USER_EDITED)
-                        val markerPresent = editedJson != null
-                        val editedFields: Set<String> = editedJson?.let { json ->
-                            runCatching {
-                                val arr = org.json.JSONArray(json)
-                                (0 until arr.length()).map { arr.getString(it) }.toSet()
-                            }.getOrElse { emptySet() }
-                        } ?: emptySet()
-                        // A user-editable field may be REFRESHED (overwritten) only
-                        // when the marker is present and the user hasn't edited it.
-                        fun canRefresh(fieldKey: String): Boolean =
-                            markerPresent && fieldKey !in editedFields
+                        // ── Metadata is golden-source (enriched catalog wins) ───
+                        // The enriched catalog is authoritative for all metadata, so
+                        // franchise/category/imageUrl overwrite unconditionally when
+                        // the catalog value is non-blank (see each field below). The
+                        // old user-edited-field marker no longer gates metadata and
+                        // has been removed. UPC is the one user value still always
+                        // preserved — handled as fill-only in its own block below.
 
                         // catalogRef itself — backfill if the item matched only via UPC.
                         if (catalogRef.isBlank()) {
@@ -190,14 +179,15 @@ class CollectionRelinkService @Inject constructor(
                             changed = true
                         }
 
-                        // UPC — user-editable. Refresh when allowed, else fill-only.
-                        // (UPC is identity-critical for scanning; only overwrite a
-                        // user's value when they did NOT set it by hand.)
+                        // UPC — FILL-ONLY, user's scan always wins. A scanned UPC
+                        // comes from the physical box in hand, so it is ground truth
+                        // and is NEVER overwritten by the catalog — even though every
+                        // other metadata field is now golden-source/enricher-wins.
+                        // The catalog UPC fills only when the item has none.
                         run {
                             val catUpc = catalog.getString(CatalogMapper.FIELD_UPC)?.trim()?.takeIf { it.isNotBlank() }
                             if (catUpc != null) {
-                                val refresh = canRefresh(FunkoDexDatabase.FIELD_UPC)
-                                if ((itemUpc == null || refresh) && catUpc != itemUpc) {
+                                if (itemUpc == null && catUpc != itemUpc) {
                                     mutable.setString(FunkoDexDatabase.FIELD_UPC, catUpc); changed = true
                                 }
                             }
@@ -248,8 +238,12 @@ class CollectionRelinkService @Inject constructor(
                                         catalog.getString(CatalogMapper.FIELD_PC_SERIES),
                                         pcUrl,
                                     )
-                            val itemBlank = item.getString(FunkoDexDatabase.FIELD_FRANCHISE).isNullOrBlank()
-                            if (suggested != null && (itemBlank || canRefresh(FunkoDexDatabase.FIELD_FRANCHISE)) &&
+                            // GOLDEN SOURCE: the enriched catalog is authoritative for
+                            // franchise. Overwrite whenever the catalog has a non-blank
+                            // suggestion, regardless of the user-edited marker. Only a
+                            // blank catalog value leaves the user's existing value in place
+                            // (handled by the `suggested != null` guard via takeIf above).
+                            if (suggested != null &&
                                 suggested != item.getString(FunkoDexDatabase.FIELD_FRANCHISE)
                             ) {
                                 mutable.setString(FunkoDexDatabase.FIELD_FRANCHISE, suggested); changed = true
@@ -265,8 +259,9 @@ class CollectionRelinkService @Inject constructor(
                         // fill-only. Re-derive genre to stay consistent.
                         run {
                             val cat = catalog.getString(CatalogMapper.FIELD_CATEGORY)?.takeIf { it.isNotBlank() }
-                            val itemBlank = item.getString(FunkoDexDatabase.FIELD_CATEGORY).isNullOrBlank()
-                            if (cat != null && (itemBlank || canRefresh(FunkoDexDatabase.FIELD_CATEGORY)) &&
+                            // GOLDEN SOURCE: enriched catalog is authoritative for
+                            // category. Overwrite whenever catalog has a non-blank value.
+                            if (cat != null &&
                                 cat != item.getString(FunkoDexDatabase.FIELD_CATEGORY)
                             ) {
                                 mutable.setString(FunkoDexDatabase.FIELD_CATEGORY, cat)
@@ -285,8 +280,12 @@ class CollectionRelinkService @Inject constructor(
                         run {
                             val img = catalog.getString(CatalogMapper.FIELD_IMAGE_URL)?.takeIf { it.isNotBlank() }
                                 ?: catalog.getString(CatalogMapper.FIELD_FUNKO_IMAGE)?.takeIf { it.isNotBlank() }
-                            val itemBlank = item.getString(FunkoDexDatabase.FIELD_IMAGE_URL).isNullOrBlank()
-                            if (img != null && (itemBlank || canRefresh(FunkoDexDatabase.FIELD_IMAGE_URL)) &&
+                            // GOLDEN SOURCE: enriched catalog is authoritative for the
+                            // stock image URL. Overwrite whenever catalog has one. This
+                            // is the catalog image only — the user's own photo
+                            // (userPhoto / thumbnailBlob) is a separate field and is
+                            // never touched here.
+                            if (img != null &&
                                 img != item.getString(FunkoDexDatabase.FIELD_IMAGE_URL)
                             ) {
                                 mutable.setString(FunkoDexDatabase.FIELD_IMAGE_URL, img); changed = true

@@ -5,6 +5,67 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — Session 16 — 2026-06-28
+
+Streaming catalog import (removes OOM risk on the now-larger enriched catalog),
+golden-source collection relink, a non-figure cleanup pass, and a set of specs for
+work to build next (variant hierarchy, regional currency, on-add price fill, remote
+catalog auto-update, browse-set want-list). Code changes compile-pending on-device;
+specs are design docs only.
+
+### Changed
+
+- **`CatalogImporter` rewritten to stream.** The old importer did
+  `bufferedReader().readText()` + full-tree `JsonParser` — loading the entire
+  ~15–35 MB enriched catalog into memory at once (OOM risk on first launch / large
+  imports; the app does not request `largeHeap`). Now uses Gson `JsonReader` to read
+  one record at a time, commit in 500-record batches via `inBatch`, with a fast
+  streaming count pass first for the progress denominator. Memory is now flat
+  regardless of catalog size. All merge logic (handle/UPC/title precedence,
+  `mergeRecordInto`, collision-merge, `isStandardPop`, `CatalogMapper`) preserved.
+  A flow-invariant bug was caught and fixed in review (emit must run in the flow's
+  own coroutine — `commitBatch()` is non-suspend and emits happen inline).
+  COMPILE-PENDING on-device.
+- **`CollectionRelinkService` is golden-source.** On relink, the enriched catalog
+  now OVERWRITES `franchise`/`category` (and re-derives genre) when the catalog
+  value is non-blank, instead of only filling blanks. UPC stays fill-only (scanned
+  barcode is physical ground truth). Personal/ownership data (pricePaid, condition,
+  notes, photos, variants, manual market value) is never touched. The dead
+  user-edited-marker / `canRefresh` block was removed. COMPILE-PENDING on-device.
+
+### Added (specs / docs — not yet built)
+
+- **SPEC_variant_hierarchy.md** — three levels: base figure → official/catalog
+  variant → user copy. The catalog is FLAT (e.g. Spider-Man #1329 is 9 ungrouped
+  records); the app's `FunkoItem.variants` serves user copies (level 3) but nothing
+  groups official variants (level 1). Grouping rule must group "Spider-Man" with
+  "(Wood Deco)" but NOT merge "Vegeta" with "Great Ape Vegeta" — design against final
+  data with UI approval.
+- **SPEC_regional_currency.md** — store a currency code with every price; do NOT
+  auto-convert via live FX. PriceCharting is always USD (browser-pref, not request-
+  origin — travel-safe); eBay localizes by domain (NOT travel-safe). Defense: pin
+  eBay to a fixed domain + warn when device region currency ≠ home currency.
+- **TODO_app_autofill_prices.md** — for `priceSource:'none'` items, pull a live
+  price ONLY when the user scans/searches and ADDS the item (NOT on import, NOT on
+  view, never bulk). Reads the new `priceSource` flag from enrich.js.
+- **TODO_remote_catalog_autoupdate.md** — keep APK small, hydrate the enriched
+  catalog from a manifest-pointed gzipped asset (GitHub Release → later Cloudflare
+  R2), reusing the streaming importer. Private app storage, version check, sha256.
+- **IDEA_browse_set_wantlist.md** — browse a set, see what you're missing, with an
+  eBay-ACTIVE "available to buy" row (reuses the eBay tier with sold-filters off).
+
+### Notes
+
+- Pipeline emits a new `priceSource` field; the importer currently IGNORES it
+  (explicit-field reader). To act on it, add a reader (see TODO_app_autofill_prices).
+- PENDING before relying on any of this: validate streaming import + golden-source
+  relink on-device with the real cleaned catalog; then resolve the shared grouping-
+  field question (relink mapping + variant grouping + set membership + want-list all
+  depend on it) against final data.
+
+---
+
+
 ## [Unreleased] — Session 15 — 2026-06-20
 
 Series completion, franchise/property grouping, and an auto want-list. The

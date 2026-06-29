@@ -45,13 +45,18 @@ owned items on-device:
    `handle`, `title`, and `imageUrl` are preserved. The old "repair only the
    exact 'Pop! Vinyl' category" block is gone — category is recomputed every
    import. `mapRecord` was refactored to use the same helper, so insert and
-   merge can't drift (insert output unchanged).
+   merge can't drift (insert output unchanged). **S16:** the importer now STREAMS the enriched JSON (Gson `JsonReader`, 500-record `inBatch` batches) instead of reading the whole file + parsing a full tree — import memory is flat regardless of catalog size, removing OOM risk on the larger catalog (no `largeHeap`). Merge logic unchanged.
 3. **Collection re-link service** (`data/preload/CollectionRelinkService.kt`,
    NEW): fills/refreshes owned `funko::` items from the enriched catalog so
    items you already own pick up new UPC/price/image/franchise/category data
    without re-scanning. Matches each item to its catalog doc by `catalogRef`
    then UPC (ambiguous UPCs dropped). Run AFTER importing the enriched JSON —
-   the catalog must be enriched first. Surfaced as a "Re-link collection to
+   the catalog must be enriched first. **S16: now GOLDEN-SOURCE** — the enriched
+   catalog OVERWRITES franchise/category (genre re-derived) when the catalog value
+   is non-blank, not just fills blanks; UPC stays fill-only (scanned barcode is
+   ground truth); ownership data (pricePaid/condition/notes/photos/variants/manual
+   market value) never touched. The `userEditedFields` marker no longer gates
+   metadata and the dead `canRefresh` block was removed. Surfaced as a "Re-link collection to
    catalog" row in Settings → Catalog (under "Import Enriched Catalog"), with
    the same progress/result dialog pattern as the import; both rows guard each
    other from running concurrently.

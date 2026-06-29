@@ -100,3 +100,30 @@ to "any site" — that's mostly-no-API integrations with poor ROI.
 - SERIES_COMPLETION_SPEC (set membership / franchise grouping) — shares field #1.
 - CollectionRelinkService golden-source mapping — shares field #1.
 - PriceService eBay tier — reused for availability.
+
+---
+
+## Addendum: variant grouping (discovered during cleanup)
+
+The enriched catalog is FLAT for variants: e.g. Spider-Man #1329 exists as 9
+independent top-level records (Spider-Man, (Wood Deco), (Hologram), (Gold Eyes),
+...). There is NO variant marker field — no `isVariant`, `variantOf`, `baseHandle`.
+They share only `funkoNumber` + base name (in the title parenthetical).
+
+The APP has a variant system (`FunkoItem.variants: List<FunkoVariant>`, `isChase`,
+`isMissingOriginal`) but it is for USER-managed variants of owned items, NOT auto-
+populated from the catalog's flat variant records. So on import, the 9 records come
+in as 9 separate catalog entries — they are NOT grouped as variants.
+
+For ownership tracking this flat structure is CORRECT — collectors own specific
+variants individually. But the want-list / series-completion features would benefit
+from knowing variants share a base figure (to show "Spider-Man #1329 — you have
+2 of 9 variants"). That grouping needs either:
+  (a) a catalog field linking variants (e.g. `variantGroup` / `baseFigure` key
+      derived in post-process), or
+  (b) the app grouping by `funkoNumber` + normalized base-name at display time.
+
+This is part of the SAME unresolved grouping-field question as the relink mapping
+and set membership — design it against FINAL enriched data, with rendered UI
+options for approval. Do NOT add variant markers blindly now (risks designing
+against the wrong field). Captured here so it is not forgotten.

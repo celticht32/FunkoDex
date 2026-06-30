@@ -85,8 +85,8 @@ item that legitimately can.
 ### Notes
 
 - App code (4 files: `DatabaseTransferViewModel`, `SettingsScreen`,
-  `CollectionRelinkService`) is built on-device but NOT yet pushed to the repo as of
-  this writing. The full backup/restore was used live to produce the diagnostic
+  `CollectionRelinkService`) was built and verified on-device, then pushed to the repo
+  (Session 17). The full backup/restore was used live to produce the diagnostic
   dumps and is verified working.
 - The repaired backup is built on the post-relink full backup (live catalog state),
   with the prune + image-clear applied. Restore via "Restore full".

@@ -280,6 +280,29 @@ No server, no sync subscription, 100% offline. Document types:
 - `cat_pref::{category}` — category filter preferences
 - `system` type docs — internal markers; preserved through backup/restore (never exported, never deleted)
 
+> **CRITICAL (S17): owned items must NEVER use a `catalog::` document ID.** A class
+> of corruption was found where 8 owned items were saved with `catalog::{handle}`
+> IDs (e.g. owned "Maid" as `catalog::maid`). These squat on the IDs the catalog's
+> own records need, so the matching `catalog::` record can't be created on import,
+> and the relink's UPC index (which queries `type=="catalog"`) never finds it →
+> permanent no-match. Any add/import/edit path that mints a collection-item ID must
+> use `funko::{upc|uuid}`. When debugging "won't relink", check the owned item's
+> `_id` prefix first.
+
+### Backup / restore — two scopes (S17)
+- **Backup collection** (`exportDatabase`): excludes `type=="catalog"` (catalog is
+  re-importable). Small. ↔ **Restore collection** (`importDatabase`): replaces
+  collection docs, leaves catalog.
+- **Backup full** (`exportFullBackup`): EVERY doc incl. catalog. STREAMS to the zip
+  (never an in-memory `JSONArray` — that OOMs at ~150 MB; app has no `largeHeap`).
+  Same entry name `funkodex_backup.json`. ↔ **Restore full** (`forceRestoreDatabase`):
+  wipes the whole DB, then STREAMS the backup in via Gson `JsonReader` in 500-doc
+  batches (reading the whole file at once would OOM). If a full restore is fed a
+  collection-only backup, the catalog re-loads from assets on next start.
+- Only "Backup full" can capture on-device catalog state for diagnostics — the
+  collection backup's catalog exclusion is why earlier full-state inspection was
+  impossible.
+
 All constants in `FunkoDexDatabase.kt`. The Mapper handles `FunkoItem` ↔ Document conversion.
 
 ### Price waterfall (`PriceService.kt`)

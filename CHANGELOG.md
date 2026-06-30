@@ -5,6 +5,94 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — Session 17 — 2026-06-29
+
+On-device validation of the Session 16 streaming import + golden-source relink
+(both confirmed working on hardware), discovery and full repair of a data-corruption
+bug class, two new app features (streaming full backup/restore + four-row backup UI),
+and a non-figure image fix in the enricher. The headline outcome: a clean repaired
+full backup the user restores via "Restore full", plus the relink now matching every
+item that legitimately can.
+
+### Added (app code — COMPILE-PENDING / on-device verified where noted)
+
+- **Streaming full backup (`exportFullBackup`) in `DatabaseTransferViewModel`.**
+  The normal backup query excludes `type=="catalog"`, so it never captured the
+  ~25–28 k catalog docs — meaning the full on-device state could never be inspected.
+  New full backup dumps EVERY document with no type filter, STREAMING each doc
+  straight to the zip (`[`, comma-separated objects, `]`) so it never builds a full
+  in-memory `JSONArray` (the naive version OOM'd at 150 MB on the catalog — the app
+  has no `largeHeap`). Same zip entry name (`funkodex_backup.json`) so restore reads
+  it. VERIFIED on-device (produced a 28 k-doc, ~37 MB backup successfully).
+- **Streaming full restore.** `forceRestoreDatabase` rewritten to read the backup
+  via Gson `JsonReader` in 500-doc batches (was `JSONArray(wholeFile)` — would OOM
+  reading a full backup back). Wipes DB first, then streams in. Reuses `jsonToDoc`
+  unchanged (each element re-serialized to a single small `org.json.JSONObject`).
+- **Four-row backup/restore UI in `SettingsScreen`.** Replaced the old
+  backup/force-restore rows with: Backup collection / Backup full / Restore
+  collection / Restore full. `Exporting` state made a `data class` carrying a
+  `scope` ("collection"|"full") so only the tapped row spins (was: all export rows
+  shared one `Exporting` state and spun together). Restore dialogs reworded to name
+  the scope explicitly ("Restore full — wipe everything?" vs "Restore collection —
+  replace your data?").
+
+### Fixed
+
+- **`CollectionRelinkService` line-190 warning.** `if (itemUpc == null && catUpc != itemUpc)`
+  → `if (itemUpc == null)` (the second clause was always true when the first held).
+- **Session 16 code validated on-device.** Streaming `CatalogImporter` import ran
+  16,149 updated + 9,546 added in 14 s, no OOM. Golden-source relink confirmed
+  overwriting franchise/category and leaving ownership data intact.
+
+### Data repair (delivered as a repaired full backup, not code)
+
+- **Root-cause bug found: 8 owned collection items had `catalog::` document IDs**
+  (e.g. an owned "Maid" stored as `catalog::maid`), squatting on the exact IDs the
+  catalog's own records need. On import the real catalog records for those handles
+  could not be created, so the relink's UPC index (queries `type=="catalog"`) never
+  found them and 6 items could never match. This was the true cause behind several
+  misleading symptoms chased over many rounds (wrong images, "not matched", junk
+  names). The repair re-homes those 8 items to `funko::{upc}` IDs, which vacates the
+  colliding slots so a subsequent re-import creates the real catalog records and the
+  relink then matches them by UPC. After repair: relink reported 0 remaining bugs
+  (every unique-UPC-in-catalog item matches).
+- **21 corrupted franchise values cleaned** (trailing spaces / embedded quotes, e.g.
+  `"Haunted Mansion "` → `"Haunted Mansion"`).
+- **Collection-wide franchise normalization** (~30 items): merged duplicate spellings
+  to canonical — Dwarves→Dwarfs, "Lilo & Stitch"→"Lilo and Stitch" (ampersand breaks
+  search), casing fixes (sleeping beauty→Sleeping Beauty, the goonies→The Goonies),
+  Disney Hercules→Hercules, The Haunted Mansion→Haunted Mansion, Disney 100th
+  Anniversary→Disney 100, Universal Studios Monsters→Universal Monsters, Wonder
+  Woman→DC, Villains+Disney Villains→Disney Villains, Princess→Disney Princess
+  (Villains Assemble kept separate; Princess Bride/Diaries/Frog correctly untouched).
+- **15 junk retail-paste-in names cleaned** to proper figure names, with metadata
+  extracted (Stitch in PJs → `funkoNumber` 1747). Franchises for the 15 HONOR THE
+  CATALOG where a UPC match exists (e.g. "Stan Lee with Futuristic Glasses" →
+  "Guardians of the Galaxy", the GotG Vol. 2 cameo; "Snow White (Ultimate Princess)"
+  → "Disney Ultimate Princess Celebration").
+- **Catalog pruned 28,008 → 21,989** (stale records from accumulated past imports
+  dropped; the importer merges but never deletes records absent from a newer file).
+  Owned-referenced stragglers preserved so nothing orphans (1: Mia Thermopolis).
+- **1,404 catalog + 4 owned non-figure images CLEARED** (imageUrl nulled, cached
+  `thumbnailBlob` removed). HobbyDB returns merch photos (pins/keychains/plush/PEZ)
+  for some figure records; cleared so they show a placeholder and force correction on
+  encounter. (Release-prep: a full re-enrichment with the fixed enricher is the
+  realistic way to repopulate correct figure images at catalog scale.)
+- All repairs verified: 175/175 collection items preserved with prices/conditions/
+  photos intact, 0 junk names, 0 Funko/unknown franchises, 0 duplicate IDs, 0
+  orphaned catalogRefs.
+
+### Notes
+
+- App code (4 files: `DatabaseTransferViewModel`, `SettingsScreen`,
+  `CollectionRelinkService`) is built on-device but NOT yet pushed to the repo as of
+  this writing. The full backup/restore was used live to produce the diagnostic
+  dumps and is verified working.
+- The repaired backup is built on the post-relink full backup (live catalog state),
+  with the prune + image-clear applied. Restore via "Restore full".
+
+---
+
 ## [Unreleased] — Session 16 — 2026-06-28
 
 Streaming catalog import (removes OOM risk on the now-larger enriched catalog),

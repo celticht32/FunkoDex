@@ -59,7 +59,7 @@ Android Funko Pop collectibles tracker.
 
 ## Current State
 
-Sessions 5–8 complete. Per `docs/PlayStore_Readiness_Migration_SPEC.md`'s
+Sessions 5–8 complete. Per the Play-readiness migration (now `FUNKODEX_SPEC_v1.0.md` §11)'s
 execution plan (Sessions A–C), the app is code-complete for Play submission
 readiness: 16 KB page-size compliant, Drive auth migrated off GoogleSignIn, Photo
 Picker replaces the storage-permission gallery flow, and the P3 deprecation items
@@ -71,7 +71,7 @@ Lite calls to the Collection API (`database.defaultCollection`) across 12 files
 `DataSource.database(db)` → `collection.X` / `DataSource.collection(col)`.
 `inBatch()` correctly remains database-level (transaction wrapper, not
 deprecated, not moved to Collection). Full functional test pass (see
-`SESSION_D_TRACKER.md`) is deferred — code-only checkpoint per session
+`FUNKODEX_TEST_PLAN_v1.0.md`) is deferred — code-only checkpoint per session
 instructions.
 
 Session 8 (Session E from the spec, P2) replaced `androidx.security:security-crypto`
@@ -127,9 +127,10 @@ stale schema. Verified against FunkoMapper, not assumed.
 upgraded without clobbering user edits. The master ships catalog-only / empty user
 collection, so re-link + field protection are runtime features, not part of the master.
 
-**Open for next session:** add the S14 unit tests (`RELINK_FIELD_PROTECTION_SPEC.md`:
-FunkoMapper marker roundtrip, re-link preserve-vs-refresh, edit-screen stamping) before
-ship; on-device re-link verification (see Next session focus).
+**Open for next session:** add the S14 unit tests (`FUNKODEX_SPEC_v1.0.md` §3,
+re-link field protection: FunkoMapper marker roundtrip, re-link preserve-vs-refresh,
+edit-screen stamping) before ship; on-device re-link verification (see Next session
+focus).
 
 ### Session 12 (2026-06-19) — pricing, scanner UX, leak fixes
 
@@ -176,10 +177,10 @@ captured sold-listings page; the live fetch and the HobbyDB/Channel3 paths were 
 Ready for: full Session 7 + 8 functional/device test pass, then Cloud Console
 OAuth client confirmation, device tests T-D1–T-D5 (Drive auth), Photo Picker
 smoke test (API 33+ and API 26–32), then physical device testing per
-`DEVICE_TEST_PLAN.md`.
+`FUNKODEX_TEST_PLAN_v1.0.md` (Part 3 — On-Device Test Plan).
 
 ### Pre-Play Store blockers remaining
-- [ ] Session 7 functional/device test pass — `SESSION_D_TRACKER.md` checklist.
+- [ ] Session 7 functional/device test pass — `FUNKODEX_TEST_PLAN_v1.0.md` (Part 1, the Session-7 CBL-migration test surface).
       **Highest priority: backup, restore, and force-restore** (force-restore
       involves `db.close()` → wipe → `db.reopen()` → fresh `Collection` accessor)
 - [ ] Session 8 device verification — confirm Channel3 API key entry,
@@ -189,10 +190,10 @@ smoke test (API 33+ and API 26–32), then physical device testing per
 - [ ] All unit test suites (FunkoMapperTest, CollectionStatsTest,
       FunkoLookupServiceTest, full `./gradlew test`)
 - [ ] Cloud Console: confirm Android OAuth client ID (`com.funkodex` + signing SHA-1)
-- [ ] Device tests T-D1–T-D5 (`docs/CredentialManager_Migration_SPEC.md` §9) —
+- [ ] Device tests T-D1–T-D5 (`FUNKODEX_TEST_PLAN_v1.0.md` Part 3; spec `FUNKODEX_SPEC_v1.0.md` §11.4) —
       T-D3 (lapsed grant) is the critical one
 - [ ] Photo Picker smoke test — gallery pick on API 33+ and API 26–32
-      (`docs/PlayStore_Readiness_Migration_SPEC.md` §2.3)
+      (`FUNKODEX_SPEC_v1.0.md` §11, Photo Picker — done Session 6)
 - [ ] Community contribution Cloudflare Worker deployment (infrastructure)
 - [ ] 16 KB emulator regression — re-run smoke test (CBL access patterns changed)
 - [x] Device testing — enriched catalog import (full 14,314-record file),
@@ -227,7 +228,7 @@ smoke test (API 33+ and API 26–32), then physical device testing per
       `ImageBlobRepository`, `CatalogPreloader`, `CatalogImporter`,
       `CatalogRefreshWorker`, `FunkoLookupService`, `ConnectivityObserver`,
       `DatabaseTransferViewModel`. Code complete and compiling/running clean;
-      full functional test pass pending (see `SESSION_D_TRACKER.md`)
+      full functional test pass pending (see `FUNKODEX_TEST_PLAN_v1.0.md`)
 - [x] Keystore/security-crypto migration — Session 8 (Session E, P2).
       `SecureKeyStore` rewritten as a direct AES-256-GCM `AndroidKeyStore`
       wrapper (alias `funkodex_secure_key`); `security-crypto` dependency
@@ -304,7 +305,7 @@ Collection card priority: `imageUrl` (remote) → error fallback to `userPhoto` 
 `data/backup/DriveAuthManager.kt`, replacing the deprecated `GoogleSignIn`/
 `GoogleAccountCredential` path. Authorization-only — no Credential Manager
 dependency (the original "Credential Manager" framing in earlier sessions was
-half right; see `docs/CredentialManager_Migration_SPEC.md` §1 for the full
+half right; see `FUNKODEX_SPEC_v1.0.md` §11.4 for the full
 reasoning). Key facts:
 - No access token is persisted — `DriveAuthManager.authorize()` is called fresh
   each use (worker run, connect, etc.); tokens are ~1h-lived and
@@ -320,7 +321,7 @@ reasoning). Key facts:
   worker; reconnect re-schedules it.
 
 **Remaining:** Cloud Console OAuth client confirmation (package `com.funkodex` +
-signing SHA-1) and device tests T-D1–T-D5 (`docs/CredentialManager_Migration_SPEC.md`
+signing SHA-1) and device tests T-D1–T-D5 (`FUNKODEX_SPEC_v1.0.md` §11.4
 §9) — T-D3 (lapsed grant) is the one that catches worker-lifecycle mistakes.
 
 ---
@@ -459,7 +460,9 @@ Key decisions needed: host location, update trigger, delta vs full, version endp
 ## Known Deferred
 
 - Price alerts (Channel3 API) — untested
-- Google Drive backup — blocked on Credential Manager migration
+- Google Drive backup — auth migrated to AuthorizationClient (Session 5, see
+  "Google Drive Auth Migration (Implemented — Session 5)" above); on-device
+  T-D1–T-D5 device tests still pending
 - Community UPC upload — needs Cloudflare Worker deployed
 - Catalog refresh worker — weekly update, untested
 - Check/PreScan screen — never tested (device test plan item #5)

@@ -16,11 +16,13 @@ moved), trust reality and update this file.
 2. **`HANDOFF.md`** — dated session log, current state, **Next session focus**, and
    the repo/local-path/toolchain facts (see its "Project" block — do not duplicate
    those here; read them there so there is one copy).
-3. **`TEST_TRACKER_v2.0.md`** + **`COMPLETE_TEST_PLAN_v2.0.md`** — what is tested,
-   what is only specified, and the per-session changed test surface.
-4. Any `*_SPEC.md` relevant to the task (e.g. `RELINK_FIELD_PROTECTION_SPEC.md`,
-   `docs/*_Migration_SPEC.md`) — specs for work that is designed but may not be
-   fully built or tested.
+3. **`FUNKODEX_TEST_PLAN_v1.0.md`** — what is tested, what is only specified, and
+   the per-session changed test surface (Part 1 plan + Part 2 tracker + Part 3
+   device + Part 4 backend + Part 5 completion/want-list).
+4. **`FUNKODEX_SPEC_v1.0.md`** — the consolidated spec for all designed-but-not-
+   fully-built work (completion/want-list, re-link protection, price fill,
+   currency, remote catalog, community distribution, F-XXX backlog). Plus
+   `docs/*_Migration_SPEC.md` for completed-migration hard rules.
 
 The code's true state is whatever the repo says. Treat your training data as
 possibly stale for anything version- or symbol-specific.
@@ -100,8 +102,8 @@ session inherits everything:
 - `CLAUDE.md` — bump the state summary + package tree if structure changed.
 - `HANDOFF.md` — add a dated session entry, update **Next session focus**, append the
   session to the sessions-completed line.
-- `TEST_TRACKER_v2.0.md` — add a "Session N changes" block describing the new/changed
-  test surface.
+- `FUNKODEX_TEST_PLAN_v1.0.md` — add a "Session N changes" block (in Part 2) describing
+  the new/changed test surface.
 - `CHANGELOG.md` — add an entry (Keep a Changelog format) if user-facing.
 - `README.md` — only if a user-facing feature changed.
 

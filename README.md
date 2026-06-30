@@ -52,7 +52,8 @@ FunkoDex/
 ├── gradle/libs.versions.toml
 ├── CLAUDE.md               Full architecture guide for future Claude sessions
 ├── LESSONS_LEARNED.md      Practical lessons from the build
-├── FUTURE.md               25 future enhancements with implementation instructions
+├── FUNKODEX_SPEC_v1.0.md   Consolidated feature spec (completion/want-list, TODOs, F-XXX roadmap)
+├── FUNKODEX_TEST_PLAN_v1.0.md  Consolidated test plan + tracker + device + backend setup
 ├── GITHUB_SETUP.md         Step-by-step GitHub + Cloudflare + eBay setup guide
 ├── cloudflare-worker/      Cloudflare Worker (worker.js, wrangler.toml, README)
 ├── community-repo/         Community UPC database (merge scripts, workflows, schema)

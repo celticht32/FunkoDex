@@ -5,6 +5,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — Documentation consolidation — 2026-06-29
+
+Documentation restructure (no code change). Collapsed the scattered spec, TODO,
+roadmap, and test files into two authoritative consolidated documents.
+
+### Added
+- **`FUNKODEX_SPEC_v1.0.md`** — single consolidated feature spec. Leads with the
+  Collection Completion + Want List feature (grouped variant model, scan=owned /
+  heart=want, want-all standing intent with auto-want on import, verified against the
+  on-device backup). Absorbs the former variant-hierarchy, browse-set want-list,
+  series-completion, re-link field-protection, regional-currency, on-add price-fill,
+  remote-catalog-autoupdate, community-distribution, and FUTURE (F-XXX) docs.
+- **`FUNKODEX_TEST_PLAN_v1.0.md`** — single consolidated test document: Part 1
+  functional plan, Part 2 tracker, Part 3 device plan, Part 4 backend setup, Part 5
+  new completion/want-list test surface.
+
+### Removed (folded into the two files above)
+- Specs/TODOs/roadmap: `SERIES_COMPLETION_SPEC_v0.2.md`, `SERIES_COMPLETION_HANDOFF.md`,
+  `IDEA_browse_set_wantlist.md`, `SPEC_variant_hierarchy.md`,
+  `RELINK_FIELD_PROTECTION_SPEC.md`, `SPEC_regional_currency.md`,
+  `TODO_app_autofill_prices.md`, `TODO_remote_catalog_autoupdate.md`, `FUTURE.md`.
+- Tests: `COMPLETE_TEST_PLAN_v2.0.md`, `COMPLETE_TEST_PLAN.md` (v1),
+  `TEST_TRACKER_v2.0.md`, `DEVICE_TEST_PLAN.md`, `BACKEND_SETUP.md`,
+  `SESSION_D_TRACKER.md`.
+
+### Note
+Earlier changelog entries below still reference the now-removed filenames by their
+original names — that history is left intact by design (it records what was added
+when). Live pointers in `CLAUDE.md`, `SESSION_BOOTSTRAP.md`, `HANDOFF.md`, and
+`README.md` were repointed to the two consolidated files.
+
+---
+
 ## [Unreleased] — Session 17 — 2026-06-29
 
 On-device validation of the Session 16 streaming import + golden-source relink

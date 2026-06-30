@@ -86,18 +86,19 @@ collection, so the re-link/field-protection work is a runtime feature, not part
 of the master itself. Full functional/device test pass remains the standing
 focus — see Testing below. A Community Catalog Distribution architecture
 (golden-master base + GitHub update packets) is designed but not built — see
-FUTURE.md.**
+`FUNKODEX_SPEC_v1.0.md` §7.**
 
 ---
 
 ## Testing — current focus
 
 A full, code-verified functional test plan covering every feature built to
-date lives in **`COMPLETE_TEST_PLAN.md`** (Parts A–E: core collection, OAuth/
-Drive/community integrations, backup/restore/force-restore, automated/unit
-tests, 16 KB regression — every UI label and dialog title verified against
-source). Progress is tracked in **`TEST_TRACKER.md`** — check items off there
-as they run, with one-line results in its log section.
+date lives in **`FUNKODEX_TEST_PLAN_v1.0.md`** (Part 1, Parts A–E: core
+collection, OAuth/Drive/community integrations, backup/restore/force-restore,
+automated/unit tests, 16 KB regression — every UI label and dialog title verified
+against source). Progress is tracked in the same file's **Part 2 — Execution
+Tracker** — check items off there as they run, with one-line results in its log
+section.
 
 **Highest priority:** Part C3, force restore — exercises the Session 7
 `db.reopen()` → fresh `Collection` accessor path, the biggest regression risk
@@ -116,7 +117,8 @@ Both wired and verified working as of Session 9; no longer open gaps.
 **Session 15 — series completion, franchise grouping, auto want-list (compiles on-device).**
 Turns the Reports "series completion" figure from an owned-count into a true
 catalog-sourced X-of-Y, adds the property-level grouping the collector actually
-thinks in, and builds an automatic want-list. Spec: `SERIES_COMPLETION_SPEC_v0.2.md`.
+thinks in, and builds an automatic want-list. Spec: `FUNKODEX_SPEC_v1.0.md` §1
+(the consolidated successor to the former series-completion spec).
 
 Two grouping levels:
 - **Franchise / property** (e.g. "Hocus Pocus", "Harry Potter") — the primary
@@ -432,26 +434,30 @@ Test files:
 
 ## Migration specs (read BEFORE touching dependencies or auth)
 
-- **`docs/PlayStore_Readiness_Migration_SPEC.md`** — 16 KB page-size compliance and
-  deprecation cleanup. Hard rules from it: Couchbase Lite must stay ≥3.2.3, CameraX
-  ≥1.4.x; **do NOT migrate to Couchbase Lite 4.0.x** — it removes APIs and changes
-  semantics beyond the 3.2.x Collection API this codebase now uses; do NOT add
+Both completed migrations are now documented in **`FUNKODEX_SPEC_v1.0.md` §11**
+(Completed Migrations & Hard Rules — reference, no open work). Key hard rules:
+
+- **Play readiness / 16 KB:** Couchbase Lite must stay ≥3.2.3, CameraX ≥1.4.x;
+  **do NOT migrate to Couchbase Lite 4.0.x** — it removes APIs and changes semantics
+  beyond the 3.2.x Collection API this codebase now uses; do NOT add
   extractNativeLibs/useLegacyPackaging workarounds. (The database-level → Collection
-  API migration that this spec scheduled was completed in Session 7 — all data
-  access already uses `database.defaultCollection`.)
-- **`docs/CredentialManager_Migration_SPEC.md`** — Google Drive auth migration off the
-  deprecated GoogleSignIn API. Uses AuthorizationClient only (authorization), NOT
-  Credential Manager (authentication) — read §1 before assuming otherwise.
+  API migration was completed in Session 7 — all data access uses
+  `database.defaultCollection`.)
+- **Drive auth:** migrated off the deprecated GoogleSignIn API in Session 5. Uses
+  AuthorizationClient ONLY (authorization), NOT Credential Manager (authentication) —
+  read §11.4 before assuming otherwise. Do not persist the Drive access token.
 
 ## Future work
 
 See **`GITHUB_SETUP.md`** for complete step-by-step GitHub + Cloudflare Worker setup.
 
-See **`FUTURE.md`** for 25 detailed enhancement items with implementation instructions,
-all designed to be implementable in a single Claude session. Groups: Auth, Prices,
-Collection features, Platform, Data/Sync, QA, UI/UX, Security, Performance, i18n.
+See **`FUNKODEX_SPEC_v1.0.md`** for all designed-but-not-fully-built work: the
+Collection Completion + Want List feature (§1, build first), re-link field
+protection, on-add price fill, regional currency, remote catalog auto-update,
+community distribution, and the F-XXX enhancement backlog (§8). It supersedes the
+former FUTURE roadmap and the individual spec/TODO files.
 
-## Recently completed (from FUTURE.md)
+## Recently completed
 - **F-QA-1:** ScannerViewModelStateTest wired with Mockk — 20 tests covering all 10 ScanState branches
 - **F-PERF-1:** Coil ImageLoader singleton — 30% memory cache, disk cache, global crossfade(150ms)
 - **F-PLAT-4:** Quick-scan home screen shortcut — long-press app icon → opens scanner directly

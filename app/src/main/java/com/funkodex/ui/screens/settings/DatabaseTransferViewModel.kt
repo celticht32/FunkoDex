@@ -29,7 +29,9 @@ import javax.inject.Inject
 
 sealed class DatabaseTransferState {
     object Idle : DatabaseTransferState()
-    object Exporting : DatabaseTransferState()
+    /** scope identifies which export is running so only that row shows a spinner:
+     *  "collection" (data only) or "full" (everything incl. catalog). */
+    data class Exporting(val scope: String) : DatabaseTransferState()
     data class ReadyToShare(val uri: Uri) : DatabaseTransferState()
     object Importing : DatabaseTransferState()
     object ImportSuccess : DatabaseTransferState()
@@ -50,7 +52,7 @@ class DatabaseTransferViewModel @Inject constructor(
 
     fun exportDatabase() {
         viewModelScope.launch {
-            _state.value = DatabaseTransferState.Exporting
+            _state.value = DatabaseTransferState.Exporting("collection")
             runCatching {
                 withContext(Dispatchers.IO) {
                     val liveCollection = db.getCollection()
@@ -181,6 +183,76 @@ class DatabaseTransferViewModel @Inject constructor(
     fun reset() { _state.value = DatabaseTransferState.Idle }
 
     /**
+     * FULL backup — exports EVERY document including the catalog (the collection
+     * backup deliberately excludes catalog docs). Same zip format and entry name
+     * as the collection backup (funkodex_backup.json), so it restores through the
+     * normal restore paths. A full backup restored via "Restore full" rebuilds the
+     * catalog too; restored via "Restore collection" only your data is touched.
+     * This is also the snapshot to share for diagnostics.
+     *
+     * Note: large file (the full catalog is tens of thousands of docs); writing it
+     * takes a few seconds — that is expected, not a hang.
+     */
+    fun exportFullBackup() {
+        viewModelScope.launch {
+            _state.value = DatabaseTransferState.Exporting("full")
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val liveCollection = db.getCollection()
+                    val dateStr  = LocalDateTime.now()
+                        .format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+                    val fileName = "FunkoDex_FULL_$dateStr.zip"
+                    val zipFile  = File(context.cacheDir, fileName)
+
+                    // EVERY document — no WHERE clause, no type filter.
+                    val query = QueryBuilder
+                        .select(SelectResult.expression(Meta.id).`as`("id"))
+                        .from(DataSource.collection(liveCollection))
+
+                    // STREAM each document straight to the zip as a JSON array, one
+                    // object at a time. We never build a full in-memory JSONArray or
+                    // call toString() on the whole thing — that OOMs on the ~25k-doc
+                    // catalog (no largeHeap). We write "[", then each doc's JSON
+                    // separated by commas, then "]". Output stays valid JSON that the
+                    // streaming restore (Gson JsonReader) reads back the same way.
+                    var count = 0
+                    ZipOutputStream(zipFile.outputStream().buffered()).use { zos ->
+                        zos.putNextEntry(ZipEntry("funkodex_backup.json"))
+                        val writer = zos.bufferedWriter(Charsets.UTF_8)
+                        writer.write("[")
+                        query.execute().use { rs ->
+                            rs.allResults().forEach { result ->
+                                val docId = result.getString("id") ?: return@forEach
+                                val doc   = liveCollection.getDocument(docId) ?: return@forEach
+                                if (count > 0) writer.write(",")
+                                writer.write("\n")
+                                // docToJson builds ONE doc's JSONObject; toString() on a
+                                // single doc is tiny. Memory stays flat.
+                                writer.write(docToJson(doc).toString())
+                                count++
+                            }
+                        }
+                        writer.write("\n]")
+                        writer.flush()
+                        zos.closeEntry()
+                    }
+
+                    android.util.Log.d("DatabaseTransfer",
+                        "FULL backup streamed $count documents to $fileName")
+
+                    saveToDownloads(fileName, zipFile)
+
+                    FileProvider.getUriForFile(
+                        context, "${context.packageName}.fileprovider", zipFile)
+                }
+            }.fold(
+                onSuccess = { uri -> _state.value = DatabaseTransferState.ReadyToShare(uri) },
+                onFailure = { _state.value = DatabaseTransferState.Error(it.message ?: "Full backup failed") }
+            )
+        }
+    }
+
+    /**
      * Force restore — wipes the entire database including catalog, then restores user data
      * from backup. Use when the database is corrupt and normal restore isn't working.
      * The catalog will be re-preloaded from assets on next app start.
@@ -190,14 +262,64 @@ class DatabaseTransferViewModel @Inject constructor(
             _state.value = DatabaseTransferState.Importing
             runCatching {
                 withContext(Dispatchers.IO) {
-                    // 1. Extract JSON from zip
-                    val jsonText = StringBuilder()
+                    // Full restore must STREAM — a full backup contains the entire
+                    // catalog (~25k docs) and reading it whole via JSONArray(text)
+                    // OOMs (no largeHeap). We wipe the DB, then stream the backup's
+                    // JSON array one object at a time with Gson JsonReader, saving in
+                    // batches. Each object is converted to a single small org.json
+                    // JSONObject so the existing jsonToDoc can be reused unchanged.
+
+                    // 1. Wipe and reopen a fresh empty DB FIRST (before reading), so
+                    //    we never hold both the old DB and the backup in memory.
+                    db.close()
+                    val dbDir = java.io.File(context.filesDir, "funkodex.cblite2")
+                    if (dbDir.exists()) dbDir.deleteRecursively()
+                    db.reopen()
+                    val liveDb = db.getDatabase()
+                    val liveCollection = db.getCollection()
+
+                    // 2. Open the zip entry as a stream and read it incrementally.
+                    val gson = com.google.gson.Gson()
+                    var count = 0
+                    var sawEntry = false
                     context.contentResolver.openInputStream(uri)?.use { input ->
                         ZipInputStream(input.buffered()).use { zis ->
                             var entry = zis.nextEntry
                             while (entry != null) {
                                 if (entry.name == "funkodex_backup.json") {
-                                    jsonText.append(zis.bufferedReader(Charsets.UTF_8).readText())
+                                    sawEntry = true
+                                    // Reader over the zip entry; do NOT close it (that
+                                    // would close the ZipInputStream mid-iteration).
+                                    val reader = com.google.gson.stream.JsonReader(
+                                        zis.bufferedReader(Charsets.UTF_8))
+                                    if (reader.peek() != com.google.gson.stream.JsonToken.BEGIN_ARRAY) {
+                                        error("Backup is not a JSON array")
+                                    }
+                                    reader.beginArray()
+                                    val batch = ArrayList<Pair<String, JSONObject>>(500)
+                                    fun flush() {
+                                        if (batch.isEmpty()) return
+                                        liveDb.inBatch(UnitOfWork {
+                                            batch.forEach { (docId, obj) ->
+                                                liveCollection.save(jsonToDoc(docId, obj))
+                                            }
+                                        })
+                                        count += batch.size
+                                        batch.clear()
+                                    }
+                                    while (reader.hasNext()) {
+                                        // Read one element as a Gson tree (one doc — small),
+                                        // re-serialize it, and parse with org.json so the
+                                        // existing jsonToDoc(JSONObject) works unchanged.
+                                        val el = gson.fromJson<com.google.gson.JsonElement>(
+                                            reader, com.google.gson.JsonElement::class.java)
+                                        val obj = JSONObject(el.toString())
+                                        val docId = obj.getString("_id")
+                                        batch.add(docId to obj)
+                                        if (batch.size >= 500) flush()
+                                    }
+                                    flush()
+                                    reader.endArray()
                                 }
                                 zis.closeEntry()
                                 entry = zis.nextEntry
@@ -205,34 +327,9 @@ class DatabaseTransferViewModel @Inject constructor(
                         }
                     } ?: error("Could not open backup file")
 
-                    if (jsonText.isEmpty()) error("Backup file does not contain funkodex_backup.json — this may be an old-format backup.")
+                    if (!sawEntry) error("Backup file does not contain funkodex_backup.json — this may be an old-format backup.")
 
-                    val jsonArray = JSONArray(jsonText.toString())
-
-                    // 2. Close database and wipe entire directory
-                    db.close()
-                    val dbDir = java.io.File(context.filesDir, "funkodex.cblite2")
-                    if (dbDir.exists()) dbDir.deleteRecursively()
-
-                    // 3. Reopen database (creates fresh empty DB)
-                    db.reopen()
-
-                    val liveDb = db.getDatabase()
-                    val liveCollection = db.getCollection()
-
-                    // 4. Insert user documents from backup
-                    var count = 0
-                    liveDb.inBatch(UnitOfWork {
-                        for (i in 0 until jsonArray.length()) {
-                            val obj   = jsonArray.getJSONObject(i)
-                            val docId = obj.getString("_id")
-                            val doc   = jsonToDoc(docId, obj)
-                            liveCollection.save(doc)
-                            count++
-                        }
-                    })
-
-                    android.util.Log.d("DatabaseTransfer", "Force restore: inserted $count user documents. Catalog will reload on next start.")
+                    android.util.Log.d("DatabaseTransfer", "Force restore: streamed $count documents. If the backup had no catalog, it reloads from assets on next start.")
                 }
             }.fold(
                 onSuccess = { _state.value = DatabaseTransferState.ForceRestoreSuccess },

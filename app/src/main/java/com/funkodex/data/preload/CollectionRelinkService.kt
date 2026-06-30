@@ -187,7 +187,10 @@ class CollectionRelinkService @Inject constructor(
                         run {
                             val catUpc = catalog.getString(CatalogMapper.FIELD_UPC)?.trim()?.takeIf { it.isNotBlank() }
                             if (catUpc != null) {
-                                if (itemUpc == null && catUpc != itemUpc) {
+                                // Fill-only: set the catalog UPC just when the item
+                                // has none. (When itemUpc == null, catUpc != itemUpc is
+                                // trivially true, so it was redundant — dropped.)
+                                if (itemUpc == null) {
                                     mutable.setString(FunkoDexDatabase.FIELD_UPC, catUpc); changed = true
                                 }
                             }

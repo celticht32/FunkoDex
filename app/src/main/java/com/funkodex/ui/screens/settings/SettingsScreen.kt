@@ -446,7 +446,7 @@ fun SettingsScreen(
                         icon        = Icons.Default.PhoneAndroid,
                         title       = "Send to another phone",
                         subtitle    = "Share your full collection database via Bluetooth, email, or any app (swipe down to cancel)",
-                        isLoading   = transferState is DatabaseTransferState.Exporting,
+                        isLoading   = transferState == DatabaseTransferState.Exporting("collection"),
                         onClick     = { dbTransferViewModel.exportDatabase() }
                     )
                     HorizontalDivider()
@@ -531,12 +531,34 @@ fun SettingsScreen(
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column {
                     SettingsRow(
+                        icon        = Icons.Default.Backup,
+                        title       = "Backup collection",
+                        subtitle    = "Your data only (no catalog) — smaller file, saved to Downloads",
+                        isLoading   = transferState == DatabaseTransferState.Exporting("collection"),
+                        onClick     = {
+                            if (transferState !is DatabaseTransferState.Exporting)
+                                dbTransferViewModel.exportDatabase()
+                        }
+                    )
+                    HorizontalDivider()
+                    SettingsRow(
+                        icon        = Icons.Default.Storage,
+                        title       = "Backup full",
+                        subtitle    = "Everything including the full catalog — large file, takes a few seconds",
+                        isLoading   = transferState == DatabaseTransferState.Exporting("full"),
+                        onClick     = {
+                            if (transferState !is DatabaseTransferState.Exporting)
+                                dbTransferViewModel.exportFullBackup()
+                        }
+                    )
+                    HorizontalDivider()
+                    SettingsRow(
                         icon      = Icons.Default.Download,
-                        title     = "Restore backup",
+                        title     = "Restore collection",
                         subtitle  = when (transferState) {
-                            is DatabaseTransferState.Importing     -> "Importing…"
-                            is DatabaseTransferState.ImportSuccess -> "Import successful!"
-                            else -> "Restore from a FunkoDex .zip backup file"
+                            is DatabaseTransferState.Importing     -> "Restoring…"
+                            is DatabaseTransferState.ImportSuccess -> "Restore successful!"
+                            else -> "Restore your data from a backup — catalog untouched"
                         },
                         isLoading = transferState is DatabaseTransferState.Importing,
                         onClick   = {
@@ -548,20 +570,13 @@ fun SettingsScreen(
                     HorizontalDivider()
                     SettingsRow(
                         icon     = Icons.Default.RestartAlt,
-                        title    = "Force restore (corrupt database)",
-                        subtitle = "Wipes everything and rebuilds from backup — use if the app is behaving incorrectly",
+                        title    = "Restore full",
+                        subtitle = "Wipe everything and rebuild from a full backup (catalog restored from the backup, or from the app if the backup has none)",
                         onClick  = {
                             if (transferState !is DatabaseTransferState.Importing) {
                                 showForceRestoreConfirmDialog = true
                             }
                         }
-                    )
-                    HorizontalDivider()
-                    SettingsRow(
-                        icon     = Icons.Default.Backup,
-                        title    = "Backup database",
-                        subtitle = "Saves a .zip to your phone's Downloads folder and lets you share to another device",
-                        onClick  = { dbTransferViewModel.exportDatabase() }
                     )
                 }
             }
@@ -570,18 +585,19 @@ fun SettingsScreen(
                 AlertDialog(
                     onDismissRequest = { showForceRestoreConfirmDialog = false },
                     icon    = { Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error) },
-                    title   = { Text("Wipe and rebuild from backup?") },
+                    title   = { Text("Restore full — wipe everything?") },
                     text    = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(
-                                "This will completely wipe the database — including the catalog — " +
-                                "and rebuild it from scratch. Use this only if the app is behaving " +
-                                "incorrectly after a normal restore fails.",
+                                "This wipes the ENTIRE database — your collection AND the catalog — " +
+                                "then rebuilds everything from the backup file you pick. Use this with a " +
+                                "FULL backup (one that includes the catalog).",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
-                                "The catalog will re-download on next app start. " +
-                                "Your collection will be restored from the backup file.",
+                                "Your collection is restored from the backup. If the backup has no " +
+                                "catalog, the app re-loads the catalog on next start. Pick a " +
+                                "FunkoDex_FULL_*.zip (or any backup) from Downloads.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -612,17 +628,17 @@ fun SettingsScreen(
                 AlertDialog(
                     onDismissRequest = { showRestoreConfirmDialog = false },
                     icon    = { Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error) },
-                    title   = { Text("Replace your collection?") },
+                    title   = { Text("Restore collection — replace your data?") },
                     text    = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(
-                                "This will permanently replace everything in your current collection " +
-                                "with the contents of the backup file. This cannot be undone.",
+                                "This replaces your current collection with the one in the backup " +
+                                "file. The catalog is NOT touched. This cannot be undone.",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
-                                "Backup files are in your phone's Downloads folder and are " +
-                                "named FunkoDex_backup_YYYYMMDD_HHmmss.zip.",
+                                "Pick a backup .zip from your phone's Downloads folder " +
+                                "(FunkoDex_backup_*.zip or FunkoDex_FULL_*.zip).",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

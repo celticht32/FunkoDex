@@ -1,0 +1,169 @@
+# DECISIONS.md — FunkoDex / funko_enrich Architectural Decision Registry
+
+Single source of truth for locked architectural decisions across FunkoDex (Android/Kotlin) and the funko_enrich pipeline (Node.js). Search with `grep -i "keyword" docs/DECISIONS.md`.
+
+Rules:
+- One heading per decision (`### DEC-NNN: title (YYYY-MM-DD)`). Active decisions on top.
+- A reversed/replaced decision is NOT deleted — set Status to "Superseded by DEC-NNN", move it to the Superseded section, add the replacement up top with "Supersedes DEC-NNN".
+- Detail lives here once. Chronicle/handoff notes reference "see DEC-NNN" rather than restating rationale.
+
+> VERIFICATION NOTE: Validated 2026-06-30 against the live repo (master branch — NOTE default branch is `master`, not `main`): libs.versions.toml, app/build.gradle.kts, gradle/wrapper/gradle-wrapper.properties, and HANDOFF.md (dated 2026-06-29). Toolchain pins (DEC-010) confirmed against build files. Data-model decisions confirmed against HANDOFF.md Sessions 14-17. Corrections from the first draft are folded in below.
+
+---
+
+## ACTIVE DECISIONS
+
+### DEC-001: franchiseSuggestion is the primary grouping axis (locked; verified S15)
+**Status:** Active
+**Context:** FunkoDex needs a consistent top-level grouping for browsing and the series/collection-completion features. The raw series tag gave bad results (the umbrella console alone resolved small properties like Hocus Pocus / Hangover to "disney").
+**Decision:** `franchiseSuggestion` is the PRIMARY grouping axis, seeded from PriceCharting's `pcSeries` property (cleaned; console fallback) — user-authoritative, NO longer derived from the raw series tag. It is level 1 of a two-level grouping (franchise/property + named set).
+**Verified:** Session 15 — switching to pcSeries raised franchise coverage 57 -> 630 and correctly resolves small properties. (The earlier "~76% populated" figure is NOT in the repo; removed.)
+**Consequences:** Grouping UI, completion logic, and group_pref intent key off franchiseSuggestion (level 1). Do not revert grouping to the raw series tag.
+
+### DEC-002: setTag is the named-set level (level 2 of two-level grouping; verified S15)
+**Status:** Active
+**Context:** Within a franchise/property, users want the specific named set (e.g. Haunted Mansion within Disney).
+**Decision:** `setTag` = the most-specific named set. It is LEVEL 2 of the deliberate two-level grouping (franchise/property at L1, named set at L2) — not a fallback or a lesser axis. Emitted by enricher POST-PROCESS 5 (S15).
+**Verified:** Session 15 — Haunted Mansion resolves to its own set, 19/19.
+**Consequences:** Set membership, set badges, and per-set completion read setTag. Changing what populates setTag is a grouping change, not a cosmetic one.
+
+### DEC-003: group_pref intent stored in group_pref::{LEVEL}::{key} docs (verified S15)
+**Status:** Active
+**Context:** Per-group completion intent must persist as durable, backed-up user data.
+**Decision:** Intent is stored in docs keyed `group_pref::{LEVEL}::{key}` — LEVEL = grouping tier (franchise / set), key = the franchise/set identifier. Intent value is COMPLETE or CHERRY_PICK. These docs back up via the existing denylist (treated as user data, not catalog).
+**Verified:** Session 15. `getCollectionStats` reads the catalog for true X-of-Y denominators; want list = COMPLETE groups only (manual wants kept).
+**Consequences:** Key format and the COMPLETE/CHERRY_PICK enum are load-bearing — changing either is a migration. Completion + Want List read/write these docs.
+
+### DEC-004: Collection Completion + Want List feature design
+**Status:** Active
+**Context:** Users want to track which items in a group they own and which they still want.
+**Decision:** Collection Completion and Want List are designed against the franchiseSuggestion grouping (DEC-001) with intent in group_pref docs (DEC-003). Next actionable build work: §9 data pre-work + the §4 priceSource reader to unblock the Collection Completion build.
+**Consequences:** Build sequencing depends on the priceSource reader landing first.
+
+### DEC-005: funko_enrich produces funko_data_enriched.json, consumed via catalog import
+**Status:** Active
+**Context:** Enrichment (Node.js) and the app (Android) are separate codebases; the app must not run enrichment at runtime.
+**Decision:** funko_enrich emits `funko_data_enriched.json` as its product; FunkoDex consumes it via catalog import. The boundary is the file, not a live API.
+**Consequences:** App ships against a snapshot. Re-enrichment = new JSON + re-import, not a hot update.
+
+### DEC-006: funko_enrich is a four-pass pipeline (corrected; verified against HANDOFF + enrich.js usage)
+**Status:** Active
+**Context:** No single source has complete catalog + pricing + reference-number coverage.
+**Decision (CORRECTED from first draft):** enrich.js runs FOUR passes: Pass 1 = Kenny Chan GitHub dataset (always `--skip-kenny`, same as bundled JSON); Pass 2 = funko.com scrape (Puppeteer + stealth, `--max-pages 160`); Pass 3 = PriceCharting (free, no key — adds marketValueLoose/New); Pass 4 = HobbyDB Reference Numbers (Puppeteer — adds upc, funkoNumber, retailer SKUs). The "Pass 3b catalog crawl" and "Pass 3 pricing" language from the first draft conflated later PriceCharting session work with the base pipeline structure — it is NOT a separate numbered pass.
+**Standing rule:** MAXIMIZE golden-master completeness — prefer expanded passes and higher limits over partial enrichment.
+**Consequences:** Re-enrichment follows the four-pass order. HobbyDB runs in resumable batches (`--hdb-limit`).
+
+### DEC-006b: enriched-record counts (verified S16/S17 — these are the real numbers)
+**Status:** Active
+**Context:** Several count figures drifted in handoff memory.
+**Decision (authoritative numbers):** Bundled asset `funko_data.json` = 23,940 records. Golden master after S16 rebuild = ~25,806 records, ~76% PriceCharting-priced (unpriced tail = items PC doesn't carry, a data ceiling not a matcher gap). On-device catalog after S17 repair/prune = 21,989 (pruned from 28,008 stale-drift). (First-draft figures "~25,731 / 77-80%" were close but not exact — use these.)
+**Consequences:** Quote these numbers, not remembered approximations.
+
+### DEC-007: Streaming exportFullBackup() / forceRestoreDatabase() to avoid OOM (verified S16/S17)
+**Status:** Active
+**Context:** Full catalog is ~22-26k docs. The naive in-memory `exportFullBackup` OOM'd at 150 MB.
+**Decision:** Backup/restore are STREAMING. `exportFullBackup` dumps EVERY doc incl. catalog, streamed to zip. `forceRestoreDatabase` uses Gson `JsonReader`, 500-doc batches. Force restore = close DB -> wipe directory -> reopen fresh -> insert user data -> catalog re-preloads on next start.
+**Critical related fact:** the NORMAL backup EXCLUDES catalog + system docs (only user data) — that is why on-device catalog state was previously invisible and why `exportFullBackup` was needed for full-state dumps. system-type marker docs are preserved through backup/restore (not exported, not deleted).
+**Verified:** Session 17 on-device — import 16,149 updated + 9,546 added in 14 s, no OOM.
+**Consequences:** Never refactor backup/restore to load-all-then-write. Preserve the catalog-excluded/full-included distinction between normal and full backup.
+
+### DEC-007b: funko::UUID for collection items — NEVER catalog:: (hard invariant; root cause of S17 bug class)
+**Status:** Active
+**Context:** A long-chased bug class (wrong/pin images, "not matched", junk names) was root-caused in S17: 8 owned items carried `catalog::` document IDs, squatting on the slots the catalog's own records need, so those catalog records were never created and the relink's UPC index (queries type=="catalog") never found them.
+**Decision:** Collection items MUST use `funko::{UUID}` (or `funko::{upc}`) IDs. `catalog::` IDs are reserved for catalog records. The S17 fix re-homed the 8 offenders to `funko::{upc}`.
+**Consequences:** Any code path that could assign a `catalog::` ID to an owned item is a corruption bug. After the fix, relink reported 0 remaining bugs (75 unmatched are legitimate: 64 not-in-catalog gaps + 11 shared-UPC variants relink correctly won't guess).
+
+### DEC-008: GitHub access pattern for catalog/data files
+**Status:** Active
+**Context:** Bulk tarball fetches (codeload.github.com) can serve stale cache.
+**Decision:** Use raw.githubusercontent.com for individual files; codeload.github.com tarballs for bulk — but VERIFY against the GitHub web tree when correctness matters, because tarballs may serve stale cache.
+**Consequences:** Don't trust a tarball snapshot as current without a web-tree check.
+
+### DEC-009: On-device DB repaired (S17) — known-good baseline with exact numbers
+**Status:** Active
+**Context:** The on-device DB had ID-collisions, corrupted franchises, junk names, stale drift, and non-figure images.
+**Decision/result (verified S17, delivered as a repaired full backup, restore via "Restore full"):** re-homed 8 `catalog::`-squatting items to `funko::{upc}` (see DEC-007b); cleaned 21 corrupted franchises; normalized ~30 franchises to canonical spellings; cleaned 15 junk retail names with metadata extraction; pruned catalog 28,008 -> 21,989 (stale drift dropped, owned-refs preserved); cleared 1,404 catalog + 4 owned non-figure images (pins/keychains) to placeholders. Final verification: 175/175 items preserved with prices/conditions/photos, 0 junk names, 0 Funko/unknown franchises, 0 dup IDs, 0 orphaned refs.
+**Consequences:** This is the known-good baseline. Relink/import regressions validate against it; relink-integrity regressions are release-blockers. Release-prep open item: the 1,404 cleared images need a full re-enrichment (fixed enricher now filters non-figure HobbyDB media via `isFigureImage()`) to repopulate correct figure images before release.
+
+### DEC-010: FunkoDex toolchain pins (VERIFIED against build files 2026-06-30)
+**Status:** Active — VERIFIED
+**Context:** Reproducible builds; version-sensitive API symbols must match pinned libs exactly.
+**Decision (confirmed against gradle/libs.versions.toml, app/build.gradle.kts, gradle-wrapper.properties):** AGP 8.13.2, Gradle 8.13, Kotlin 2.0.21 (KSP 2.0.21-1.0.28), Couchbase Lite 3.2.4, Compose BOM 2024.09.00, minSdk 26, targetSdk 36, compileSdk 36. Also pinned: Hilt 2.51.1, CameraX 1.6.1, ML Kit barcode 17.3.0, Coil 2.7.0, Navigation 2.8.0, coroutines 1.9.0, OkHttp 4.12.0, Gson 2.11.0, Apache POI 5.3.0, WorkManager 2.10.1, DataStore 1.1.1, Glance 1.1.0.
+**CORRECTION:** material3 has NO explicit version in the catalog — `compose-material3` is declared without a version and resolved transitively by the Compose BOM (2024.09.00). State it as "material3 via compose-bom 2024.09.00 (BOM-managed)", NOT as a literal pin like "1.3.0".
+**Consequences:** For any Compose/material3/Kotlin/Android code, never infer API symbol names/signatures from training data — verify every version-sensitive symbol against the project's existing usage first, then versioned docs; flag any symbol that can't be verified against the pinned/BOM-managed version rather than guessing.
+
+### DEC-011: FunkoDex documentation consolidated 24 -> 11 files
+**Status:** Active
+**Context:** Documentation had sprawled to 24 files.
+**Decision:** Consolidated to 11 files. (This handoff/docs tracking structure should not re-sprawl it — keep hot state in CONTEXT.md, decisions here, narrative in chronicles.)
+**Consequences:** New docs justify their existence against the 11-file baseline.
+
+### DEC-012: Enriched import uses explicit JSON-tree extraction, NOT reflective Gson (FAILED PATH — do not retry)
+**Status:** Active
+**Context:** The enriched-catalog importer must deserialize `funko_data_enriched.json` into `EnrichedRecord`.
+**Decision:** Parse via `JsonParser.parseString(json)` -> `JsonArray` -> explicit per-field `JsonObject` extraction (`optString`/`optBoolean`/`optStringList`). DO NOT use `gson.fromJson(json, TypeToken<List<EnrichedRecord>>)`.
+**Why (the dead-end to not repeat):** the reflective Gson path threw `ArrayList cannot be cast to java.lang.Void` on-device (Session 9). Kotlin-bytecode-specific; root cause never fully isolated, but the tree-parse approach bypasses it entirely. Unknown JSON keys (hdbid, hdbChecked, franchise, funkoSection, funkoNumberFromTitle) are simply not read — harmless.
+**Consequences:** Anyone "cleaning up" the importer to reflective binding will reintroduce an on-device crash. Leave the tree-parse in place.
+
+### DEC-013: Accepted import behaviors — do NOT "fix" without discussion
+**Status:** Active
+**Context:** The importer's spec-verbatim rules produce a few known, deliberately-accepted edge cases.
+**Decision (accepted, by choice, to stay close to spec):**
+ - `NON_POP_TITLE` regex is verbatim from spec and false-positives on real Pops whose titles contain shirt/soda/bag (e.g. "Hulk Hogan (Tearing Shirt)", "Jinu (Soda Pop)", "Bilbo Baggins in Bag-End"). These ~4 are skipped by decision.
+ - `isStandardPop()` series-tag list omits "pocket pop" — Pocket Pops lacking the phrase in-title pass the filter. No impact on current file; a future raw dataset could insert them as standard.
+ - funko.com Pass-2 emits `NNNNN.html` page-filename handles for unmatched records; importer repairs them with a title slug (729/729 clean on the 2026-06-12 file). Proper upstream fix is to slugify in enrich.js.
+ - Shared UPCs (e.g. 889698491181 on two records) and shared funkoNumbers (e.g. #157 Vader variants) are expected; user is the safety net (wrong name shows in Preview).
+**Consequences:** These are not bugs. Reference DEC-013 before "fixing" any of them.
+
+### DEC-014: CollectionRelinkService is golden-source; field protection via userEditedFields (verified S14/S16/S17)
+**Status:** Active
+**Context:** Re-importing an improved enrich.js run must upgrade owned items without clobbering user edits.
+**Decision:** Catalog merge is last-enricher-wins and recomputes series-derived fields via shared `CatalogMapper.deriveSeriesFields` (insert and merge can't drift). `CollectionRelinkService` is golden-source: enriched catalog OVERWRITES franchise/category (re-derives genre) when non-blank; UPC is fill-only; ownership data untouched. User-editable fields (upc, franchise, category, imageUrl) refresh only when the `userEditedFields` marker is absent or doesn't list them; absent marker -> fill-only (migration guard). Run AFTER the enriched import.
+**Consequences:** The `userEditedFields` marker is load-bearing for edit protection. Backup/restore is field-agnostic (walks doc.keys) — verified, no schema change needed when fields are added.
+
+---
+
+## LICENSING / COPYRIGHT / BRAND (personal work — git-resident, kept separate from any Couchbase registry)
+
+### DEC-015: License + copyright — MIT, © 2026 Chris Ahrendt (personal default)
+**Status:** Active
+**Context:** FunkoDex is personal/hobbyist work under the Celtic Heart Steamworks brand (GitHub celticht32), distinct from Couchbase employer work. No top-level LICENSE file existed in the repo when this was recorded (2026-06-30).
+**Decision:** Code Chris produces here is MIT licensed, Copyright (c) 2026 Chris Ahrendt, unless a specific file states otherwise. Personal default — applies ONLY to personal repos, NEVER to Couchbase work (Couchbase code carries Couchbase/licensor terms; that separation lives in the Couchbase ops DECISIONS.md, not here).
+**Action:** No top-level `LICENSE` file is present — add one (MIT, © 2026 Chris Ahrendt) to make the license explicit rather than implied.
+**Consequences:** Clear personal-vs-employer IP boundary. A FunkoDex artifact carrying Couchbase terms, or a Couchbase artifact carrying this MIT/© Chris Ahrendt notice, is an error.
+
+### DEC-016: Brand — Celtic Heart Steamworks (personal)
+**Status:** Active
+**Context:** Personal deliverables use a consistent brand identity.
+**Decision:** Celtic Heart Steamworks brand: palette navy #0B1929, steel blue #4A8FD4, brass #8B6914, cream text #D4B896, muted steel blue #5580A0, dark steel #263F56; Georgia serif headings. Logo is the Celtic heart knot SVG — original file `celticht.svg`, path data used VERBATIM, never approximated or redrawn; if referenced and not present in session, ask for re-upload rather than substituting.
+**Scope note:** This palette/Georgia rule governs Chris's personal *documents and deliverables*. FunkoDex's in-app UI has its own type set (Cinzel Decorative) and uses `celticht.svg` as the launcher icon — the app's UI theme is not bound by the document brand rule.
+**Consequences:** Personal-work brand consistency. Personal-only — never appears on Couchbase material (see Couchbase ops DECISIONS.md DEC-010).
+
+---
+
+## METHOD / QUALITY DISCIPLINE (harvested as PATTERNS from davidegreenwald/claude-greenfield — not the tool)
+
+### DEC-017: Unified `verify` gate = the Definition of Done
+**Status:** Active (target — pieces exist, not yet unified)
+**Context:** FunkoDex already has the quality pieces — `tsc`/Kotlin compile clean, the test suite (138+ passing incl. ScannerViewModelStateTest), and build output tracked in `C:\build_output.txt` — but they run separately, not as one gate. Greenfield's factor 6: one fast command (lint + types + tests + arch) is the Definition of Done, ideally hook-enforced, "the faster the gate, the more often it runs."
+**Decision:** Treat a single pass of {Kotlin compile + lint + unit tests + the catalog:: invariant check (DEC-018)} as the Definition of Done for a change. "Done" means that gate is green — not "the build seemed to work." Where practical, bind it so it runs at commit rather than at discretion. Keep slow/instrumented device tests OUT of the fast gate; run them as a separate pre-merge step (Greenfield's "keep slow suites out of the fast gate").
+**Consequences:** A change isn't done until the gate passes. Prevents "compiles for me" landing a regression. Not yet wired as a literal hook — this records the intent and the gate's contents; wiring is a follow-up.
+
+### DEC-018: catalog:: invariant enforced as a fitness function, not just prose
+**Status:** Active (target — invariant is real, machine-check not yet built)
+**Context:** DEC-007b is the hard invariant (collection items use funko::{upc|uuid}, NEVER catalog::) and was the root cause of the S17 corruption (8 squatting items). Today it lives as a CRITICAL prose warning in CLAUDE.md. Greenfield's factor 7: "documented boundaries decay; checked contracts do not" — encode the rule as a build-failing check, and only fall back to a rule+review when no machine check is possible.
+**Decision:** Add a machine check that FAILS when a collection-item (`type=="funko"` / owned item) is written or found with a `catalog::` `_id` prefix — as a unit test over the mint/import/edit paths and/or a lightweight assertion in the ID-minting code. The prose warning stays, but the test is the enforcement. This is the build-failing guard for the exact bug class DEC-007b describes.
+**Consequences:** The S17 corruption class can't silently recur — a violating ID fails the gate (DEC-017) instead of shipping. Until the check exists, DEC-007b remains prose-only; this entry is the standing instruction to build it.
+
+### DEC-019: Decision-complete tickets — no "TBD" reaches the keyboard
+**Status:** Active
+**Context:** Greenfield's factor 1: a ticket/spec resolves every decision (files touched, schema, flags, blast radius, test scenarios) before implementation, so "execution becomes mechanical — the agent transcribes a resolved plan instead of designing at the keyboard, where it has the least context and the most room to drift." This sharpens the existing BRD gap-scan discipline.
+**Decision:** Before implementing a FunkoDex feature/change of any size, resolve every open decision in the spec first — no "TBD" carried into code. Files affected, data-model/schema impact, the catalog::/funko:: ID path, and the test scenarios are all named before writing. This is the existing gap-scan rule, stated as an absolute: design is finished in the spec, not improvised mid-build.
+**Consequences:** Less mid-implementation drift and rework. Specs carry the decisions; the build transcribes them. (Complements the standing BRD gap-scan-before-finalize rule.)
+
+---
+
+## SUPERSEDED / DEPRECATED (kept for reference — never deleted)
+
+### (none yet)
+When a decision above is reversed, set its Status to "Superseded by DEC-NNN", move it here, and add the replacement to ACTIVE DECISIONS.

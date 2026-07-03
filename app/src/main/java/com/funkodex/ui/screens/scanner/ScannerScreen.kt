@@ -33,7 +33,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -938,6 +943,8 @@ private fun NotFoundSheet(
     onAddManual:   () -> Unit,
     onDismiss:     () -> Unit,
 ) {
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState       = rememberModalBottomSheetState(skipPartiallyExpanded = false),
@@ -947,7 +954,13 @@ private fun NotFoundSheet(
                 .fillMaxWidth()
                 .fillMaxHeight(0.80f)
                 .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp),
+                .padding(bottom = 24.dp)
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                    })
+                },
             verticalArrangement   = Arrangement.spacedBy(10.dp),
         ) {
             Row(
@@ -984,6 +997,15 @@ private fun NotFoundSheet(
                         Icon(Icons.Default.Search, null)
                 },
                 singleLine    = true,
+                keyboardOptions = KeyboardOptions(
+                    autoCorrectEnabled = false,
+                    capitalization = KeyboardCapitalization.Words,
+                    imeAction = ImeAction.Search,
+                ),
+                keyboardActions = KeyboardActions(onSearch = {
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                }),
                 modifier      = Modifier.fillMaxWidth(),
             )
             OutlinedButton(
@@ -1095,6 +1117,13 @@ private fun ManualAddSheet(
     var pricePaid         by remember { mutableStateOf("") }
     var condition         by remember { mutableStateOf(Condition.MINT) }
 
+    // Keyboard dismissal (Compose equivalent of InputMethodManager.hideSoftInput):
+    // the search sheet already uses these; ManualAddSheet was missing them, which is
+    // why the soft keyboard stuck open on this form. Used by the Name field's Done
+    // action and the tap-outside handler below.
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
             modifier = Modifier
@@ -1102,6 +1131,14 @@ private fun ManualAddSheet(
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 24.dp)
                 .imePadding()
+                .pointerInput(Unit) {
+                    // Tap anywhere outside a text field dismisses the keyboard
+                    // (Compose equivalent of the XML focusable/OnFocusChange approach).
+                    detectTapGestures(onTap = {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                    })
+                }
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -1182,6 +1219,18 @@ private fun ManualAddSheet(
                 label = { Text("Name *") },
                 placeholder = { Text("e.g. Mr. Toad with Monocle") },
                 singleLine = true,
+                // Proper nouns (Pyke, Hondo, etc.) were being autocorrected to
+                // dictionary words (Pike→Pikk). Disable autocorrect, capitalize each
+                // word, and make Done dismiss the keyboard instead of leaving it open.
+                keyboardOptions = KeyboardOptions(
+                    autoCorrectEnabled = false,
+                    capitalization = KeyboardCapitalization.Words,
+                    imeAction = ImeAction.Done,
+                ),
+                keyboardActions = KeyboardActions(onDone = {
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                }),
                 modifier = Modifier.fillMaxWidth(),
             )
 
@@ -1232,6 +1281,10 @@ private fun ManualAddSheet(
                 OutlinedTextField(
                     value = franchise, onValueChange = { franchise = it },
                     label = { Text("Franchise") }, singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        autoCorrectEnabled = false,
+                        capitalization = KeyboardCapitalization.Words,
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                 )
 

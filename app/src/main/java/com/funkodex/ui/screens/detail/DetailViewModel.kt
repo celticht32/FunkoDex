@@ -106,15 +106,16 @@ class DetailViewModel @Inject constructor(
 
     // ─── Load ─────────────────────────────────────────────────────────────────
 
-    private fun loadItem() {
+    private fun loadItem(overrideId: String? = null) {
+        val loadId = overrideId ?: itemId
         viewModelScope.launch {
-            val item = repository.getItem(itemId)
+            val item = repository.getItem(loadId)
             if (item != null) {
                 _state.value = DetailUiState.Viewing(item)
                 // Load user photo bytes for display
-                _photoBytes.value = photoRepository.getPhotoBytes(itemId)
+                _photoBytes.value = photoRepository.getPhotoBytes(loadId)
                 // Load price alert state (D4)
-                _alertState.value = alertRepository.getAlert(itemId)
+                _alertState.value = alertRepository.getAlert(loadId)
                 // Load completion intent for this item's franchise + named set
                 _franchiseIntent.value = item.franchise.takeIf { it.isNotBlank() }?.let {
                     groupPrefs.getIntent(com.funkodex.data.model.GroupLevel.FRANCHISE, it)
@@ -248,10 +249,26 @@ class DetailViewModel @Inject constructor(
         val item = (state.value as? DetailUiState.Viewing)?.item ?: return
         viewModelScope.launch {
             val nowOwned = !item.isOwned
-            repository.saveItem(item.copy(isOwned = nowOwned))
+            // An owned item must NEVER live under a catalog:: document id — that id
+            // belongs to the catalog record and colliding on it blocks relink and
+            // corrupts data. When marking a catalog-backed item as owned, re-home it
+            // to funko::{upc|uuid} and keep the link via catalogRef. (Items already
+            // under a funko:: id, e.g. from a scan, are unaffected.)
+            val toSave = if (nowOwned && item.id.startsWith("catalog::")) {
+                val newId  = if (item.upc.isNotBlank()) "funko::${item.upc}"
+                             else "funko::${java.util.UUID.randomUUID()}"
+                val catRef = item.catalogRef.ifBlank { item.id }   // preserve link to catalog doc
+                item.copy(id = newId, catalogRef = catRef, isOwned = true)
+            } else {
+                item.copy(isOwned = nowOwned)
+            }
+            val saveResult = repository.saveItem(toSave)
             // D4: disable alert when item moves from want list to owned
             if (nowOwned) alertRepository.disableAlert(itemId)
-            loadItem()
+            // If we re-homed to a new funko:: id, reload by that id (the old itemId
+            // still points at the catalog doc, which is correct to leave in place).
+            val reloadId = saveResult.getOrNull()?.id?.takeIf { it != itemId }
+            loadItem(reloadId)
         }
     }
 

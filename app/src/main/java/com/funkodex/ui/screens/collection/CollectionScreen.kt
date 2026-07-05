@@ -86,13 +86,17 @@ fun CollectionScreen(
 
         // Stats bar
         if (items.isNotEmpty()) {
-            val totalPaid = items.sumOf { it.pricePaid }
+            // Include variant prices so this total matches the Reports total
+            // (Reports sums pricePaid + each variant's pricePaid). Variants also
+            // count as owned units, so the item count includes them too.
+            val totalPaid  = items.sumOf { it.pricePaid + it.variants.sumOf { v -> v.pricePaid } }
+            val totalUnits = items.size + items.sumOf { it.variants.size }
             Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("${items.size} items", style = MaterialTheme.typography.labelMedium)
+                    Text("$totalUnits items", style = MaterialTheme.typography.labelMedium)
                     if (totalPaid > 0) Text("Paid: $${"%.2f".format(totalPaid)}", style = MaterialTheme.typography.labelMedium)
                 }
             }

@@ -1,28 +1,68 @@
 # FunkoDex — Session Handoff
 **Date:** 2026-06-29
 **Sessions completed:** 1 (initial build), 2 (enricher/catalog import), 3 (UI/variant/photo/backup), 4 (enriched catalog import implementation + handle repair), 5 (16 KB page-size compliance + Drive auth migration), 6 (Photo Picker migration + P3 deprecation cleanup), 7 (CBL Collection API migration), 8 (Keystore/security-crypto migration), 9 (wiring gaps closed — Reports/CatalogDataSection; enriched-import parse fix + on-device verification; category data/filter bugfix; deprecation cleanup), 10 (UPC scan-only enforcement; Funko ID row removal; category-key search fix), 11 (scanner retry/frame-confirmation; punctuation-tolerant search; manual add of catalog-missing items + community contribution; image URL entry + http→https fix; eBay RSS→HTML pricing; manual market value with feed-overwrite; multiple bugfixes; community-distribution architecture design doc), 12 (image-URL clear on edit; scan-again goes straight to camera; manual-UPC check-digit validation; third "enter details manually" button on Add screen; conditional manual-add subtitle; variant-aware pricing across eBay/HobbyDB/Channel3; eBay price-band ceiling raise; OkHttp response-leak fixes in PriceService; UPCitemdb regex→gson rewrite; camera-executor thread-leak fix; enriched-data malformed-UPC salvage), 13 (PriceCharting end-to-end: marketValueComplete + UPCs + metadata through enricher→import→catalog→FunkoItem; scan reads Couchbase catalog not bundled JSON; live PriceCharting refresh tier re-scrapes stored product page via OkHttp; UPC-based import de-dup; import merges instead of skipping priced-but-incomplete records; Channel3 manual-key UI hidden), 14 (catalog data-quality + re-link + field protection, code-only: enriched-import parser now reads the 9 dropped keys incl. `marketValueComplete`; catalog merge switched to last-enricher-wins and recomputes series-derived fields via the new shared `CatalogMapper.deriveSeriesFields`, so re-importing an improved enrich.js run upgrades existing catalog records; new `CollectionRelinkService` + Settings "Re-link collection to catalog" row refreshes owned items from the enriched catalog; `userEditedFields` marker + `DetailViewModel` stamping protect user-edited fields during re-link, with an absent-marker→fill-only migration guard; backup/restore audited as field-agnostic, no change needed), 15 (series completion + franchise grouping + auto want-list: enricher emits `setTag` (most-specific named set) and `franchiseSuggestion` (PriceCharting `pcSeries` property, cleaned; console fallback) via new POST-PROCESS 5; app gains two-level grouping — franchise/property (user-authoritative, seeded from `pcSeries`/console, no longer from the raw series tag) and named set — with per-group COMPLETE/CHERRY_PICK intent stored in `group_pref::{LEVEL}::{key}` docs (backs up via the existing denylist); `getCollectionStats` rewritten to read the catalog for true X-of-Y denominators and a computed want list (COMPLETE groups only; manual wants kept); Reports shows Option-A rows (fraction, progress bar gray for cherry-pick, intent pill, Set badge); detail screen gains a Complete/Just-this-one toggle per group; Box Number (`funkoNumber`) now preferred over title `seriesNumber` for display; compiles clean on-device), 16 (streaming `CatalogImporter` rewrite — Gson `JsonReader`, 500-record `inBatch` batches, flat memory regardless of catalog size, removes OOM risk on the larger enriched catalog; flow-invariant emit bug caught+fixed; COMPILE-PENDING on-device. `CollectionRelinkService` made golden-source — enriched catalog OVERWRITES franchise/category (re-derives genre) when non-blank, UPC stays fill-only, ownership data untouched, dead canRefresh block removed; COMPILE-PENDING. enrich.js side emits new `priceSource` flag (pricecharting|none). Specs added for next build: SPEC_variant_hierarchy (base→official-variant→user-copy 3 levels), SPEC_regional_currency (store currency code, no auto-FX, eBay-domain-pin + travel warning), TODO_app_autofill_prices (live-price fill ONLY on user add, not import/view), TODO_remote_catalog_autoupdate (small APK + manifest-pointed gzip catalog hydrate), IDEA_browse_set_wantlist (set browse + eBay-active buy row). Non-figure cleanup: pure merch removed by exact title via funko_enrich/clean_nonfigures.js (FunkO's/advent/boxes KEPT — they bundle figures)), 17 (on-device validation of S16 streaming import + golden-source relink — both confirmed working on hardware: import 16,149 updated + 9,546 added in 14 s, no OOM; data-corruption bug class found and repaired — 8 owned items had `catalog::` IDs squatting on catalog record slots, blocking those records' creation and the relink's UPC match; repair re-homes them to `funko::{upc}`; also cleaned 21 corrupted franchises, normalized ~30 franchises to canonical spellings, cleaned 15 junk retail names with metadata extraction (honoring catalog franchises where matched), pruned catalog 28,008→21,989 (stale drift dropped, owned-refs preserved), cleared 1,404 catalog + 4 owned non-figure images (pins/keychains) to placeholders; delivered as a repaired full backup restored via "Restore full". New app code: streaming `exportFullBackup` (dumps every doc incl. catalog, streams to zip — naive version OOM'd at 150 MB), streaming `forceRestoreDatabase` (Gson `JsonReader`, 500-doc batches), four-row backup/restore UI (Backup/Restore × collection/full) with scoped `Exporting` state so only the tapped row spins and scope-named confirm dialogs, `CollectionRelinkService` line-190 always-true warning fixed. enrich.js side: `isFigureImage()` filter rejects non-figure HobbyDB media (Pins_and_Badges/Keychains/Plush_Toys/PEZ/etc.) at both image-assignment points so new bad images never enter. App code built + verified on-device, then pushed))
-**Next session focus:** PUSH the Session 17 app code, then resume the build roadmap.
-**(1) App code pushed (S17):** the 4 app files are in the repo —
-`DatabaseTransferViewModel.kt` (streaming full backup/restore + scoped Exporting
-state), `SettingsScreen.kt` (four-row backup/restore UI + scope-named dialogs),
-`CollectionRelinkService.kt` (line-190 warning fix). Update CHANGELOG/HANDOFF/CLAUDE
-to reflect them as pushed. **(2) Shared grouping-field investigation** (carried from
-S16, still the key unlock): sample the FINAL enriched data for a named set (Haunted
-Mansion), a mainline line, and a Minis set to lock WHICH field holds the specific
-set/property name. Unblocks relink field-mapping, variant grouping
-(SPEC_variant_hierarchy — group official variants without merging Vegeta/Great Ape
-Vegeta), set membership, and want-list. Design against final data with rendered UI
-options for approval. **(3) priceSource reader:** add a reader for the `priceSource`
-field in `toEnrichedRecord`/`EnrichedRecord`/`CatalogMapper` so the on-add
-live-price fill (TODO_app_autofill_prices) can act on `'none'`. **(4) Then build, in
-spec-priority order:** variant hierarchy, regional currency, on-add price fill,
-remote catalog auto-update, browse-set want-list — all designed, none built.
-**Release-prep (new, from S17):** the 1,404 cleared catalog images show placeholders
-— a full re-enrichment with the fixed enricher (now filtering non-figure images) is
-the realistic way to repopulate correct figure images at catalog scale before
-release; then take a full backup and extract the final golden-master enriched file
-from it. **Carried:** S15 series-completion verification; SERIES_COMPLETION_SPEC §9 +
-RELINK_FIELD_PROTECTION_SPEC unit tests; HobbyDB tier-4 pricing never verified on-device.
+**Next session focus:** resume the build roadmap after the enrichment run.
+
+**Done since S17 (code pushed, compiles clean on-device):** `DetailViewModel.kt`
+— the recurring `catalog::` ID bug ROOT-CAUSED and fixed: `toggleOwned()` was saving
+an owned item under the catalog record's `catalog::{handle}` id (marking a catalog
+figure "In collection" from Detail), colliding with the catalog doc and breaking
+relink; now re-homes to `funko::{upc|uuid}` and preserves the link via `catalogRef`
+(reloads Detail by the new id). This is the code fix for the class the S17 data
+repair only patched — 86 such items had already accumulated (from browsing catalog →
+"In collection"). `DetailScreen.kt` — variant edit form now has `imePadding()` so the
+keyboard doesn't cover the variant Description/Price fields (couldn't scroll to them).
+`CollectionScreen.kt` — collection stats bar now sums variant `pricePaid` and counts
+variants as units, matching the Reports total (was undercounting; Reports already
+included variants). Scanner sheets earlier gained `autoCorrectEnabled=false` +
+`KeyboardCapitalization.Words` (proper nouns like "Pike" were autocorrected to "Pikk")
+and Compose keyboard-dismiss (`LocalFocusManager`/`LocalSoftwareKeyboardController` +
+tap-outside) on ManualAddSheet/NotFoundSheet.
+
+**Still pending PUSH:** the three code files above are on-device and compiling but
+verify they're committed; update CHANGELOG/HANDOFF/CLAUDE for this session's work.
+
+**Data DQ pass — deferred until AFTER the enriched catalog is imported** (user's
+call). When the in-progress enrichment run finishes and is imported, take a fresh
+full backup and send it; then one comprehensive repair: re-home any stray `catalog::`
+ids (the code fix stops NEW ones), strip retail boilerplate from names (KEEP bracket
+variant tags like `[Diamond]`, sub-lines → parenthetical e.g. "Joker (Dia De Los
+DC)"), extract `#N` from names into `funkoNumber`, fill missing numbers/franchises
+from catalog UPC matches, plus a findings list of what only the fuller catalog can
+fill (current backup had ~63 numbers unrecoverable, ~74 junk names, ~89 blank
+franchises).
+
+**Variant / Chase feature (spec'd this session, build after enrichment):**
+- **Variant market value (option C layout, approved).** `FunkoVariant` has
+  `pricePaid` but NO market-value field, so variants are invisible to Market Price /
+  market totals. Chase research confirmed variant value MUST be MANUAL — Chases share
+  the base UPC/number/box (Stitch Mood Chart #1744 Chase = same barcode 889698903455),
+  so no auto-lookup can price them. Add `FunkoVariant.marketValue: Double` (manual),
+  a "Market value" field in the variant edit form, and show it in the Market Price
+  card as **per-variant line + a combined base+variant total (option C)**; add
+  `variants.sumOf { it.marketValue }` to `totalMarketValue`. Show rendered layout for
+  approval before writing (per user pref on visual changes). Ties into
+  SPEC_variant_hierarchy.
+- **"Has a Chase?" → want-list flow.** Once the enricher emits `hasChase` on base
+  records (see funko_enrich roadmap — derived by grouping on `funkoNumber`, ~212
+  bases now), the base figure's Detail shows a "Chase available" badge and asks "Do
+  you have the Chase?" → **No → add the Chase to the want list** (reuse existing
+  want-list / `isMissingOriginal` machinery). Yes → prompt to add it as a variant.
+
+**(then) Shared grouping-field investigation** (carried, still the key unlock):
+sample FINAL enriched data for a named set, a mainline line, and a Minis set to lock
+WHICH field holds the set/property name. Unblocks relink field-mapping, variant
+grouping, set membership, want-list. **priceSource reader:** add to
+`toEnrichedRecord`/`EnrichedRecord`/`CatalogMapper` so on-add live-price fill can act
+on `'none'`. **Then, spec-priority:** variant hierarchy, regional currency, on-add
+price fill, remote catalog auto-update, browse-set want-list — designed, none built.
+
+**Release-prep (from S17):** the 1,404 cleared catalog images show placeholders — a
+full re-enrichment with the fixed enricher (non-figure image filter + the in-progress
+discovery run) repopulates correct figure images at catalog scale; then take a full
+backup and extract the final golden-master enriched file. **Carried:** S15
+series-completion verification; SERIES_COMPLETION_SPEC §9 + RELINK_FIELD_PROTECTION_SPEC
+unit tests; HobbyDB tier-4 pricing never verified on-device.
 
 **Resolved Session 15:** series completion now uses real catalog denominators (was owned-count); franchise/property grouping works and resolves small properties like Hocus Pocus via `pcSeries` (the umbrella console alone gave "disney"); per-group completion intent persists as backed-up user data; Box Number reaches the display; enricher emits the two grouping fields with verified rules (Haunted Mansion → its set, 19/19; franchise coverage 57→630 with pcSeries). Both repos confirmed IDENTICAL to live after push. **Late S15 fix:** `CatalogImporter` now reads `marketValueIsApproximate` from the enriched JSON — a S14 bug (parser skipped the key on a wrong comment) had it dropping the flag on insert and overwriting a stored `true` with `false` on every re-import, so ~198 approximate base-variant prices showed as exact. Import the corrected catalog after this lands.
 

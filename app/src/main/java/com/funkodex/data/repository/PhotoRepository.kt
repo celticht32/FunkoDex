@@ -88,31 +88,48 @@ class PhotoRepository @Inject constructor(
                 return@runCatching false
             }
 
-            // 2. Correct EXIF rotation
-            val rotated = correctRotation(uri, original)
+            // Bitmaps are large native allocations (a 12MP camera frame is ~48MB as
+            // ARGB_8888). Each transform below MAY allocate a new bitmap or MAY return
+            // its input unchanged. We recycle an intermediate only when the next stage
+            // returned a DIFFERENT instance (reference check), so we never recycle a
+            // bitmap that a later stage is still using. Without this the pipeline could
+            // hold 2–3 full-size bitmaps at once and OOM on a large photo.
+            var stage = original
+            try {
+                // 2. Correct EXIF rotation
+                val rotated = correctRotation(uri, stage)
+                if (rotated !== stage) { stage.recycle(); stage = rotated }
 
-            // 3. Scale down if needed
-            val scaled = scaleBitmap(rotated)
+                // 3. Scale down if needed
+                val scaled = scaleBitmap(stage)
+                if (scaled !== stage) { stage.recycle(); stage = scaled }
 
-            // 4. Compress to JPEG
-            val bytes = ByteArrayOutputStream().also { out ->
-                scaled.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
-            }.toByteArray()
+                // 4. Compress to JPEG
+                val bytes = ByteArrayOutputStream().also { out ->
+                    stage.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+                }.toByteArray()
 
-            if (bytes.size > MAX_BLOB_BYTES) {
-                FunkoDexLogger.w(TAG, "Photo too large after compression (${bytes.size}B) — re-compressing")
-                val recompressed = recompressAggressively(scaled)
-                if (recompressed.size > MAX_BLOB_BYTES) {
+                val finalBytes = if (bytes.size > MAX_BLOB_BYTES) {
+                    FunkoDexLogger.w(TAG, "Photo too large after compression (${bytes.size}B) — re-compressing")
+                    recompressAggressively(stage)
+                } else {
+                    bytes
+                }
+
+                if (finalBytes.size > MAX_BLOB_BYTES) {
                     FunkoDexLogger.e(TAG, "Photo still too large after re-compress — skipping")
                     return@runCatching false
                 }
-                storeBlob(itemId, recompressed)
-            } else {
-                storeBlob(itemId, bytes)
-            }
 
-            FunkoDexLogger.d(TAG, "Photo saved for item $itemId (${bytes.size}B)")
-            true
+                storeBlob(itemId, finalBytes)
+                FunkoDexLogger.d(TAG, "Photo saved for item $itemId (${finalBytes.size}B)")
+                true
+            } finally {
+                // Release the last bitmap held by the pipeline. recycle() is idempotent-safe
+                // via isRecycled guard; any bitmap recompressAggressively allocated internally
+                // is recycled inside that helper.
+                if (!stage.isRecycled) stage.recycle()
+            }
         }.getOrElse { e ->
             FunkoDexLogger.e(TAG, "Photo save failed: ${e.message}", e)
             false
@@ -185,11 +202,17 @@ class PhotoRepository @Inject constructor(
             bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
             if (out.size() <= MAX_BLOB_BYTES) return out.toByteArray()
         }
-        // Last resort: scale down to 512px
+        // Last resort: scale down to 512px. The scaled bitmap is a new allocation we
+        // own here, so recycle it once compressed (unless createScaledBitmap returned
+        // the input unchanged, which it won't at a fixed 512×512 target but guard anyway).
         val small = Bitmap.createScaledBitmap(bitmap, 512, 512, true)
-        return ByteArrayOutputStream().also { out ->
-            small.compress(Bitmap.CompressFormat.JPEG, 70, out)
-        }.toByteArray()
+        return try {
+            ByteArrayOutputStream().also { out ->
+                small.compress(Bitmap.CompressFormat.JPEG, 70, out)
+            }.toByteArray()
+        } finally {
+            if (small !== bitmap && !small.isRecycled) small.recycle()
+        }
     }
 
     private fun storeBlob(itemId: String, bytes: ByteArray) {

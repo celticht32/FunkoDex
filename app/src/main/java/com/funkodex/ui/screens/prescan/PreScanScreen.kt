@@ -299,11 +299,16 @@ private fun PreScanCameraPreview(onBarcodeDetected: (String) -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Analysis executor owned by this composable; shut down on dispose. Without
-    // this the executor (and its background thread) leaked when the preview left.
+    // Analysis executor + analyzer owned by this composable; both released on
+    // dispose. Without closing the analyzer, its native ML Kit scanner leaked
+    // every time the Check tab was opened.
     val cameraExecutor = remember { java.util.concurrent.Executors.newSingleThreadExecutor() }
+    val analyzer = remember { BarcodeAnalyzer(onBarcodeDetected) }
     DisposableEffect(Unit) {
-        onDispose { cameraExecutor.shutdown() }
+        onDispose {
+            analyzer.close()
+            cameraExecutor.shutdown()
+        }
     }
 
     AndroidView(
@@ -314,7 +319,7 @@ private fun PreScanCameraPreview(onBarcodeDetected: (String) -> Unit) {
                 val cameraProvider = cameraProviderFuture.get()
                 val preview = Preview.Builder().build()
                     .also { it.setSurfaceProvider(previewView.surfaceProvider) }
-                val analyzer = ImageAnalysis.Builder()
+                val analysis = ImageAnalysis.Builder()
                     .setResolutionSelector(
                         ResolutionSelector.Builder()
                             .setResolutionStrategy(
@@ -328,14 +333,11 @@ private fun PreScanCameraPreview(onBarcodeDetected: (String) -> Unit) {
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
                     .also { ia ->
-                        ia.setAnalyzer(
-                            cameraExecutor,
-                            BarcodeAnalyzer(onBarcodeDetected)
-                        )
+                        ia.setAnalyzer(cameraExecutor, analyzer)
                     }
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(
-                    lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analyzer
+                    lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis
                 )
             }, ContextCompat.getMainExecutor(ctx))
             previewView

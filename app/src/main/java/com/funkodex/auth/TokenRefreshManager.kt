@@ -134,31 +134,33 @@ class TokenRefreshManager @Inject constructor(
                         .build()
                 ).execute()
 
-                val bodyStr = response.body?.string() ?: error("Empty refresh response")
-                if (!response.isSuccessful) {
-                    // 400/401 means refresh token is invalid — clear and require re-auth
-                    if (response.code in 400..401) {
-                        FunkoDexLogger.w(TAG, "$provider refresh token rejected (${response.code}) — clearing tokens")
-                        clearToken(provider)
-                        return@runCatching null
+                response.use { resp ->
+                    val bodyStr = resp.body?.string() ?: error("Empty refresh response")
+                    if (!resp.isSuccessful) {
+                        // 400/401 means refresh token is invalid — clear and require re-auth
+                        if (resp.code in 400..401) {
+                            FunkoDexLogger.w(TAG, "$provider refresh token rejected (${resp.code}) — clearing tokens")
+                            clearToken(provider)
+                            return@runCatching null
+                        }
+                        error("Refresh failed HTTP ${resp.code}")
                     }
-                    error("Refresh failed HTTP ${response.code}")
+
+                    val json         = JSONObject(bodyStr)
+                    val newAccess    = json.getString("access_token")
+                    val newRefresh   = json.optString("refresh_token", refreshToken) // some providers rotate refresh tokens
+                    val expiresIn    = json.optLong("expires_in", 3600L)
+                    val expireAt     = System.currentTimeMillis() + (expiresIn * 1000)
+                    val newStored    = "$newAccess|$expireAt|$newRefresh"
+
+                    when (provider) {
+                        OAuthProvider.HOBBYDB -> secureKeyStore.setHobbyDbToken(newStored)
+                        OAuthProvider.EBAY    -> secureKeyStore.setEbayOAuthToken(newStored)
+                    }
+
+                    FunkoDexLogger.i(TAG, "$provider token silently refreshed (expires in ${expiresIn}s)")
+                    newAccess
                 }
-
-                val json         = JSONObject(bodyStr)
-                val newAccess    = json.getString("access_token")
-                val newRefresh   = json.optString("refresh_token", refreshToken) // some providers rotate refresh tokens
-                val expiresIn    = json.optLong("expires_in", 3600L)
-                val expireAt     = System.currentTimeMillis() + (expiresIn * 1000)
-                val newStored    = "$newAccess|$expireAt|$newRefresh"
-
-                when (provider) {
-                    OAuthProvider.HOBBYDB -> secureKeyStore.setHobbyDbToken(newStored)
-                    OAuthProvider.EBAY    -> secureKeyStore.setEbayOAuthToken(newStored)
-                }
-
-                FunkoDexLogger.i(TAG, "$provider token silently refreshed (expires in ${expiresIn}s)")
-                newAccess
             }.getOrElse { t ->
                 FunkoDexLogger.e(TAG, "$provider silent refresh failed — will skip tier", t)
                 null  // graceful degradation — caller skips the tier, not a crash

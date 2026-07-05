@@ -303,7 +303,14 @@ class CatalogImporter @Inject constructor(
         val reader = try {
             val input = context.contentResolver.openInputStream(uri)
                 ?: run { emit(ImportProgress(error = "Could not open file")); return@flow }
-            com.google.gson.stream.JsonReader(input.bufferedReader())
+            try {
+                com.google.gson.stream.JsonReader(input.bufferedReader())
+            } catch (e: Exception) {
+                // JsonReader/bufferedReader ctor threw after the stream was opened —
+                // close the orphaned stream before bailing so it isn't leaked.
+                try { input.close() } catch (_: Exception) {}
+                throw e
+            }
         } catch (e: Exception) {
             emit(ImportProgress(error = "Could not open file: ${e.message}")); return@flow
         }

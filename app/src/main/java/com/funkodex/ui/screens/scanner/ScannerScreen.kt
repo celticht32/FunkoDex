@@ -1,7 +1,6 @@
 package com.funkodex.ui.screens.scanner
 
 import android.Manifest
-import android.content.Context
 import android.util.Size
 import kotlin.OptIn
 import androidx.camera.core.*
@@ -48,6 +47,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.funkodex.ui.help.HelpBanner
 import com.funkodex.util.toHttpsImageUrl
 import com.funkodex.util.UpcValidation
+import com.funkodex.util.MoneyInput
 import com.funkodex.ui.help.HelpContent
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.Lifecycle
@@ -254,15 +254,48 @@ private fun CameraPreview(
     // resume.
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
 
-    DisposableEffect(lifecycleOwner) {
+    // Single reused analyzer (owns the native ML Kit scanner). Reusing it across
+    // rebinds — instead of building a fresh one on every ON_RESUME — is what stops
+    // native detectors accumulating over a long scanning session. Closed on dispose.
+    val analyzer = remember { BarcodeAnalyzer(onBarcodeDetected) }
+
+    // Camera provider is fetched once and cached. Rebinding on resume reuses this
+    // instance rather than re-requesting the provider future each time, which cuts
+    // the use-case-graph churn that made the camera slower/black over a session.
+    var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
+    LaunchedEffect(Unit) {
+        val future = ProcessCameraProvider.getInstance(context)
+        future.addListener(
+            { cameraProvider = future.get() },
+            ContextCompat.getMainExecutor(context)
+        )
+    }
+
+    DisposableEffect(lifecycleOwner, cameraProvider) {
+        val provider = cameraProvider
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                startCamera(context, lifecycleOwner, previewView, cameraExecutor, onBarcodeDetected)
+            if (event == Lifecycle.Event.ON_RESUME && provider != null) {
+                startCamera(provider, lifecycleOwner, previewView, cameraExecutor, analyzer)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
+        // If the provider became available while already resumed, bind immediately.
+        if (provider != null &&
+            lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        ) {
+            startCamera(provider, lifecycleOwner, previewView, cameraExecutor, analyzer)
+        }
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    // Release camera use cases, the executor thread, and the native scanner exactly
+    // once when this composable leaves for good.
+    DisposableEffect(Unit) {
+        onDispose {
+            cameraProvider?.unbindAll()
+            analyzer.close()
             cameraExecutor.shutdown()
         }
     }
@@ -410,13 +443,16 @@ private fun FunkoPreviewSheet(
     onWantList: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var priceText by remember { mutableStateOf(if (item.retailPrice > 0) item.retailPrice.toString() else "") }
+    var priceText by remember { mutableStateOf(if (item.retailPrice > 0) MoneyInput.sanitize(item.retailPrice.toString()) else "") }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
+                .imePadding()
+                .navigationBarsPadding()
                 .padding(bottom = 40.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -478,10 +514,11 @@ private fun FunkoPreviewSheet(
             if (!alreadyOwned) {
                 OutlinedTextField(
                     value          = priceText,
-                    onValueChange  = { priceText = it.filter { c -> c.isDigit() || c == '.' } },
+                    onValueChange  = { priceText = MoneyInput.sanitize(it) },
                     label          = { Text("Price paid (optional)") },
                     prefix         = { Text("$") },
                     singleLine     = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier       = Modifier.fillMaxWidth(),
                     placeholder    = { if (item.retailPrice > 0) Text("Retail: $${item.retailPrice}") }
                 )
@@ -809,48 +846,41 @@ private fun ErrorSheet(message: String, onRetry: () -> Unit, onManual: () -> Uni
 // ─── CameraX bootstrap ─────────────────────────────────────────────────────────
 
 internal fun startCamera(
-    context: Context,
+    cameraProvider: ProcessCameraProvider,
     lifecycleOwner: LifecycleOwner,
     previewView: PreviewView,
     analysisExecutor: java.util.concurrent.ExecutorService,
-    onBarcodeDetected: (String) -> Unit,
+    analyzer: BarcodeAnalyzer,
 ) {
-    val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
-    cameraProviderFuture.addListener({
-        val cameraProvider = cameraProviderFuture.get()
+    val preview = Preview.Builder().build().also {
+        it.setSurfaceProvider(previewView.surfaceProvider)
+    }
 
-        val preview = Preview.Builder().build().also {
-            it.setSurfaceProvider(previewView.surfaceProvider)
-        }
-
-        val analyzer = ImageAnalysis.Builder()
-            .setResolutionSelector(
-                ResolutionSelector.Builder()
-                    .setResolutionStrategy(
-                        ResolutionStrategy(
-                            Size(1280, 720),
-                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
-                        )
+    val imageAnalysis = ImageAnalysis.Builder()
+        .setResolutionSelector(
+            ResolutionSelector.Builder()
+                .setResolutionStrategy(
+                    ResolutionStrategy(
+                        Size(1280, 720),
+                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
                     )
-                    .build()
-            )
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .build()
-            .also { imageAnalysis ->
-                imageAnalysis.setAnalyzer(
-                    analysisExecutor,
-                    BarcodeAnalyzer(onBarcodeDetected)
                 )
-            }
-
-        cameraProvider.unbindAll()
-        cameraProvider.bindToLifecycle(
-            lifecycleOwner,
-            CameraSelector.DEFAULT_BACK_CAMERA,
-            preview,
-            analyzer
+                .build()
         )
-    }, ContextCompat.getMainExecutor(context))
+        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+        .build()
+        .also { it.setAnalyzer(analysisExecutor, analyzer) }
+
+    // Release the previous use-case graph before rebinding. The analyzer (and its
+    // native ML Kit scanner) is REUSED across rebinds — it is not rebuilt here —
+    // so repeated resumes don't leak detectors or churn native allocation.
+    cameraProvider.unbindAll()
+    cameraProvider.bindToLifecycle(
+        lifecycleOwner,
+        CameraSelector.DEFAULT_BACK_CAMERA,
+        preview,
+        imageAnalysis
+    )
 }
 
 // ─── AlreadyOwned sheet ────────────────────────────────────────────────────────
@@ -1346,7 +1376,7 @@ private fun ManualAddSheet(
 
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
-                        value = pricePaid, onValueChange = { pricePaid = it },
+                        value = pricePaid, onValueChange = { pricePaid = MoneyInput.sanitize(it) },
                         label = { Text("Price paid") }, singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.weight(1f),

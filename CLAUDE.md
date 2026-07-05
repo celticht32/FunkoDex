@@ -6,8 +6,8 @@ FunkoDex is an Android Kotlin/Jetpack Compose app for managing a Funko Pop colle
 Built entirely in Claude across multiple sessions. This file gives Claude the full
 context needed to work on the codebase without re-explaining architecture.
 
-**75 Kotlin source files. Feature-complete at the code level through
-Sessions 1–15.** Sessions 7–8 (CBL Collection API + Keystore migrations) and
+**76 Kotlin source files. Feature-complete at the code level through
+Sessions 1–17.** Sessions 7–8 (CBL Collection API + Keystore migrations) and
 Session 11 (scanner/manual-add/pricing/image work) were the prior big code
 changes; Session 12 added manual-UPC validation, variant-aware pricing, an
 "enter details manually" entry point, and two resource-leak fixes (HTTP
@@ -163,6 +163,56 @@ re-run + catalog re-import.
 
 ---
 
+**Session 16 — streaming catalog import + golden-source relink (code, validated S17).**
+`CatalogImporter` rewritten to STREAM the enriched JSON via Gson `JsonReader` in
+500-record `inBatch` batches, so import memory is flat regardless of catalog size
+(removes the OOM risk as the catalog grew; app has no `largeHeap`). All merge
+precedence preserved. `CollectionRelinkService` made GOLDEN-SOURCE: the enriched
+catalog OVERWRITES franchise/category (genre re-derived) when non-blank, UPC stays
+fill-only, ownership data untouched, dead `canRefresh` block removed. Also added
+several design specs for the next build wave (variant hierarchy, regional currency,
+on-add price fill, remote catalog auto-update, browse-set want-list) — all now
+consolidated into `FUNKODEX_SPEC_v1.0.md`. Enricher emits a new `priceSource` flag
+the importer does NOT yet read (adding that reader is a next-session task).
+
+**Session 17 — on-device validation + data-corruption repair + streaming full backup.**
+S16's streaming import + golden-source relink were VALIDATED on hardware (import
+16,149 updated + 9,546 added in ~14 s, no OOM). A long-chased bug class was
+root-caused and fixed: 8 owned items carried `catalog::` document IDs, squatting on
+the slots the catalog's own records need (see the CRITICAL note under Database
+below — this is now a hard invariant). New app code (built + on-device verified,
+pushed): streaming `exportFullBackup` (dumps EVERY doc incl. catalog, streamed to
+zip), streaming `forceRestoreDatabase` (Gson `JsonReader`, 500-doc batches), a
+four-row backup/restore UI (collection/full × backup/restore) with scoped spinner
+and scope-named dialogs. Enricher gained `isFigureImage()` to reject non-figure
+HobbyDB media (pins/keychains/plush/PEZ) at both image-assignment points.
+
+**Where we left off (read `docs/CONTEXT.md` for the live hot-state):** next tasks
+are (1) lock the grouping field against final enriched data, (2) add the
+`priceSource` reader, then (3) build the designed-but-unbuilt features in
+spec-priority order. Release-prep: the 1,404 catalog images cleared in S17 show
+placeholders; a full re-enrichment with the fixed enricher is the repopulation
+path before release.
+
+---
+
+## Read-first / session mechanics
+
+New session? Read in order: **`SESSION_BOOTSTRAP.md`** (evergreen process + repo
+access mechanics), this file (`CLAUDE.md`, architecture), **`HANDOFF.md`** (dated
+session log + Next-session focus + toolchain block), **`docs/CONTEXT.md`** (hot
+state — where we left off), **`FUNKODEX_TEST_PLAN_v1.0.md`**, then
+**`FUNKODEX_SPEC_v1.0.md`** for designed-but-unbuilt work.
+
+Repo access is unreliable from tooling: `raw.githubusercontent.com` is
+robots-blocked, the GitHub REST API is rate-limited unauthenticated, and the web
+`blob/` view can serve a STALE cache (it has served a CLAUDE.md dozens of commits
+behind). The reliable current source is the codeload tarball —
+`https://codeload.github.com/celticht32/FunkoDex/tar.gz/refs/heads/master` — or a
+fresh clone. Verify generated files against a fresh fetch before claiming parity.
+
+---
+
 ## Technology stack
 
 | Layer | Technology |
@@ -205,10 +255,11 @@ com.funkodex/
 │                               refresh tokens alive (eBay 18-month expiry, HobbyDB similar)
 ├── data/
 │   ├── backup/                 DriveBackupWorker, GitHubUploadWorker
-│   ├── db/                     FunkoDexDatabase (all constants + 9 indexes), FunkoMapper
+│   ├── db/                     FunkoDexDatabase (all constants + 14 indexes), FunkoMapper
 │   ├── export/                 CollectionExporter, ExportScreen (ExportButton), ExportViewModel
-│   ├── model/                  FunkoItem (30 fields, incl. resolvedRetail +
-│   │                           effectiveRetail computed getter), PriceData, PriceAlert (+upc field),
+│   ├── model/                  FunkoItem (36 fields, incl. resolvedRetail +
+│   │                           effectiveRetail computed getter, setTag,
+│   │                           pricechartingUrl), PriceData, PriceAlert (+upc field),
 │   │                           CategoryPreference, PendingUpcScan, CatalogContribution
 │   ├── preload/                CatalogPreloader, CatalogMapper (+deriveSeriesFields,
 │   │                           shared series→category/exclusive/chase derivation used by
@@ -270,6 +321,17 @@ com.funkodex/
 
 ## Key architectural decisions
 
+> **Decision registry — consult before acting.** Before making or reversing any
+> architectural choice (data model, grouping, backup/restore, import/relink,
+> build/toolchain, dependency pins, licensing/brand), check `docs/DECISIONS.md`
+> for a binding entry (grep by keyword). If one exists, follow it or explicitly
+> supersede it (set the old entry's status to "Superseded by DEC-NNN", move it to
+> the Superseded section, add the replacement); never silently contradict a
+> recorded decision. Record any NEW architectural decision there. `docs/CONTEXT.md`
+> is the hot-state file — read it first for "where we left off". Toolchain pins are
+> in DEC-010; confirm any Compose/material3 symbol against project usage before
+> writing (material3 is BOM-managed via compose-bom 2024.09.00, NOT a literal pin).
+
 ### Database — Couchbase Lite Community
 No server, no sync subscription, 100% offline. Document types:
 - `funko::{upc|uuid}` — personal collection items
@@ -280,6 +342,8 @@ No server, no sync subscription, 100% offline. Document types:
 - `pending_upc::{upc}` — offline UPC scan queue
 - `contrib::{upc}` — pending community UPC contributions
 - `cat_pref::{category}` — category filter preferences
+- `group_pref::{LEVEL}::{groupKey}` — per-group completion intent (COMPLETE/CHERRY_PICK),
+  S15; user data, rides the backup denylist
 - `system` type docs — internal markers; preserved through backup/restore (never exported, never deleted)
 
 > **CRITICAL (S17): owned items must NEVER use a `catalog::` document ID.** A class

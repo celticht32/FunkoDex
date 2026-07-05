@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsNone
 import com.funkodex.data.model.Condition
 import com.funkodex.util.toHttpsImageUrl
+import com.funkodex.util.MoneyInput
 import com.funkodex.data.model.FunkoItem
 import com.funkodex.data.model.FunkoGenre
 import com.funkodex.data.model.FunkoCategories
@@ -610,11 +611,23 @@ private fun UpcScanDialog(
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     var scanned        by remember { mutableStateOf(false) }
 
-    // Analysis executor owned by this dialog; shut down on dismiss so the
-    // barcode-analyzer thread isn't leaked each time the scan dialog opens.
+    // Analysis executor + analyzer owned by this dialog; both released on dismiss
+    // so neither the analyzer thread nor the native ML Kit scanner is leaked each
+    // time the scan dialog opens.
     val cameraExecutor = remember { java.util.concurrent.Executors.newSingleThreadExecutor() }
+    val analyzer = remember {
+        com.funkodex.ui.screens.scanner.BarcodeAnalyzer({ upc ->
+            if (!scanned) {
+                scanned = true
+                onScanned(upc)
+            }
+        })
+    }
     DisposableEffect(Unit) {
-        onDispose { cameraExecutor.shutdown() }
+        onDispose {
+            analyzer.close()
+            cameraExecutor.shutdown()
+        }
     }
 
     androidx.compose.ui.window.Dialog(
@@ -633,17 +646,16 @@ private fun UpcScanDialog(
             AndroidView(
                 factory  = { ctx ->
                     val previewView = androidx.camera.view.PreviewView(ctx)
-                    com.funkodex.ui.screens.scanner.startCamera(
-                        context        = ctx,
-                        lifecycleOwner = lifecycleOwner,
-                        previewView    = previewView,
-                        analysisExecutor = cameraExecutor,
-                    ) { upc ->
-                        if (!scanned) {
-                            scanned = true
-                            onScanned(upc)
-                        }
-                    }
+                    val future = androidx.camera.lifecycle.ProcessCameraProvider.getInstance(ctx)
+                    future.addListener({
+                        com.funkodex.ui.screens.scanner.startCamera(
+                            cameraProvider   = future.get(),
+                            lifecycleOwner   = lifecycleOwner,
+                            previewView      = previewView,
+                            analysisExecutor = cameraExecutor,
+                            analyzer         = analyzer,
+                        )
+                    }, androidx.core.content.ContextCompat.getMainExecutor(ctx))
                     previewView
                 },
                 modifier = Modifier.fillMaxSize()
@@ -1096,7 +1108,7 @@ fun AlertBottomSheet(
             )
             OutlinedTextField(
                 value         = priceText,
-                onValueChange = { priceText = it },
+                onValueChange = { priceText = MoneyInput.sanitize(it) },
                 label         = { Text("Target price (USD)") },
                 leadingIcon   = { Text("$", modifier = Modifier.padding(start = 12.dp)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),

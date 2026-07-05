@@ -124,29 +124,31 @@ class OAuthCallbackActivity : ComponentActivity() {
                     .build()
 
                 val response = httpClient.newCall(request).execute()
-                val bodyStr  = response.body?.string()
-                    ?: error("Empty token response")
+                response.use { resp ->
+                    val bodyStr = resp.body?.string()
+                        ?: error("Empty token response")
 
-                if (!response.isSuccessful) {
-                    error("Token exchange failed: HTTP ${response.code} — $bodyStr")
+                    if (!resp.isSuccessful) {
+                        error("Token exchange failed: HTTP ${resp.code} — $bodyStr")
+                    }
+
+                    val json         = JSONObject(bodyStr)
+                    val accessToken  = json.getString("access_token")
+                    val refreshToken = json.optString("refresh_token", "")
+                    val expiresIn    = json.optLong("expires_in", 3600L)
+
+                    // Store token — include expiry prefix so we can check staleness later
+                    val expireAt = System.currentTimeMillis() + (expiresIn * 1000)
+                    val stored   = "$accessToken|$expireAt|$refreshToken"
+
+                    when (provider) {
+                        OAuthProvider.HOBBYDB -> secureKeyStore.setHobbyDbToken(stored)
+                        OAuthProvider.EBAY    -> secureKeyStore.setEbayOAuthToken(stored)
+                    }
+
+                    FunkoDexLogger.i(TAG, "OAuth token stored for $provider (expires in ${expiresIn}s)")
+                    stored
                 }
-
-                val json         = JSONObject(bodyStr)
-                val accessToken  = json.getString("access_token")
-                val refreshToken = json.optString("refresh_token", "")
-                val expiresIn    = json.optLong("expires_in", 3600L)
-
-                // Store token — include expiry prefix so we can check staleness later
-                val expireAt = System.currentTimeMillis() + (expiresIn * 1000)
-                val stored   = "$accessToken|$expireAt|$refreshToken"
-
-                when (provider) {
-                    OAuthProvider.HOBBYDB -> secureKeyStore.setHobbyDbToken(stored)
-                    OAuthProvider.EBAY    -> secureKeyStore.setEbayOAuthToken(stored)
-                }
-
-                FunkoDexLogger.i(TAG, "OAuth token stored for $provider (expires in ${expiresIn}s)")
-                stored
             }.fold(
                 onSuccess = {
                     broadcast(ACTION_SUCCESS, provider, null)

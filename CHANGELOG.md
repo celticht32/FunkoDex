@@ -38,7 +38,77 @@ when). Live pointers in `CLAUDE.md`, `SESSION_BOOTSTRAP.md`, `HANDOFF.md`, and
 
 ---
 
-## [Unreleased] — Session 17 — 2026-06-29
+## [Unreleased] — Session 18 — 2026-07-05
+
+On-device bug-fix + hardening session driven by real usage. Closed the recurring
+`catalog::` ID bug at its code source, fixed several scanner/detail UI bugs, made
+restore OOM-proof for low-end phones, added LeakCanary, built an in-app backup
+picker, and fixed an HTML-entity data bug at its enricher source. Also produced an
+interim DQ-repaired full backup. All app code compiled and verified working
+on-device, then pushed.
+
+### Fixed
+- **`catalog::` ID collision — ROOT CAUSE in code (not just data).** Session 17
+  repaired the data; this session found the code path that kept re-creating the
+  problem. `DetailViewModel.toggleOwned()` saved `item.copy(isOwned = true)` while
+  `item.id` was `catalog::{handle}` (marking a catalog figure "In collection" from
+  the Detail screen), so `saveItem` wrote an owned doc under the catalog record's ID,
+  colliding with it and breaking relink. 86 such items had accumulated since S17.
+  Fix: `toggleOwned` now re-homes to `funko::{upc|uuid}` and preserves the link via
+  `catalogRef`; `loadItem(overrideId)` reloads Detail by the new id. The catalog doc
+  is left intact.
+- **Scanner autocorrect mangling.** Proper nouns (e.g. "Pike"→"Pikk") were being
+  autocorrected. Name/Franchise/search fields now set `autoCorrectEnabled = false`
+  + `KeyboardCapitalization.Words` (verified valid in Compose 1.7.0 / BOM 2024.09.00).
+- **Keyboard wouldn't dismiss on ManualAddSheet / NotFoundSheet.** Added the Compose
+  dismiss pattern already used elsewhere (`LocalFocusManager` +
+  `LocalSoftwareKeyboardController`, Done/Search ime action, tap-outside via
+  `detectTapGestures`).
+- **Variant edit fields hidden by keyboard.** `EditContent` scrolled but lacked
+  `imePadding()`; added it so the variant Description/Price fields clear the keyboard.
+- **Collection stats undercounted variants.** The Collection screen summed only
+  `it.pricePaid` and counted `items.size`; now adds `variants.sumOf { it.pricePaid }`
+  and counts variants as units, matching the Reports total.
+- **Restore OOM on photo-heavy backups.** Both restore paths could OOM once photos
+  were present: full restore batched a fixed 500 docs (284 contiguous ~0.7 MB photo
+  blobs could pile ~21 MB into one batch); collection restore parsed the entire
+  40+ MB file into a single in-memory `JSONArray`. Rewrote both to share one
+  `streamDocsInto()` helper with low-end-phone (128 MB heap) bounds: small docs batch
+  at 50 docs / 2 MB, any doc >64 KB (photo blobs) saves individually, one doc's
+  transient parse live at a time. Collection restore now streams from a temp file and
+  skips catalog/system docs. Verified on-device (restore succeeded, LeakCanary clean).
+- **HTML entities in names (`&amp;`).** 3 collection + 533 catalog names carried
+  `&amp;` ("X &amp; Y (2-Pack)"). Root cause fixed in `enrich.js` (`sanitiseTitle` now
+  runs a loop-until-stable `decodeHtmlEntities`, handling double-encoding). Data
+  decoded in the interim repaired backup.
+
+### Added
+- **In-app backup picker (`BackupPickerDialog.kt`).** Restore now opens an in-app list
+  of Downloads backups (name · Full/Collection · size · date, newest first) instead of
+  the system file picker (whose grid/icon view and folder aren't app-controllable).
+  Tap to restore; per-row delete with confirm; "Browse other files…" falls back to the
+  system picker. **No cache by design:** there is no stored/persisted backup index —
+  `scanBackupFiles()` re-queries MediaStore (or the Downloads dir on API <29) on every
+  open, ON_RESUME, manual refresh, and after every delete, so a backup created or
+  deleted (in-app OR via a file manager) is always reflected. In-app delete uses
+  `MediaStore.delete`, with the `createDeleteRequest` IntentSender path for the
+  Android 11+ permission edge case, then re-scans. Both restore launchers also switched
+  to the Downloads-scoped `OpenDocumentInDownloads` contract and a zip-only MIME filter.
+- **LeakCanary (debug-only).** `debugImplementation(libs.leakcanary)` (2.14) added via
+  the version catalog; ships only in debug builds. Used to verify the restore path
+  retains no objects on real hardware (came back clean).
+
+### Data (interim repair, delivered as a restorable full backup)
+- 86 `catalog::` owned-item IDs re-homed to `funko::` (dangling `catalogRef`s cleared
+  so they relink cleanly); Tier-1 safe name cleanup (`#N` extracted to `funkoNumber`,
+  bracket variant tags kept); 31 junk names replaced with catalog-authoritative names
+  where a unique UPC matched; numbers/franchises filled from catalog UPC matches; all
+  `&amp;` decoded. **Deliberately NOT auto-cleaned:** ~46 retail-boilerplate names with
+  no unique UPC match — number-based matching proven UNSAFE (Pop numbers aren't unique
+  across lines; #1533 is both a Stitch and a Demon Slayer figure). Those wait for the
+  fuller enriched catalog + UPC matching. Findings list documents the ~192 flagged.
+
+
 
 On-device validation of the Session 16 streaming import + golden-source relink
 (both confirmed working on hardware), discovery and full repair of a data-corruption

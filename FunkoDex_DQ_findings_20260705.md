@@ -1,0 +1,208 @@
+# FunkoDex DQ Repair — Findings (2026-07-05)
+
+Items the current catalog could not auto-fill. The enrichment run in progress should cover many of these on the next pass.
+
+## Junk names with no catalog match (53)
+
+Left AS-IS (not auto-cleaned to avoid mangling). Real name needs the enriched catalog or manual edit.
+
+- Josh w/Piano Outfit  (UPC: 889698423441)
+- Snape w/Patronus  (UPC: 889698902731)
+- Funko Pop! Movies Elvira Mistress of the Dark and Gonk   (UPC: 889698806947)
+- Funko POP Nooks: Star Wars S11- Yoda s Hutt Collectible  (UPC: 889698903752)
+- Funko Pop! Heroes: Dia De Los DC - Joker Vinyl Figure  (UPC: 889698574174)
+- Funko POP! Marvel: Endgame - Captain America w/ Broken   (UPC: 889698451376)
+- Funko POP Marvel: Deadpool Playtime - Deadpool in Robe  (UPC: 889698311182)
+- Funko POP! Star Wars: The Mandalorian - The Child Actio  (UPC: 889698487405)
+- Funko Pop! Movies: Forbidden Planet - Robby the Robot  (UPC: 830395034041)
+- Funko - POP! Star Wars: New Classics - Luke Skywalker -  (UPC: 889698675369)
+- Funko Pop! Star Wars - Princess Leia Vinyl Bobblehead  (UPC: 889698675352)
+- Funko Pop 427 Star Wars IG-11 with The Child Bobble-Hea  (UPC: 889698517621)
+- Funko Pop! Star Wars The Mandalorian Collectible Gamorr  (UPC: 889698509640)
+- Funko Pop! Star Wars - Chewbacca Vinyl Bobblehead  (UPC: 889698675338)
+- Funko POP! TV: American Gods - Laura Moon  (UPC: 889698260374)
+- Funko POP! Movies: The Devile Wears Prada - Andy Sachs   (UPC: 889698903493)
+- Funko Pop! Ride Super Deluxe: Walt Disney World 50 Year  (UPC: 889698505710)
+- Funko Pop! Rides Disneyland 70th Mickey Mouse & Walt of  (UPC: 889698844512)
+- Funko Pop! Vinyl Figure Easter Angel Lilo and Stitch Co  (UPC: 889698831116)
+- Disney Mickey Mouse Trick-or-Treat Funko Pop! Vinyl Fig  (UPC: 889698747066)
+- Easter Stitch Funko Pop! Vinyl Figure #1533  (UPC: 889698831123)
+- Funko POP! Animation: Looney Tunes Halloween - Marvin (  (UPC: 889698808712)
+- Red One Nick Funko Pop! Vinyl Figure #1686  (UPC: 889698797856)
+- Funko Pop! Christmas Lilo & Stitch Angel with Lights #1  (UPC: 889698819510)
+- FUNKO POP! DELUXE: The Nightmare Before Christmas 30th   (UPC: 889698723824)
+- Disney Funko POP Star-Lord  Groot  Drax  Mantis & Rocke  (UPC: 889698663458)
+- How the Grinch Stole Christmas Grinch Deluxe Pop! Vinyl  (UPC: 889698809726)
+- Rudolph 60th Anniversary Mrs. Claus Pop! Figure  Not Mi  (UPC: 889698810425)
+- Lilo & Stitch Holiday Stitch with Candy Cane Pop! Vinyl  (UPC: 889698800365)
+- Funko Pop! Disney Holiday - Mickey Mouse Gingerbread  (UPC: 889698643290)
+- Funko Pop! Movies: Rudolph The Red-Nosed Reindeer - Rud  (UPC: 889698643429)
+- Lilo & Stitch Holiday Stitch with Hat Pop! Vinyl Figure  (UPC: 889698800372)
+- Funko POP! Holiday - Santa Claus  (UPC: 889698444187)
+- Rudolph 60th Anniversary Clarice Pop! Vinyl Figure  (UPC: 889698810401)
+- Funko POP! Disney Holiday Pluto Figure  (UPC: 889698643283)
+- Funko Pop! Disney: Holiday 2021- Tigger Vinyl Figure  (UPC: 889698577496)
+- FUNKO POP! Disney: Stitch Holiday - Hanukkah  Funko  Gi  (UPC: 889698799539)
+- Funko POP! Disney: Princess Holiday - Jasmine Collectib  (UPC: 889698860703)
+- Funko Vinyl 3.65 inches Lilo & Stitch - Stitch with Uke  (UPC: 889698556156)
+- Funko Pop Disney Stitch in Costume - Stitch as Cheshire  (UPC: 889698817042)
+- Funko POP! Disney Lilo Stitch - Tourist Stitch Exclusiv  (UPC: 889698871396)
+- Funko Pop! Lilo & Stitch Stitch in Sunlounger Premium V  (UPC: 889698884693)
+- Funko Pop! Disney Lilo Stitch Luau Angel # 1568  (UPC: 889698862745)
+- Angel with Umbrella Funko Pop! Vinyl Figure #1573 - Spe  (UPC: 889698849357)
+- Funko Pop! Disney Lilo Stitch Luau Stitch # 1567  (UPC: 889698862752)
+- Funko Pop! Disney Lilo Stitch - Stitch in Sand # 1566  (UPC: 889698862769)
+- Funko Pop Disney 1701 Lilo & Stitch Devilish Stitch Vin  (UPC: 889698918336)
+- Funko Pop! Disney Lilo Stitch - Stitch with Tube # 1565  (UPC: 889698862776)
+- Angel with Bags Funko Pop! Vinyl Figure #1574 - Special  (UPC: 889698849364)
+- Funko Pop! Lilo & Stitch Gamer Angel #1483 Exclusive  (UPC: 889698819497)
+- Funko POP Disney: Lilo & Stitch S4 – Snorkeling Stitch   (UPC: 889698903431)
+- Lilo & Stitch Mermaid Angel Funko Pop! Vinyl Figure #17  (UPC: 889698903448)
+- Funko POP & Buddy: Lilo & Stitch S4- Hula Lilo with Scr  (UPC: 889698903424)
+
+## Numbers still missing (78)
+
+No # in title, no catalog UPC match. Enriched catalog may fill.
+
+- Stitch, Scrump &amp; Angel (3 Pack)
+- Panic & Pain 2-Pack
+- Ariel Stained Glass
+- Ariel
+- Tiana
+- Street Jiminy
+- Rapunzel in Tower
+- Dopey
+- Snow White (Ultimate Princess)
+- Snow White in Cottage
+- Stitch with Lights
+- Stitch as Pineapple
+- Robin Hood
+- Stan Lee (Patina)
+- Stan Lee (Futuristic Glasses)
+- Donald's Shoulder Angel & Devil
+- Beast (Flocked)
+- Superman with Booth
+- Stan Lee (Comic Cover)
+- Walt Disney with Dumbo & Timothy
+- Minnie Mouse
+- Mad Hatter (Sketched)
+- Frankenstein & The Bride
+- Phineas, Ezra, Gus
+- Funko Pop! Movies Elvira Mistress of the Dark and Gonk Vinyl Figures
+- Funko POP Nooks: Star Wars S11- Yoda s Hutt Collectible Vinyl Figures
+- Funko Pop! Heroes: Dia De Los DC - Joker Vinyl Figure
+- Funko POP! Marvel: Endgame - Captain America w/ Broken Shield & Mjolnir
+- Funko POP Marvel: Deadpool Playtime - Deadpool in Robe
+- Funko POP! Star Wars: The Mandalorian - The Child Action Figure
+- Funko Pop! Movies: Forbidden Planet - Robby the Robot
+- Funko - POP! Star Wars: New Classics - Luke Skywalker - Multi
+- Funko Pop! Star Wars - Princess Leia Vinyl Bobblehead
+- Funko Pop 427 Star Wars IG-11 with The Child Bobble-Head Figure Exclusive
+- Funko Pop! Star Wars The Mandalorian Collectible Gamorrean Fighter Action Figure  6.4  x 4.55
+- Funko Pop! Star Wars - Chewbacca Vinyl Bobblehead
+- Funko POP! TV: American Gods - Laura Moon
+- Funko POP! Movies: The Devile Wears Prada - Andy Sachs with The Book Collectible Vinyl Figure
+- Funko Pop! Ride Super Deluxe: Walt Disney World 50 Years - Dumbo with Goofy Vinyl Figure
+- Funko Pop! Rides Disneyland 70th Mickey Mouse & Walt of Fire Engine New with tag
+- Funko Pop! Vinyl Figure Easter Angel Lilo and Stitch Collection Pink 4 x 8 x 6 in
+- Disney Mickey Mouse Trick-or-Treat Funko Pop! Vinyl Figure #1398 (Hot Topic Exclusive)
+- Easter Stitch Funko Pop! Vinyl Figure #1533
+- Funko POP! Animation: Looney Tunes Halloween - Marvin (Mummy)
+- Red One Nick Funko Pop! Vinyl Figure #1686
+- Funko Pop! Christmas Lilo & Stitch Angel with Lights #1505
+- FUNKO POP! DELUXE: The Nightmare Before Christmas 30th - Jack Skellington & Zero w/Tree
+- Disney Funko POP Star-Lord  Groot  Drax  Mantis & Rocket Vinyl Figure New W Box
+- How the Grinch Stole Christmas Grinch Deluxe Pop! Vinyl
+- Rudolph 60th Anniversary Mrs. Claus Pop! Figure  Not Mint
+- Lilo & Stitch Holiday Stitch with Candy Cane Pop! Vinyl
+- Funko Pop! Disney Holiday - Mickey Mouse Gingerbread
+- Funko Pop! Movies: Rudolph The Red-Nosed Reindeer - Rudolph Vinyl Figure
+- Lilo & Stitch Holiday Stitch with Hat Pop! Vinyl Figure
+- Funko POP! Holiday - Santa Claus
+- Rudolph 60th Anniversary Clarice Pop! Vinyl Figure
+- Funko POP! Disney Holiday Pluto Figure
+- Funko Pop! Disney: Holiday 2021- Tigger Vinyl Figure
+- Funko Soda: Rudolph the Red-Nosed Reindeer 4.25  Figure in a Can
+- Funko Rudolph the Red-Nosed Reindeer Vinyl Soda Hermey Figure (1 RANDOM Figure  Look For The Chase!)
+- FUNKO POP! Disney: Stitch Holiday - Hanukkah  Funko  Gifts
+- Funko POP! Disney: Princess Holiday - Jasmine Collectible Vinyl Figure
+- Funko Vinyl 3.65 inches Lilo & Stitch - Stitch with Ukelele Collectible
+- Funko Pop Disney Stitch in Costume - Stitch as Cheshire Cat #1460 [Exclusive]
+- Funko POP! Disney Lilo Stitch - Tourist Stitch Exclusive Figure #1569!
+- Funko Pop! Lilo & Stitch Stitch in Sunlounger Premium Vinyl Figure #1639
+- Funko Pop! Disney Lilo Stitch Luau Angel # 1568
+- Angel with Umbrella Funko Pop! Vinyl Figure #1573 - Specialty Series
+- Funko Pop! Disney Lilo Stitch Luau Stitch # 1567
+- Funko Pop! Disney Lilo Stitch - Stitch in Sand # 1566
+- Funko Pop Disney 1701 Lilo & Stitch Devilish Stitch Vinyl Figure EE Exclusive
+- Funko Pop! Disney Lilo Stitch - Stitch with Tube # 1565
+- Angel with Bags Funko Pop! Vinyl Figure #1574 - Specialty Series
+- Funko Pop! Lilo & Stitch Gamer Angel #1483 Exclusive
+- Stitch with Mood Chart
+- Funko POP Disney: Lilo & Stitch S4 – Snorkeling Stitch Collectible Vinyl Figure
+- Lilo & Stitch Mermaid Angel Funko Pop! Vinyl Figure #1743
+- Funko POP & Buddy: Lilo & Stitch S4- Hula Lilo with Scrump Collectible Vinyl Figure
+
+## Franchises still blank (61)
+
+- Mickey on the Casey Jr. Circus Train Attraction
+- Dave'Acula
+- Mummy Stuart
+- Donald Duck
+- Daisy Duck
+- Funko Pop! Movies Elvira Mistress of the Dark and Gonk Vinyl Figures
+- Funko POP Nooks: Star Wars S11- Yoda s Hutt Collectible Vinyl Figures
+- Funko Pop! Heroes: Dia De Los DC - Joker Vinyl Figure
+- Funko POP! Marvel: Endgame - Captain America w/ Broken Shield & Mjolnir
+- Funko POP Marvel: Deadpool Playtime - Deadpool in Robe
+- Funko POP! Star Wars: The Mandalorian - The Child Action Figure
+- Funko Pop! Movies: Forbidden Planet - Robby the Robot
+- Funko - POP! Star Wars: New Classics - Luke Skywalker - Multi
+- Funko Pop! Star Wars - Princess Leia Vinyl Bobblehead
+- Funko Pop 427 Star Wars IG-11 with The Child Bobble-Head Figure Exclusive
+- Funko Pop! Star Wars The Mandalorian Collectible Gamorrean Fighter Action Figure  6.4  x 4.55
+- Funko Pop! Star Wars - Chewbacca Vinyl Bobblehead
+- Funko POP! TV: American Gods - Laura Moon
+- Mrs. Featherstone
+- Lady Catherine
+- Parson Collins
+- Funko POP! Movies: The Devile Wears Prada - Andy Sachs with The Book Collectible Vinyl Figure
+- Funko Pop! Ride Super Deluxe: Walt Disney World 50 Years - Dumbo with Goofy Vinyl Figure
+- Funko Pop! Rides Disneyland 70th Mickey Mouse & Walt of Fire Engine New with tag
+- Funko Pop! Vinyl Figure Easter Angel Lilo and Stitch Collection Pink 4 x 8 x 6 in
+- Disney Mickey Mouse Trick-or-Treat Funko Pop! Vinyl Figure #1398 (Hot Topic Exclusive)
+- Easter Stitch Funko Pop! Vinyl Figure #1533
+- Funko POP! Animation: Looney Tunes Halloween - Marvin (Mummy)
+- Red One Nick Funko Pop! Vinyl Figure #1686
+- Funko Pop! Christmas Lilo & Stitch Angel with Lights #1505
+- FUNKO POP! DELUXE: The Nightmare Before Christmas 30th - Jack Skellington & Zero w/Tree
+- Disney Funko POP Star-Lord  Groot  Drax  Mantis & Rocket Vinyl Figure New W Box
+- How the Grinch Stole Christmas Grinch Deluxe Pop! Vinyl
+- Rudolph 60th Anniversary Mrs. Claus Pop! Figure  Not Mint
+- Lilo & Stitch Holiday Stitch with Candy Cane Pop! Vinyl
+- Funko Pop! Disney Holiday - Mickey Mouse Gingerbread
+- Funko Pop! Movies: Rudolph The Red-Nosed Reindeer - Rudolph Vinyl Figure
+- Lilo & Stitch Holiday Stitch with Hat Pop! Vinyl Figure
+- Funko POP! Holiday - Santa Claus
+- Rudolph 60th Anniversary Clarice Pop! Vinyl Figure
+- Funko POP! Disney Holiday Pluto Figure
+- Funko Pop! Disney: Holiday 2021- Tigger Vinyl Figure
+- Funko Soda: Rudolph the Red-Nosed Reindeer 4.25  Figure in a Can
+- FUNKO POP! Disney: Stitch Holiday - Hanukkah  Funko  Gifts
+- Funko POP! Disney: Princess Holiday - Jasmine Collectible Vinyl Figure
+- Funko Vinyl 3.65 inches Lilo & Stitch - Stitch with Ukelele Collectible
+- Funko Pop Disney Stitch in Costume - Stitch as Cheshire Cat #1460 [Exclusive]
+- Funko POP! Disney Lilo Stitch - Tourist Stitch Exclusive Figure #1569!
+- Funko Pop! Lilo & Stitch Stitch in Sunlounger Premium Vinyl Figure #1639
+- Funko Pop! Disney Lilo Stitch Luau Angel # 1568
+- Angel with Umbrella Funko Pop! Vinyl Figure #1573 - Specialty Series
+- Funko Pop! Disney Lilo Stitch Luau Stitch # 1567
+- Funko Pop! Disney Lilo Stitch - Stitch in Sand # 1566
+- Funko Pop Disney 1701 Lilo & Stitch Devilish Stitch Vinyl Figure EE Exclusive
+- Funko Pop! Disney Lilo Stitch - Stitch with Tube # 1565
+- Angel with Bags Funko Pop! Vinyl Figure #1574 - Specialty Series
+- Funko Pop! Lilo & Stitch Gamer Angel #1483 Exclusive
+- Stitch with Mood Chart
+- Funko POP Disney: Lilo & Stitch S4 – Snorkeling Stitch Collectible Vinyl Figure
+- Lilo & Stitch Mermaid Angel Funko Pop! Vinyl Figure #1743
+- Funko POP & Buddy: Lilo & Stitch S4- Hula Lilo with Scrump Collectible Vinyl Figure

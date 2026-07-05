@@ -187,7 +187,25 @@ four-row backup/restore UI (collection/full × backup/restore) with scoped spinn
 and scope-named dialogs. Enricher gained `isFigureImage()` to reject non-figure
 HobbyDB media (pins/keychains/plush/PEZ) at both image-assignment points.
 
-**Where we left off (read `docs/CONTEXT.md` for the live hot-state):** next tasks
+**Session 18 — usage-driven bug fixes + restore hardening + backup picker.** Closed
+the `catalog::` bug at its CODE source: `DetailViewModel.toggleOwned()` was saving an
+owned item under `catalog::{handle}` when a catalog figure was marked "In collection"
+from Detail; it now re-homes to `funko::{upc|uuid}` and preserves `catalogRef` (S17
+only repaired the data — this stops recurrence; 86 had re-accumulated). Made restore
+OOM-proof for low-end (128 MB) phones: both paths now share `streamDocsInto()` in
+`DatabaseTransferViewModel` — small docs batch at 50/2 MB, any doc >64 KB (photo blob)
+saves individually, one transient parse live at a time; collection restore streams
+from a temp file and skips catalog/system. Added an in-app backup picker
+(`BackupPickerDialog.kt`) that re-scans MediaStore live on every open/resume/refresh/
+delete — NO cached list (the Downloads dir is the only source of truth), so in-app or
+external deletions always reflect. LeakCanary added (debug-only) and used to confirm
+the restore leaks nothing. Fixed scanner autocorrect/keyboard-dismiss, variant-edit
+scroll, and variant totals. HTML `&amp;` entity bug fixed at its enricher source
+(`sanitiseTitle` → loop-until-stable decode). Interim DQ backup produced; ~46
+retail-junk names deliberately left for the enriched-catalog pass (number-matching
+proven UNSAFE — Pop numbers aren't unique across lines).
+
+
 are (1) lock the grouping field against final enriched data, (2) add the
 `priceSource` reader, then (3) build the designed-but-unbuilt features in
 spec-priority order. Release-prep: the 1,404 catalog images cleared in S17 show

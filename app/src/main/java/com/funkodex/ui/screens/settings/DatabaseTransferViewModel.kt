@@ -48,6 +48,18 @@ class DatabaseTransferViewModel @Inject constructor(
     private val _state = MutableStateFlow<DatabaseTransferState>(DatabaseTransferState.Idle)
     val state: StateFlow<DatabaseTransferState> = _state
 
+    private companion object {
+        // Restore batching bounds — chosen to hold on a low-end phone (128 MB heap),
+        // independent of catalog size or photo count. Small docs (catalog entries,
+        // owned items without photos) batch up to whichever limit hits first; anything
+        // larger than LARGE_DOC_BYTES (photo blobs, ~0.5–0.7 MB each) is saved on its
+        // own so blobs never accumulate. Keeping these small trades a little speed for
+        // a peak-memory ceiling that works everywhere.
+        const val SMALL_BATCH_DOCS  = 50
+        const val SMALL_BATCH_BYTES = 2L * 1024 * 1024   // 2 MB of raw JSON per batch
+        const val LARGE_DOC_BYTES   = 64 * 1024          // 64 KB → save individually
+    }
+
     // ─── Export ───────────────────────────────────────────────────────────────
 
     fun exportDatabase() {
@@ -115,61 +127,62 @@ class DatabaseTransferViewModel @Inject constructor(
                     val liveDb = db.getDatabase()
                     val liveCollection = db.getCollection()
 
-                    // 1. Extract JSON from zip
-                    val jsonText = StringBuilder()
-                    context.contentResolver.openInputStream(uri)?.use { input ->
-                        ZipInputStream(input.buffered()).use { zis ->
-                            var entry = zis.nextEntry
-                            while (entry != null) {
-                                if (entry.name == "funkodex_backup.json") {
-                                    jsonText.append(zis.bufferedReader(Charsets.UTF_8).readText())
+                    // 1. Extract the backup JSON to a TEMP FILE (not into memory).
+                    // Reading the whole 40+ MB file via readText()+JSONArray(text) OOM'd
+                    // once photos were present; stream it instead, same as full restore.
+                    val tmp = java.io.File.createTempFile("restore_collection", ".json", context.cacheDir)
+                    try {
+                        var sawEntry = false
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            ZipInputStream(input.buffered()).use { zis ->
+                                var entry = zis.nextEntry
+                                while (entry != null) {
+                                    if (entry.name == "funkodex_backup.json") {
+                                        sawEntry = true
+                                        tmp.outputStream().use { out -> zis.copyTo(out) }
+                                    }
+                                    zis.closeEntry()
+                                    entry = zis.nextEntry
                                 }
-                                zis.closeEntry()
-                                entry = zis.nextEntry
                             }
-                        }
-                    } ?: error("Could not open backup file")
+                        } ?: error("Could not open backup file")
+                        if (!sawEntry) error("Backup file does not contain funkodex_backup.json — this may be an old-format backup. Please create a new backup first.")
 
-                    if (jsonText.isEmpty()) error("Backup file does not contain funkodex_backup.json — this may be an old-format backup. Please create a new backup first.")
-
-                    val jsonArray = JSONArray(jsonText.toString())
-
-                    // 2. Delete all non-catalog, non-system documents from live DB
-                    val toDelete = mutableListOf<String>()
-                    QueryBuilder
-                        .select(SelectResult.expression(Meta.id).`as`("id"))
-                        .from(DataSource.collection(liveCollection))
-                        .where(
-                            Expression.property("type")
-                                .notEqualTo(Expression.string("catalog"))
-                                .and(Expression.property("type")
-                                    .notEqualTo(Expression.string("system")))
-                        )
-                        .execute().use { rs ->
-                            rs.allResults().forEach { result ->
-                                result.getString("id")?.let { toDelete.add(it) }
+                        // 2. Delete all non-catalog, non-system documents from live DB
+                        val toDelete = mutableListOf<String>()
+                        QueryBuilder
+                            .select(SelectResult.expression(Meta.id).`as`("id"))
+                            .from(DataSource.collection(liveCollection))
+                            .where(
+                                Expression.property("type")
+                                    .notEqualTo(Expression.string("catalog"))
+                                    .and(Expression.property("type")
+                                        .notEqualTo(Expression.string("system")))
+                            )
+                            .execute().use { rs ->
+                                rs.allResults().forEach { result ->
+                                    result.getString("id")?.let { toDelete.add(it) }
+                                }
                             }
+                        liveDb.inBatch(UnitOfWork {
+                            toDelete.forEach { docId ->
+                                liveCollection.getDocument(docId)?.let { liveCollection.delete(it) }
+                            }
+                        })
+
+                        // 3. Stream-insert from the temp file, SKIPPING catalog/system
+                        // docs (collection restore keeps the on-device catalog).
+                        val count = tmp.bufferedReader(Charsets.UTF_8).use { br ->
+                            streamDocsInto(
+                                com.google.gson.stream.JsonReader(br),
+                                liveDb, liveCollection, skipCatalog = true,
+                            )
                         }
 
-                    liveDb.inBatch(UnitOfWork {
-                        toDelete.forEach { docId ->
-                            liveCollection.getDocument(docId)?.let { liveCollection.delete(it) }
-                        }
-                    })
-
-                    // 3. Insert documents from JSON
-                    var count = 0
-                    liveDb.inBatch(UnitOfWork {
-                        for (i in 0 until jsonArray.length()) {
-                            val obj   = jsonArray.getJSONObject(i)
-                            val docId = obj.getString("_id")
-                            val doc   = jsonToDoc(docId, obj)
-                            liveCollection.save(doc)
-                            count++
-                        }
-                    })
-
-                    android.util.Log.d("DatabaseTransfer", "Restored $count documents")
+                        android.util.Log.d("DatabaseTransfer", "Restored $count documents")
+                    } finally {
+                        tmp.delete()
+                    }
                 }
             }.fold(
                 onSuccess = { _state.value = DatabaseTransferState.ImportSuccess },
@@ -279,7 +292,6 @@ class DatabaseTransferViewModel @Inject constructor(
                     val liveCollection = db.getCollection()
 
                     // 2. Open the zip entry as a stream and read it incrementally.
-                    val gson = com.google.gson.Gson()
                     var count = 0
                     var sawEntry = false
                     context.contentResolver.openInputStream(uri)?.use { input ->
@@ -290,36 +302,11 @@ class DatabaseTransferViewModel @Inject constructor(
                                     sawEntry = true
                                     // Reader over the zip entry; do NOT close it (that
                                     // would close the ZipInputStream mid-iteration).
-                                    val reader = com.google.gson.stream.JsonReader(
-                                        zis.bufferedReader(Charsets.UTF_8))
-                                    if (reader.peek() != com.google.gson.stream.JsonToken.BEGIN_ARRAY) {
-                                        error("Backup is not a JSON array")
-                                    }
-                                    reader.beginArray()
-                                    val batch = ArrayList<Pair<String, JSONObject>>(500)
-                                    fun flush() {
-                                        if (batch.isEmpty()) return
-                                        liveDb.inBatch(UnitOfWork {
-                                            batch.forEach { (docId, obj) ->
-                                                liveCollection.save(jsonToDoc(docId, obj))
-                                            }
-                                        })
-                                        count += batch.size
-                                        batch.clear()
-                                    }
-                                    while (reader.hasNext()) {
-                                        // Read one element as a Gson tree (one doc — small),
-                                        // re-serialize it, and parse with org.json so the
-                                        // existing jsonToDoc(JSONObject) works unchanged.
-                                        val el = gson.fromJson<com.google.gson.JsonElement>(
-                                            reader, com.google.gson.JsonElement::class.java)
-                                        val obj = JSONObject(el.toString())
-                                        val docId = obj.getString("_id")
-                                        batch.add(docId to obj)
-                                        if (batch.size >= 500) flush()
-                                    }
-                                    flush()
-                                    reader.endArray()
+                                    count += streamDocsInto(
+                                        com.google.gson.stream.JsonReader(
+                                            zis.bufferedReader(Charsets.UTF_8)),
+                                        liveDb, liveCollection, skipCatalog = false,
+                                    )
                                 }
                                 zis.closeEntry()
                                 entry = zis.nextEntry
@@ -374,6 +361,77 @@ class DatabaseTransferViewModel @Inject constructor(
     }
 
     /** Deserialize a JSON object back to a MutableDocument, restoring blobs. */
+    /**
+     * Streams a JSON array of documents from [reader] into the live collection with
+     * memory bounds that hold on a low-end phone (128 MB heap), regardless of catalog
+     * size or how many photo blobs are present.
+     *
+     * Peak memory is bounded three ways so photo docs never accumulate:
+     *  - a small doc batch caps at [SMALL_BATCH_DOCS] docs OR [SMALL_BATCH_BYTES] bytes;
+     *  - any doc whose raw JSON exceeds [LARGE_DOC_BYTES] (photo blobs) is saved on its
+     *    own, immediately, and released before the next doc is read — never batched;
+     *  - only one document's transient parse (Gson element + JSONObject + decoded blob)
+     *    is live at a time.
+     *
+     * The reader must be positioned at the start of the array; this calls beginArray()
+     * and endArray(). When [skipCatalog] is true, catalog/system docs are skipped (used
+     * by collection-only restore, which keeps the on-device catalog). Returns the number
+     * of documents saved.
+     */
+    private fun streamDocsInto(
+        reader: com.google.gson.stream.JsonReader,
+        liveDb: com.couchbase.lite.Database,
+        liveCollection: com.couchbase.lite.Collection,
+        skipCatalog: Boolean,
+    ): Int {
+        val gson = com.google.gson.Gson()
+        var count = 0
+        val batch = ArrayList<Pair<String, JSONObject>>(SMALL_BATCH_DOCS)
+        var batchBytes = 0L
+
+        fun flushSmall() {
+            if (batch.isEmpty()) return
+            liveDb.inBatch(UnitOfWork {
+                batch.forEach { (id, o) -> liveCollection.save(jsonToDoc(id, o)) }
+            })
+            count += batch.size
+            batch.clear()
+            batchBytes = 0L
+        }
+
+        if (reader.peek() != com.google.gson.stream.JsonToken.BEGIN_ARRAY) {
+            error("Backup is not a JSON array")
+        }
+        reader.beginArray()
+        while (reader.hasNext()) {
+            // One document at a time. el/json/obj are the only transient copies live,
+            // and they go out of scope each iteration.
+            val el = gson.fromJson<com.google.gson.JsonElement>(
+                reader, com.google.gson.JsonElement::class.java)
+            val json = el.toString()
+            val obj = JSONObject(json)
+            val type = obj.optString("type", "")
+            if (skipCatalog && (type == "catalog" || type == "system")) continue
+            val docId = obj.getString("_id")
+
+            if (json.length >= LARGE_DOC_BYTES) {
+                // Large doc (photo blob): flush any pending small batch first so the
+                // large doc's transient memory doesn't stack on top of the batch, then
+                // save it alone and let it be collected before the next read.
+                flushSmall()
+                liveDb.inBatch(UnitOfWork { liveCollection.save(jsonToDoc(docId, obj)) })
+                count += 1
+            } else {
+                batch.add(docId to obj)
+                batchBytes += json.length.toLong()
+                if (batch.size >= SMALL_BATCH_DOCS || batchBytes >= SMALL_BATCH_BYTES) flushSmall()
+            }
+        }
+        flushSmall()
+        reader.endArray()
+        return count
+    }
+
     private fun jsonToDoc(docId: String, obj: JSONObject): MutableDocument {
         val doc = MutableDocument(docId)
         obj.keys().forEach { key ->

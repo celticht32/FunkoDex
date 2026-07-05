@@ -60,13 +60,24 @@ fun SettingsScreen(
 
     // File picker for database import (backup restore)
     val importLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
+        OpenDocumentInDownloads()
     ) { uri ->
         uri?.let {
             context.contentResolver.takePersistableUriPermission(
                 it, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
             dbTransferViewModel.importDatabase(it)
+        }
+    }
+
+    val forceRestoreLauncher = rememberLauncherForActivityResult(
+        OpenDocumentInDownloads()
+    ) { uri ->
+        uri?.let {
+            context.contentResolver.takePersistableUriPermission(
+                it, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            dbTransferViewModel.forceRestoreDatabase(it)
         }
     }
 
@@ -102,6 +113,20 @@ fun SettingsScreen(
 
     var showBackupDoneDialog by remember { mutableStateOf(false) }
     var backupShareUri by remember { mutableStateOf<android.net.Uri?>(null) }
+
+    // In-app backup picker: which restore mode it feeds (null = hidden).
+    // "full" → forceRestoreDatabase (wipe+restore), "collection" → importDatabase.
+    var backupPickerMode by remember { mutableStateOf<String?>(null) }
+    // After a MediaStore delete needs a permission grant, run this on success (re-scan).
+    var afterDeleteGrant by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val deletePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        // Regardless of grant result, re-scan (the callback bumps scanKey). If the
+        // user denied, the file simply still shows — correct, nothing was deleted.
+        afterDeleteGrant?.invoke()
+        afterDeleteGrant = null
+    }
 
     LaunchedEffect(transferState) {
         if (transferState is DatabaseTransferState.ReadyToShare) {
@@ -146,6 +171,35 @@ fun SettingsScreen(
                     dbTransferViewModel.reset()
                 }) { Text("Done") }
             }
+        )
+    }
+
+    // In-app backup picker — lists Downloads backups with a live scan (no cache),
+    // tap to restore, delete with confirm, or fall back to the system file picker.
+    backupPickerMode?.let { mode ->
+        BackupPickerDialog(
+            title = if (mode == "full") "Restore full backup" else "Restore collection",
+            confirmActionLabel = "restore",
+            onRestore = { uri ->
+                val m = mode
+                backupPickerMode = null
+                if (m == "full") dbTransferViewModel.forceRestoreDatabase(uri)
+                else dbTransferViewModel.importDatabase(uri)
+            },
+            onBrowseOther = {
+                val m = mode
+                backupPickerMode = null
+                val filter = arrayOf("application/zip", "application/octet-stream")
+                if (m == "full") forceRestoreLauncher.launch(filter)
+                else importLauncher.launch(filter)
+            },
+            onDismiss = { backupPickerMode = null },
+            onRequestDeletePermission = { intentSender, onGranted ->
+                afterDeleteGrant = onGranted
+                deletePermissionLauncher.launch(
+                    androidx.activity.result.IntentSenderRequest.Builder(intentSender).build()
+                )
+            },
         )
     }
 
@@ -517,17 +571,6 @@ fun SettingsScreen(
             var showRestoreConfirmDialog by remember { mutableStateOf(false) }
             var showForceRestoreConfirmDialog by remember { mutableStateOf(false) }
 
-            val forceRestoreLauncher = rememberLauncherForActivityResult(
-                ActivityResultContracts.OpenDocument()
-            ) { uri ->
-                uri?.let {
-                    context.contentResolver.takePersistableUriPermission(
-                        it, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                    )
-                    dbTransferViewModel.forceRestoreDatabase(it)
-                }
-            }
-
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column {
                     SettingsRow(
@@ -607,11 +650,7 @@ fun SettingsScreen(
                         Button(
                             onClick = {
                                 showForceRestoreConfirmDialog = false
-                                forceRestoreLauncher.launch(arrayOf(
-                                    "application/zip",
-                                    "application/octet-stream",
-                                    "*/*"
-                                ))
+                                backupPickerMode = "full"
                             },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.error
@@ -648,11 +687,7 @@ fun SettingsScreen(
                         Button(
                             onClick = {
                                 showRestoreConfirmDialog = false
-                                importLauncher.launch(arrayOf(
-                                    "application/zip",
-                                    "application/octet-stream",
-                                    "*/*"
-                                ))
+                                backupPickerMode = "collection"
                             },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.error

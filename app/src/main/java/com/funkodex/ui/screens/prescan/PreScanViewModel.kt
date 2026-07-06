@@ -19,7 +19,27 @@ sealed class PreScanState {
     data class AlreadyOwned(val item: FunkoItem) : PreScanState()
     data class NotOwned(val item: FunkoItem) : PreScanState()    // found but not owned
     object NotFound : PreScanState()                              // not in DB at all
+
+    /**
+     * Name-based check for loose figures with no scannable barcode. Unlike a UPC
+     * scan (one code -> one figure), a name matches many figures, so we can't
+     * answer owned/not-owned directly — we show the matching catalog figures,
+     * each badged with the user's ownership status for that specific figure.
+     */
+    data class NameSearch(
+        val query: String = "",
+        val isSearching: Boolean = false,
+        val results: List<PreScanMatch> = emptyList(),
+    ) : PreScanState()
 }
+
+/** A catalog figure returned by name search, badged with ownership status. */
+data class PreScanMatch(
+    val item: FunkoItem,
+    val status: OwnStatus,
+)
+
+enum class OwnStatus { OWNED, WANTED, NOT_IN_COLLECTION }
 
 @HiltViewModel
 class PreScanViewModel @Inject constructor(
@@ -86,6 +106,46 @@ class PreScanViewModel @Inject constructor(
             delay(4_000)
             lastScannedUpc = ""
             _state.value = PreScanState.Scanning
+        }
+    }
+
+    // ─── Name-based check (loose figures, no scannable barcode) ────────────────
+
+    /** Enter name-search mode from the scan screen. */
+    fun openNameSearch() {
+        autoResetJob?.cancel()
+        _state.value = PreScanState.NameSearch()
+    }
+
+    /** Leave name search, return to scanning. */
+    fun closeNameSearch() {
+        lastScannedUpc = ""
+        _state.value = PreScanState.Scanning
+    }
+
+    fun onNameQueryChanged(query: String) {
+        val current = _state.value as? PreScanState.NameSearch ?: return
+        _state.value = current.copy(query = query)
+    }
+
+    fun submitNameSearch(query: String) {
+        if (query.isBlank()) return
+        val current = _state.value as? PreScanState.NameSearch ?: return
+        viewModelScope.launch {
+            _state.value = current.copy(isSearching = true)
+            val hits = lookup.searchByName(query)
+            val matches = hits.map { item ->
+                val owned = repository.findCollectionItemForCatalog(item.id, item.upc)
+                val status = when {
+                    owned == null        -> OwnStatus.NOT_IN_COLLECTION
+                    owned.isOwned        -> OwnStatus.OWNED
+                    else                 -> OwnStatus.WANTED
+                }
+                PreScanMatch(item = item, status = status)
+            }
+            (_state.value as? PreScanState.NameSearch)?.let {
+                _state.value = it.copy(query = query, isSearching = false, results = matches)
+            }
         }
     }
 

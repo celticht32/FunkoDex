@@ -4,6 +4,8 @@ import android.Manifest
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -130,16 +132,35 @@ fun PreScanScreen(
 
         // Bottom hint
         if (state is PreScanState.Scanning) {
-            Box(
+            Column(
                 modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(bottom = 60.dp),
-                contentAlignment = Alignment.Center
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     "Scan the barcode on a Funko box",
                     color    = Color.White.copy(alpha = 0.7f),
                     fontSize = 13.sp,
                 )
+                Spacer(Modifier.height(16.dp))
+                OutlinedButton(
+                    onClick = viewModel::openNameSearch,
+                    colors  = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                ) {
+                    Icon(Icons.Default.Search, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("No barcode? Search by name")
+                }
             }
+        }
+
+        // Name-search panel (loose figures with no scannable barcode)
+        if (state is PreScanState.NameSearch) {
+            NameSearchPanel(
+                state      = state as PreScanState.NameSearch,
+                onQuery    = viewModel::onNameQueryChanged,
+                onSubmit   = viewModel::submitNameSearch,
+                onClose    = viewModel::closeNameSearch,
+            )
         }
     }
 }
@@ -228,6 +249,124 @@ private fun NotOwnedResult(item: FunkoItem) {
             }
 
         Text("auto-resetting…", color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp)
+    }
+}
+
+@Composable
+private fun NameSearchPanel(
+    state: PreScanState.NameSearch,
+    onQuery: (String) -> Unit,
+    onSubmit: (String) -> Unit,
+    onClose: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.92f))
+            .padding(16.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(top = 40.dp, bottom = 8.dp)
+        ) {
+            Text(
+                "Search by name",
+                color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = onClose) {
+                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+            }
+        }
+        Text(
+            "For loose figures with no barcode. Pick the match to see if it's in your collection.",
+            color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        OutlinedTextField(
+            value = state.query,
+            onValueChange = onQuery,
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("e.g. Stitch, Batman #01") },
+            singleLine = true,
+            trailingIcon = {
+                IconButton(onClick = { onSubmit(state.query) }) {
+                    Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.White)
+                }
+            },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                cursorColor = Color.White,
+            ),
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        when {
+            state.isSearching ->
+                Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Color.White)
+                }
+            state.query.isNotBlank() && state.results.isEmpty() ->
+                Text("No matches. Try a different name.",
+                    color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp,
+                    modifier = Modifier.padding(top = 8.dp))
+            else ->
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(state.results) { m ->
+                        PreScanMatchRow(m)
+                    }
+                }
+        }
+    }
+}
+
+@Composable
+private fun PreScanMatchRow(match: PreScanMatch) {
+    val item = match.item
+    val (badgeText, badgeColor) = when (match.status) {
+        OwnStatus.OWNED             -> "✓ You have this"    to Color(0xFF4CAF50)
+        OwnStatus.WANTED            -> "★ On want list"      to Color(0xFFF57C00)
+        OwnStatus.NOT_IN_COLLECTION -> "Not in collection"   to Color(0xFF546E7A)
+    }
+    Surface(
+        color = Color.White.copy(alpha = 0.06f),
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(10.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (item.imageUrl.isNotEmpty()) {
+                AsyncImage(
+                    model = item.imageUrl.toHttpsImageUrl(), contentDescription = null,
+                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)),
+                    contentScale = ContentScale.Fit,
+                )
+                Spacer(Modifier.width(10.dp))
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(item.name, color = Color.White, fontWeight = FontWeight.Medium,
+                    fontSize = 14.sp)
+                val sub = listOfNotNull(
+                    item.seriesNumber.takeIf { it.isNotBlank() },
+                    item.franchise.takeIf { it.isNotBlank() },
+                ).joinToString(" · ")
+                if (sub.isNotEmpty())
+                    Text(sub, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
+            }
+            Spacer(Modifier.width(8.dp))
+            Surface(color = badgeColor, shape = RoundedCornerShape(6.dp)) {
+                Text(badgeText,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+            }
+        }
     }
 }
 

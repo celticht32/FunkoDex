@@ -99,7 +99,18 @@ class FunkoLookupService @Inject constructor(
     suspend fun searchByName(query: String): List<FunkoItem> = withContext(Dispatchers.IO) {
         val enabled = categoryPrefs.getEnabledCategories()
         val localResults = searchLocalByName(query)
-        val results = if (localResults.isNotEmpty()) localResults else searchChannel3ByName(query)
+        val rawResults = if (localResults.isNotEmpty()) localResults else searchChannel3ByName(query)
+        // Drop identify-only catalog rows: entries with no UPC, no Pop number, no
+        // PriceCharting link, and no franchise. These ~6k rows (prototypes, box
+        // sets, Pocket Pops) can be *seen* but not acted on — a user who picks one
+        // gets no UPC to attach and no price to look up, so it's a dead end in the
+        // add flow. Keeping any ONE actionable signal is enough to surface it.
+        val results = rawResults.filter { item ->
+            item.upc.isNotBlank() ||
+                item.seriesNumber.isNotBlank() ||
+                item.pricechartingUrl.isNotBlank() ||
+                item.franchise.isNotBlank()
+        }
         // Apply category filter. Hide an item ONLY when its category is a
         // RECOGNIZED Pop! line that the user has explicitly disabled. Items with
         // a blank category, or a category not in the canonical list (e.g.

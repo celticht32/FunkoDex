@@ -114,4 +114,55 @@ class FunkoLookupServiceTest {
         assertEquals("",      item.seriesNumber)
         assertFalse(item.isExclusive)
     }
+
+    // ─── searchByName actionability filter (DEC-021) ──────────────────────────
+    // The production filter in searchByName keeps a result only if it has at
+    // least one actionable field {upc, seriesNumber, pricechartingUrl, franchise}
+    // and drops rows with none (identify-only dead-ends a user can't attach or
+    // price). searchByName itself is a suspend fun requiring CBL + DI, so this
+    // asserts the predicate directly against the same rule.
+
+    private fun isActionable(item: com.funkodex.data.model.FunkoItem): Boolean =
+        item.upc.isNotBlank() ||
+            item.seriesNumber.isNotBlank() ||
+            item.pricechartingUrl.isNotBlank() ||
+            item.franchise.isNotBlank()
+
+    @Test
+    fun `filter keeps a row with a UPC`() {
+        val item = com.funkodex.data.model.FunkoItem(id = "catalog::a", name = "A", upc = "889698000001")
+        assertTrue(isActionable(item))
+    }
+
+    @Test
+    fun `filter keeps a row with only a Pop number`() {
+        val item = com.funkodex.data.model.FunkoItem(id = "catalog::b", name = "B", seriesNumber = "#12")
+        assertTrue(isActionable(item))
+    }
+
+    @Test
+    fun `filter keeps a row with only a franchise`() {
+        val item = com.funkodex.data.model.FunkoItem(id = "catalog::c", name = "C", franchise = "Disney")
+        assertTrue(isActionable(item))
+    }
+
+    @Test
+    fun `filter keeps a row with only a PriceCharting url`() {
+        val item = com.funkodex.data.model.FunkoItem(
+            id = "catalog::d", name = "D", pricechartingUrl = "https://www.pricecharting.com/game/x")
+        assertTrue(isActionable(item))
+    }
+
+    @Test
+    fun `filter drops an identify-only row with none of the actionable fields`() {
+        // A no-UPC Pocket Pop / prototype: title only, no upc, number, pc, or franchise.
+        val item = com.funkodex.data.model.FunkoItem(id = "catalog::junk", name = "Chiaotzu")
+        assertFalse(isActionable(item))
+    }
+
+    @Test
+    fun `filter never drops a UPC-bearing row even if all else is blank`() {
+        val item = com.funkodex.data.model.FunkoItem(id = "catalog::u", name = "U", upc = "012345678901")
+        assertTrue(isActionable(item))
+    }
 }

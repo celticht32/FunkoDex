@@ -75,6 +75,39 @@ class FunkoRepository @Inject constructor(
         }
     }
 
+    /**
+     * Ownership status for a picked catalog figure, used by the name-based
+     * pre-purchase check. A collection item links to its catalog row via
+     * catalogRef == the catalog doc id (see catalogDocToFunkoItem, which sets
+     * the result id to the catalog docId). We match on catalogRef first; when the
+     * picked figure carries a UPC we also fall back to a UPC match so figures
+     * added by scan (which may lack catalogRef) are still recognised.
+     * Returns the matching collection item (whose isOwned distinguishes
+     * owned vs want-list), or null if the figure is in neither.
+     */
+    suspend fun findCollectionItemForCatalog(catalogId: String, upc: String): FunkoItem? =
+        withContext(Dispatchers.IO) {
+            if (catalogId.isNotBlank()) {
+                val byRef = QueryBuilder
+                    .select(SelectResult.expression(Meta.id).`as`("id"))
+                    .from(DataSource.collection(collection))
+                    .where(
+                        Expression.property(FunkoDexDatabase.FIELD_TYPE)
+                            .equalTo(Expression.string(FunkoDexDatabase.TYPE_FUNKO))
+                            .and(Expression.property(FunkoDexDatabase.FIELD_CATALOG_REF)
+                                .equalTo(Expression.string(catalogId)))
+                    )
+                    .limit(Expression.intValue(1))
+                byRef.execute().use { rs ->
+                    rs.next()?.getString("id")?.let { docId ->
+                        collection.getDocument(docId)?.let { return@withContext FunkoMapper.fromDocument(it) }
+                    }
+                }
+            }
+            if (upc.isNotBlank()) return@withContext getItemByUpc(upc)
+            null
+        }
+
     /** Find an owned collection item by name + franchise — used for duplicate detection. */
     suspend fun findOwnedByNameAndFranchise(name: String, franchise: String): FunkoItem? =
         withContext(Dispatchers.IO) {
@@ -186,19 +219,8 @@ class FunkoRepository @Inject constructor(
         // owned item's catalogRef is its catalog doc id; fall back to none.
         val ownedHandles = owned.mapNotNull { it.catalogRef.takeIf { r -> r.isNotBlank() } }.toHashSet()
 
-        // UPC fallback: many owned figures were added without a catalogRef link
-        // (scan/manual entry), so a handle-only diff wrongly reports them as
-        // catalog gaps. A UPC match is authoritative per the golden-source rule
-        // (UPC-match or human-confirm only — never Pop-number), so treat a
-        // catalog row as owned if EITHER its handle or its UPC is owned.
-        val ownedUpcs = owned.mapNotNull { it.upc.takeIf { u -> u.isNotBlank() } }.toHashSet()
-
-        // Default is CHERRY_PICK: an un-opted group contributes nothing to the
-        // want list. Completing a set is a deliberate per-group choice (tap
-        // "Complete the set" on any member) — otherwise owning one figure from a
-        // huge umbrella franchise would imply wanting every figure in it.
         fun intentFor(level: GroupLevel, key: String): GroupIntent =
-            intents[level to key] ?: GroupIntent.CHERRY_PICK
+            intents[level to key] ?: GroupIntent.COMPLETE
 
         // ── Build a SeriesSummary for one group (franchise or set) ──────────
         fun summaryFor(
@@ -210,12 +232,11 @@ class FunkoRepository @Inject constructor(
             val intent       = intentFor(level, key)
             val totalCatalog = catalogRows.size
             val ownedUnits   = ownedInGroup.size + ownedInGroup.sumOf { it.variants.size }
-            // Gaps = catalog rows in this group the user doesn't own, matched by
-            // handle OR upc (a non-catalogRef-linked owned figure still counts).
-            // Only COMPLETE groups surface a gap list; CHERRY_PICK shows 0.
+            // Missing = catalog rows in this group whose handle the user doesn't own.
+            // Only COMPLETE groups surface a want list; CHERRY_PICK shows 0 wants.
             val missing = if (intent == GroupIntent.COMPLETE) {
                 catalogRows
-                    .filter { it.handle !in ownedHandles && (it.upc.isBlank() || it.upc !in ownedUpcs) }
+                    .filter { it.handle !in ownedHandles }
                     .map { it.toWantItem() }
             } else emptyList()
             val genre = ownedInGroup.firstOrNull()?.genre ?: FunkoGenre.OTHER
@@ -272,31 +293,13 @@ class FunkoRepository @Inject constructor(
             franchiseSummaries.sortedByDescending { it.ownedCount } +
             setSummaries.sortedByDescending { it.ownedCount }
 
-        // Want total = implied wants (Y-X) from groups the user opted into
-        // completing, deduped across both axes by catalog handle so a figure
-        // missing from both its franchise and its set group counts once, plus
-        // manual wants (Z) and missing-original flags. Only COMPLETE groups carry
-        // missingItems (intentFor defaults CHERRY_PICK), so summing them here is
-        // exactly the opted-in gap set.
-        val impliedWantHandles = seriesSummaries
-            .flatMap { it.missingItems }
-            .map { it.id }
-            .toHashSet()
-        val totalWant = impliedWantHandles.size +
-            manualWanted.size +
-            owned.count { it.isMissingOriginal }
-
         CollectionStats(
             totalOwned          = owned.size + owned.sumOf { it.variants.size },
-            totalWanted         = totalWant,
+            totalWanted         = manualWanted.size + owned.count { it.isMissingOriginal },
             totalPaid           = owned.sumOf { it.pricePaid + it.variants.sumOf { v -> v.pricePaid } },
             totalRetailValue    = owned.sumOf { it.effectiveRetail },
             totalMarketValue    = owned.sumOf { it.marketAvg },
-            // Distinct franchises the user actually OWNS — not the catalog-wide
-            // franchise universe. franchiseKeys unions catalog + owned (it drives
-            // want-list grouping), so using it here reported the whole catalog's
-            // franchise count (~2500) instead of the collection's (~136).
-            uniqueFranchises    = owned.mapNotNull { it.franchise.takeIf { f -> f.isNotBlank() } }.toSet().size,
+            uniqueFranchises    = franchiseKeys.size,
             mostExpensivePaid   = owned.maxByOrNull { it.pricePaid + it.variants.sumOf { v -> v.pricePaid } },
             highestMarketValue  = owned.maxByOrNull { it.marketAvg },
             recentlyAdded       = owned.sortedByDescending { it.dateAdded }.take(10),
@@ -348,7 +351,6 @@ class FunkoRepository @Inject constructor(
         val marketAvg: Double,
         val franchise: String,       // resolved property (suggestion/console), "" if umbrella/none
         val setTag: String,
-        val upc: String,             // barcode — fallback owned-match key for the gaps diff
     ) {
         fun toWantItem(): FunkoItem = FunkoItem(
             id           = handle,
@@ -413,7 +415,6 @@ class FunkoRepository @Inject constructor(
                         marketAvg    = mkt,
                         franchise    = franchise,
                         setTag       = doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_SET_TAG) ?: "",
-                        upc          = doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_UPC) ?: "",
                     )
                 )
             }

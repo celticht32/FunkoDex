@@ -161,6 +161,24 @@ Rules:
 **Decision:** Before implementing a FunkoDex feature/change of any size, resolve every open decision in the spec first — no "TBD" carried into code. Files affected, data-model/schema impact, the catalog::/funko:: ID path, and the test scenarios are all named before writing. This is the existing gap-scan rule, stated as an absolute: design is finished in the spec, not improvised mid-build.
 **Consequences:** Less mid-implementation drift and rework. Specs carry the decisions; the build transcribes them. (Complements the standing BRD gap-scan-before-finalize rule.)
 
+### DEC-020: Owned records are self-sufficient; the catalog link is opportunistic, not a dependency (S21)
+**Status:** Active
+**Context:** The catalog is a snapshot; the world is not. A figure can enter a user's collection before it enters the catalog (new releases, prototypes, signed variants, regional/park exclusives). Treating "owned but not linked to a catalog row" as a defect leads to an unwinnable enrichment chase — S20/S21 measured that the remaining unmatched owned figures need a *bigger catalog*, not more scraping (see the enrichment dead-end below). An owned record already carries its own UPC, name, franchise, and series.
+**Decision:** An owned `funko` record must render and count correctly on its own fields, whether or not a catalog row exists for it. The `catalogRef` link is OPPORTUNISTIC enrichment (a UPC/name join that happens when a catalog row exists and is simply absent when it does not) — never a precondition for the figure to be a first-class citizen. "Unmatched owned" is a normal, permanent, well-rendered state, not an error to eliminate. Set-completion math runs only where a real denominator exists (a named set), so unlinked figures never break it (they count as owned in their franchise; open franchises never had a completion denominator — see DEC-001/002).
+**Consequences:** Stop patching the catalog to chase 100% owned-link coverage. Existing `CollectionRelinkService` / `CatalogRefreshWorker` machinery is the correct home for opportunistic link-on-refresh (link by UPC when a matching row appears). Do not gate display, pricing, or grouping on presence of `catalogRef`.
+
+### DEC-021: No-UPC-no-identity catalog rows are FILTERED from action surfaces, never deleted (S21)
+**Status:** Active
+**Context:** ~6,360 catalog rows (24%) have no UPC, no Pop number, no PriceCharting link, and no franchise — overwhelmingly Pocket Pops, prototypes, box sets, and exclusives. Measured facts: 0 are currently linked by any owned figure; 6,344 are the only row for their name (not duplicates of good rows); all carry a title and ~6,065 carry an image. They cannot serve the manual-search goal (a user who picks one gets no UPC to attach and no price to look up), but they are the sole visual reference for those figures and would be first-class inputs to a future image-vector-search feature.
+**Decision:** Do NOT delete these rows (irreversible; forecloses future image-search coverage and any later UPC enrichment). Instead FILTER them out of user-facing action surfaces where an unactionable result is a dead end. Concretely, `searchByName` drops any result lacking ALL of {upc, seriesNumber, pricechartingUrl, franchise}. Deletion is only ever considered if storage genuinely bites — on a ~26k-row CBL set it does not.
+**Consequences:** Manual/name searches return only actionable figures. The rows remain in the DB, dormant, available to a later image-search or enrichment pass. Any new user-facing catalog surface should apply the same actionability filter rather than re-litigating deletion.
+
+### DEC-022: Name-based ownership check on the pre-purchase screen (loose figures) (S21)
+**Status:** Active
+**Context:** The pre-purchase ("do I already own this?") flow is the `prescan` screen and is UPC-only. A loose figure with no box has no scannable barcode. A name, unlike a UPC, is one-to-many, so a name check cannot answer owned/not-owned directly — it must show the matching figures, each badged with ownership.
+**Decision:** Add a name-search fallback to `prescan` (Option A: reuse `searchByName`, show results badged by ownership; read-only, no add flow — matching the screen's existing purpose). Ownership badge join: a picked catalog figure (id = `catalog::x`) is OWNED if a collection item's `catalogRef == catalog::x`, with a UPC fallback for scan-added items that predate linking. This is the same catalogRef==catalog-doc-id relationship established for linking (see FunkoRepository line ~187). Badge states: OWNED / WANTED / NOT_IN_COLLECTION.
+**Consequences:** `PreScanState.NameSearch` + `PreScanMatch`/`OwnStatus` added; `FunkoRepository.findCollectionItemForCatalog(catalogId, upc)` is the join. Tapping a result is intentionally inert for now (Option A); making it open detail/add is the Option-B upgrade if wanted.
+
 ---
 
 ## SUPERSEDED / DEPRECATED (kept for reference — never deleted)

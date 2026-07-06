@@ -17,27 +17,24 @@ You are picking up FunkoDex, an Android Funko Pop collection tracker. This brief
 - Catalog is golden source; fix collection to match catalog. But records with NO catalog UPC match require inference — document it AS inference.
 - Doc `_id`s are NEVER changed. Backups restore via Settings > Restore full (wipe+import); zip the inner json as `funkodex_backup.json` inside a `.zip`.
 
-## Where things stand (end of Session 19)
-Latest good backup: `FunkoDex_REPAIRED_20260706_050617.zip`. Clean state: 356 owned, 350 images, 0 blank/junk franchise, 0 blank category, restore-safe (no oversized blobs).
+## Where things stand (end of Session 21)
+Latest good backup: `FunkoDex_LINKED_20260706_linked.zip` (26,878 docs; 356 owned, 234 linked to catalog, 122 standalone). Prior: `FunkoDex_REPAIRED_20260706_050617.zip` (S19, 100 linked).
 
-Session 19 did: (a) found + fixed an image restore bug (oversized blobs broke CBL's large-doc save, dropping fields — fixed by resizing to 400px thumbnails; `resize_blobs.py` now prevents recurrence), (b) cleaned all junk/blank franchises to 0 via title inference incl. a holiday sub-line scheme "Property - Holiday", (c) filled all 61 blank categories via inference, (d) staged three report-code fixes (completion math + category derivation).
+Session 21 did (all built + installed, Chris-confirmed): (a) **corrected owned↔catalog linking 100→234** via a deterministic unique-UPC-then-unique-name pass (134 links); UPC-verified that only 1 more of the remaining 122 is genuinely linkable, so 235 is this catalog's ceiling; (b) added a **manual-search junk filter** — `searchByName` now drops identify-only rows (kept 19,891 / dropped 6,360 / 0 UPC-rows lost), nothing deleted from the DB; (c) added a **name-based pre-purchase check** on the `prescan` screen for loose figures (badged OWNED/WANTED/NOT_IN_COLLECTION); (d) **closed the enrichment workstream** as a measured dead end; (e) added unit tests for (b) and (c).
 
 ## THE MAIN THING TO KNOW
-All the messy records (61 of them) are the ones with NO catalog UPC match — retail-dump imports. Everything we did to them (franchise, category) is INFERENCE, not catalog-sourced. **Chris's decision at session end: stop hand-patching, run ENRICHMENT, let it overwrite these with real catalog data.** So the next session's likely job is the enrichment run — NOT more manual data patching.
+The owned-match problem was never catalog completeness — it was **linking** and, structurally, **architecture**. Locked in DEC-020: an owned figure is self-sufficient (carries its own UPC/name/franchise/series) and the `catalogRef` link is *opportunistic* context, not a dependency. "Owned but unlinked" is a normal, permanent state — 122 owned figures have no catalog row because none exists, and that is fine. **Do NOT run enrich.js expecting owned-match improvement** (a full run added 8 UPCs / 10 prices — retired). Do NOT delete the no-UPC catalog rows (DEC-021 — filtered, not deleted; they are the future image-search coverage set).
 
-Caveat: enrichment matches by UPC. If these 61 records' UPCs still aren't in the catalog, enrichment won't touch them and the inferred values stand (that's fine). Check catalog coverage after running.
-
-## Open items (see CLAUDE_STATE_FunkoDex_S19.md for full detail)
-1. Enrichment run (primary).
-2. Report code fixes staged in outputs/funkodex/ (FunkoItem.kt, ReportsScreen.kt, FunkoRepository.kt) — the FunkoRepository category fix did NOT land when Chris compiled; debug if continuing.
-3. Cost Breakdown label changes + info popup — APPROVED, not yet written.
-4. Manual edge records Chris handles on-device (Easter Stitch #1533, Elvira Red Sofa, Mad Sweeney; leave Wedge Antilles $120 signed as-is).
-5. Casey Jr. Mickey/Donald franchise mismatch — undecided.
+## Open items (see CLAUDE_STATE_FunkoDex_S21.md for full detail)
+1. Fold the +1 "Josh w/Piano Outfit" → `catalog::josh-baskin-piano-outfit` link into the shipped backup (found after the 234-link zip; not yet applied).
+2. Wire/verify opportunistic relink-on-refresh (DEC-020) in `CollectionRelinkService` / `CatalogRefreshWorker`.
+3. Optional Option-B: make a name-check result row tappable (open detail / add). Inert by design now (DEC-022).
+4. Future/big: image-vector-search for loose oddball figures (the 6,360 filtered rows are its coverage set).
+5. Carried from S19: Cost Breakdown label changes + info popup (approved, not written); re-verify the three S19 report-code fixes actually landed (FunkoRepository category fix was suspect); Casey Jr. Mickey/Donald franchise mismatch; manual edge records.
 
 ## Files in this handoff
-- `CLAUDE_STATE_FunkoDex_S19.md` — full session state / checkpoint (read this first).
-- `HANDOFF.md` — this file.
-- Report-code fixes: `funkodex/FunkoItem.kt`, `funkodex/ReportsScreen.kt`, `funkodex/FunkoRepository.kt`.
-- Backup: `FunkoDex_REPAIRED_20260706_050617.zip`.
-- Tooling: `resize_blobs.py` (critical), `blob_images.js`, `serp_proxy.js`, `FunkoDex_Image_Collector.html`, `rpm_harvest.js`.
-- Change logs: golden_fix, retailer_strip, holiday, franchise_final, category_fill (.md).
+- `CLAUDE_STATE_FunkoDex_S21.md` — full session state / checkpoint (read this first). `CLAUDE_STATE_FunkoDex_S19.md` retained for the data-cleanup detail.
+- `HANDOFF.md` — this file. `docs/DECISIONS.md` — DEC-020/021/022 added. `CHANGELOG.md` — S21 entry.
+- Changed code (destination paths in the state file): `FunkoLookupService.kt`, `FunkoRepository.kt`, `PreScanViewModel.kt`, `PreScanScreen.kt`. Tests: `FunkoLookupServiceTest.kt`, `PreScanBadgeLogicTest.kt`.
+- Backup: `FunkoDex_LINKED_20260706_linked.zip`. Reference: `LINK_REPORT.json`, `FunkoDex_Unlinked_Review.xlsx`.
+- S19 tooling still applies: `resize_blobs.py` (critical post-harvest), `blob_images.js`, `serp_proxy.js`, `FunkoDex_Image_Collector.html`, `rpm_harvest.js`.

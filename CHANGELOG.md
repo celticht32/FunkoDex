@@ -5,6 +5,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — Owned↔catalog linking, manual-search filter, name-based check — 2026-07-06 (S21)
+
+Built and installed on device (Chris-confirmed). See `CLAUDE_STATE_FunkoDex_S21.md` and DEC-020/021/022.
+
+### Added
+- **Name-based pre-purchase check** on the `prescan` screen (DEC-022). "No barcode? Search by name" fallback for loose figures: name → matching catalog figures, each badged OWNED / WANTED / NOT_IN_COLLECTION. Read-only. New `PreScanState.NameSearch`, `PreScanMatch`, `OwnStatus`; `NameSearchPanel` + `PreScanMatchRow` composables.
+- **`FunkoRepository.findCollectionItemForCatalog(catalogId, upc)`** — ownership join for a picked catalog figure (matches owned `catalogRef == catalogId`, UPC fallback).
+- Unit tests: `searchByName` actionability-filter cases in `FunkoLookupServiceTest`; new `PreScanBadgeLogicTest` for the OwnStatus mapping.
+
+### Changed
+- **`FunkoLookupService.searchByName`** now filters out identify-only catalog rows (DEC-021): a result is kept only if it has at least one of {upc, seriesNumber, pricechartingUrl, franchise}. Validated: 19,891 kept / 6,360 dropped / 0 UPC-bearing rows lost. No rows deleted from the DB.
+- Owned↔catalog linking corrected in the data: 100 → 234 linked (134 new links by unique UPC then unique name). Shipped as `FunkoDex_LINKED_20260706_linked.zip`.
+
+### Decided (see docs/DECISIONS.md)
+- **DEC-020** — owned records are self-sufficient; the catalog link is opportunistic, not a dependency. "Unmatched owned" is a normal permanent state.
+- **DEC-021** — no-UPC-no-identity catalog rows (~6,360) are filtered from action surfaces, never deleted.
+- **DEC-022** — name-based ownership check on the pre-purchase screen (Option A).
+
+### Closed
+- The S19 "run enrichment next" workstream is retired as a measured dead end: a full PriceCharting/Pass-5 run over ~11,423 candidates added 8 UPCs / 10 prices. The owned-match problem was linking + architecture (DEC-020), not catalog completeness. Do not re-run enrich.js expecting owned-match improvement.
+
+---
+
 ## [Unreleased] — Documentation consolidation — 2026-06-29
 
 Documentation restructure (no code change). Collapsed the scattered spec, TODO,

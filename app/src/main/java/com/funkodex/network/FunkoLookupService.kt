@@ -302,7 +302,7 @@ class FunkoLookupService @Inject constructor(
                     if (!matchesAllTokens(query, "$title $series")) return@mapNotNull null
                     catalogDocToFunkoItem(docId, doc)
                 }
-                .take(20)
+                .take(200)
 
             // If Couchbase returned nothing, the catalog may still be loading —
             // fall back to the in-memory JSON bundle using the same token logic.
@@ -313,7 +313,7 @@ class FunkoLookupService @Inject constructor(
                         val series = record.series?.joinToString(" ") ?: ""
                         matchesAllTokens(query, "$name $series")
                     }
-                    .take(20)
+                    .take(200)
                     .map { it.toFunkoItem() }
                     .toList()
             } else candidates

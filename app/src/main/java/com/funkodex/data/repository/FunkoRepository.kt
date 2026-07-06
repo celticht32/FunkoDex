@@ -77,15 +77,21 @@ class FunkoRepository @Inject constructor(
 
     /**
      * Ownership status for a picked catalog figure, used by the name-based
-     * pre-purchase check. A collection item links to its catalog row via
-     * catalogRef == the catalog doc id (see catalogDocToFunkoItem, which sets
-     * the result id to the catalog docId). We match on catalogRef first; when the
-     * picked figure carries a UPC we also fall back to a UPC match so figures
-     * added by scan (which may lack catalogRef) are still recognised.
-     * Returns the matching collection item (whose isOwned distinguishes
-     * owned vs want-list), or null if the figure is in neither.
+     * pre-purchase check. Matches a collection item by, in order:
+     *   1. catalogRef == the catalog doc id (the explicit link),
+     *   2. UPC (for scan-added items lacking catalogRef, when the picked figure
+     *      carries a UPC),
+     *   3. exact name (the loose-figure case — the owned figure may be an
+     *      un-linked standalone, or linked to a *different* catalog row than the
+     *      one shown; name equivalence is the signal a name search works on).
+     * Returns the matching collection item (isOwned distinguishes owned vs
+     * want-list), or null if the figure is in neither.
      */
-    suspend fun findCollectionItemForCatalog(catalogId: String, upc: String): FunkoItem? =
+    suspend fun findCollectionItemForCatalog(
+        catalogId: String,
+        upc: String,
+        name: String = "",
+    ): FunkoItem? =
         withContext(Dispatchers.IO) {
             if (catalogId.isNotBlank()) {
                 val byRef = QueryBuilder
@@ -104,8 +110,47 @@ class FunkoRepository @Inject constructor(
                     }
                 }
             }
-            if (upc.isNotBlank()) return@withContext getItemByUpc(upc)
+            if (upc.isNotBlank()) {
+                getItemByUpc(upc)?.let { return@withContext it }
+            }
+            if (name.isNotBlank()) {
+                val byName = QueryBuilder
+                    .select(SelectResult.expression(Meta.id).`as`("id"))
+                    .from(DataSource.collection(collection))
+                    .where(
+                        Expression.property(FunkoDexDatabase.FIELD_TYPE)
+                            .equalTo(Expression.string(FunkoDexDatabase.TYPE_FUNKO))
+                            .and(Expression.property(FunkoDexDatabase.FIELD_NAME)
+                                .equalTo(Expression.string(name)))
+                    )
+                    .limit(Expression.intValue(1))
+                byName.execute().use { rs ->
+                    rs.next()?.getString("id")?.let { docId ->
+                        collection.getDocument(docId)?.let { return@withContext FunkoMapper.fromDocument(it) }
+                    }
+                }
+            }
             null
+        }
+
+    /**
+     * All collection items (owned or want-list) whose name contains every
+     * whitespace-delimited token of [query], case-insensitive. Used by the
+     * name-based pre-purchase check to show the user's OWN figures first —
+     * these are the reliable "do I have one like this?" answer and do not
+     * depend on a catalog row existing (many dump-imported figures never
+     * match the catalog). Returns owned figures before want-list figures.
+     */
+    suspend fun searchOwnedByName(query: String): List<FunkoItem> =
+        withContext(Dispatchers.IO) {
+            val tokens = query.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+            if (tokens.isEmpty()) return@withContext emptyList()
+            getAllItems()
+                .filter { item ->
+                    val hay = item.name.lowercase()
+                    tokens.all { hay.contains(it) }
+                }
+                .sortedWith(compareByDescending<FunkoItem> { it.isOwned }.thenBy { it.name.lowercase() })
         }
 
     /** Find an owned collection item by name + franchise — used for duplicate detection. */

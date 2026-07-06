@@ -3,6 +3,7 @@ package com.funkodex.ui.screens.prescan
 import android.Manifest
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -252,6 +254,7 @@ private fun NotOwnedResult(item: FunkoItem) {
     }
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 private fun NameSearchPanel(
     state: PreScanState.NameSearch,
@@ -259,10 +262,19 @@ private fun NameSearchPanel(
     onSubmit: (String) -> Unit,
     onClose: () -> Unit,
 ) {
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.92f))
+            .imePadding()
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = {
+                    focusManager.clearFocus()
+                    keyboard?.hide()
+                })
+            }
             .padding(16.dp)
     ) {
         Row(
@@ -279,7 +291,7 @@ private fun NameSearchPanel(
             }
         }
         Text(
-            "For loose figures with no barcode. Pick the match to see if it's in your collection.",
+            "For loose figures with no barcode. Each match shows whether it's already in your collection.",
             color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp,
             modifier = Modifier.padding(bottom = 12.dp)
         )
@@ -290,8 +302,22 @@ private fun NameSearchPanel(
             modifier = Modifier.fillMaxWidth(),
             placeholder = { Text("e.g. Stitch, Batman #01") },
             singleLine = true,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                imeAction = androidx.compose.ui.text.input.ImeAction.Search
+            ),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                onSearch = {
+                    focusManager.clearFocus()
+                    keyboard?.hide()
+                    onSubmit(state.query)
+                }
+            ),
             trailingIcon = {
-                IconButton(onClick = { onSubmit(state.query) }) {
+                IconButton(onClick = {
+                    focusManager.clearFocus()
+                    keyboard?.hide()
+                    onSubmit(state.query)
+                }) {
                     Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.White)
                 }
             },
@@ -315,7 +341,9 @@ private fun NameSearchPanel(
                     modifier = Modifier.padding(top = 8.dp))
             else ->
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
                 ) {
                     items(state.results) { m ->
                         PreScanMatchRow(m)

@@ -133,18 +133,36 @@ class PreScanViewModel @Inject constructor(
         val current = _state.value as? PreScanState.NameSearch ?: return
         viewModelScope.launch {
             _state.value = current.copy(isSearching = true)
-            val hits = lookup.searchByName(query)
-            val matches = hits.map { item ->
-                val owned = repository.findCollectionItemForCatalog(item.id, item.upc)
-                val status = when {
-                    owned == null        -> OwnStatus.NOT_IN_COLLECTION
-                    owned.isOwned        -> OwnStatus.OWNED
-                    else                 -> OwnStatus.WANTED
-                }
-                PreScanMatch(item = item, status = status)
+
+            // 1. The user's OWN figures first — the reliable "do I have one like
+            //    this?" answer. These come straight from the collection and do
+            //    not depend on a catalog row existing (many dump-imported figures
+            //    never match the catalog).
+            val ownedMatches = repository.searchOwnedByName(query).map { owned ->
+                val status = if (owned.isOwned) OwnStatus.OWNED else OwnStatus.WANTED
+                PreScanMatch(item = owned, status = status)
             }
+
+            // 2. Catalog figures the user does NOT already have, shown below.
+            //    De-duplicate against owned by catalogRef, UPC, and normalized
+            //    name so a figure the user owns is not listed twice.
+            fun norm(s: String) = s.lowercase().filter { it.isLetterOrDigit() }
+            val ownedRefs  = ownedMatches.mapNotNull { it.item.catalogRef.takeIf { r -> r.isNotBlank() } }.toHashSet()
+            val ownedUpcs  = ownedMatches.mapNotNull { it.item.upc.takeIf { u -> u.isNotBlank() }?.trimStart('0') }.toHashSet()
+            val ownedNames = ownedMatches.map { norm(it.item.name) }.toHashSet()
+
+            val catalogHits = lookup.searchByName(query)
+            val unownedCatalog = catalogHits
+                .filter { cat ->
+                    cat.id !in ownedRefs &&
+                        (cat.upc.isBlank() || cat.upc.trimStart('0') !in ownedUpcs) &&
+                        norm(cat.name) !in ownedNames
+                }
+                .map { PreScanMatch(item = it, status = OwnStatus.NOT_IN_COLLECTION) }
+
+            val results = ownedMatches + unownedCatalog
             (_state.value as? PreScanState.NameSearch)?.let {
-                _state.value = it.copy(query = query, isSearching = false, results = matches)
+                _state.value = it.copy(query = query, isSearching = false, results = results)
             }
         }
     }

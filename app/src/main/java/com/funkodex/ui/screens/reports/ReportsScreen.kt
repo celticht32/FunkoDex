@@ -281,7 +281,10 @@ private fun SeriesSummaryCard(
                     }
                 }
                 Text(
-                    "${series.ownedCount} / ${series.totalInCatalog}",
+                    if (series.isTracked)
+                        "${series.ownedCount} / ${series.displayDenominator}"
+                    else
+                        "${series.ownedCount}",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = if (series.intent == GroupIntent.COMPLETE)
@@ -294,33 +297,47 @@ private fun SeriesSummaryCard(
 
             // Bar fill: primary (green-ish) when completing; muted gray when
             // cherry-picking, so an opted-out group doesn't read as "incomplete".
-            LinearProgressIndicator(
-                progress = { (series.completionPct / 100f).coerceIn(0f, 1f) },
-                color = if (series.intent == GroupIntent.COMPLETE)
-                    MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            // Untracked groups (no catalog denominator) show no bar at all.
+            if (series.isTracked) {
+                LinearProgressIndicator(
+                    progress = { (series.completionPct / 100f).coerceIn(0f, 1f) },
+                    color = if (series.intent == GroupIntent.COMPLETE)
+                        MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                )
 
-            Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp))
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("${series.completionPct}% complete", style = MaterialTheme.typography.bodySmall)
-                // Intent pill
+                Text(
+                    if (series.isTracked) "${series.completionPct}% complete"
+                    else "${series.ownedCount} in collection",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                // Intent pill — or a muted "Not tracked" tag when the group has
+                // no catalog denominator (custom/holiday franchises).
                 Surface(
-                    color = if (series.intent == GroupIntent.COMPLETE)
-                        MaterialTheme.colorScheme.primaryContainer
-                    else MaterialTheme.colorScheme.surfaceVariant,
+                    color = when {
+                        !series.isTracked -> MaterialTheme.colorScheme.surfaceVariant
+                        series.intent == GroupIntent.COMPLETE -> MaterialTheme.colorScheme.primaryContainer
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    },
                     shape = RoundedCornerShape(6.dp),
                 ) {
                     Text(
-                        if (series.intent == GroupIntent.COMPLETE) "Completing" else "Cherry-pick",
+                        when {
+                            !series.isTracked -> "Not tracked"
+                            series.intent == GroupIntent.COMPLETE -> "Completing"
+                            else -> "Cherry-pick"
+                        },
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (series.intent == GroupIntent.COMPLETE)
+                        color = if (series.isTracked && series.intent == GroupIntent.COMPLETE)
                             MaterialTheme.colorScheme.onPrimaryContainer
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),

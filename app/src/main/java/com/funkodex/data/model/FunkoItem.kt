@@ -202,7 +202,31 @@ data class SeriesSummary(
     val marketValue: Double,       // sum of marketAvg for owned items
     val imageUrls: List<String>,
 ) {
-    val completionPct: Int get() = if (totalInCatalog == 0) 0 else (ownedCount * 100) / totalInCatalog
+    /**
+     * True when the catalog knows how many items this group should contain, so
+     * a completion ratio is meaningful. Custom/user-invented franchises (e.g.
+     * holiday sub-lines like "Disney - Christmas", "Disneyland Rides") have no
+     * catalog rows and are NOT tracked — the UI shows an owned count instead of
+     * a bogus "N/0, 0%".
+     */
+    val isTracked: Boolean get() = totalInCatalog > 0
+
+    /**
+     * Denominator to display. When the catalog reports fewer items than the user
+     * owns (their cleaned franchise name groups more figures than the catalog
+     * files under it), clamp up to ownedCount so the card reads "4/4", never the
+     * nonsensical "4/2". Untracked groups have no denominator.
+     */
+    val displayDenominator: Int get() = maxOf(totalInCatalog, ownedCount)
+
+    /**
+     * Completion percentage, capped at 100. Uncapped this returned >100% when
+     * ownedCount exceeded the catalog count (e.g. "400% complete"). Untracked
+     * groups (no catalog rows) return 0 and callers should hide the bar.
+     */
+    val completionPct: Int get() =
+        if (totalInCatalog == 0) 0
+        else ((ownedCount * 100) / totalInCatalog).coerceAtMost(100)
 }
 
 data class CollectionStats(

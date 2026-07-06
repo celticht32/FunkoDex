@@ -207,7 +207,17 @@ class FunkoRepository @Inject constructor(
                     .map { it.toWantItem() }
             } else emptyList()
             val genre = ownedInGroup.firstOrNull()?.genre ?: FunkoGenre.OTHER
-            val cat   = ownedInGroup.firstOrNull()?.category ?: ""
+            // Category shown for the group = the most common non-blank category
+            // among its members, NOT firstOrNull() (which picked an arbitrary
+            // member — e.g. one "Pop! Animation" outlier made a whole "Pop!
+            // Movies" franchise display as Animation). Ties broken by count.
+            val cat = ownedInGroup
+                .mapNotNull { it.category.takeIf { c -> c.isNotBlank() } }
+                .groupingBy { it }
+                .eachCount()
+                .maxByOrNull { it.value }
+                ?.key
+                ?: ""
             return SeriesSummary(
                 franchise      = if (level == GroupLevel.FRANCHISE) key else (ownedInGroup.firstOrNull()?.franchise ?: ""),
                 category       = cat,

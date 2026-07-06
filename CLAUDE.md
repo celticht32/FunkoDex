@@ -205,6 +205,7 @@ scroll, and variant totals. HTML `&amp;` entity bug fixed at its enricher source
 retail-junk names deliberately left for the enriched-catalog pass (number-matching
 proven UNSAFE — Pop numbers aren't unique across lines).
 
+**Session 19 — image harvest + restore-size root-cause + data-quality inference passes (data + staged report code).** Mostly a data/on-device session; two lasting engineering results. (1) The harvested-image restore bug was root-caused: images fetched at full resolution (one 8.9 MB, several 1-2 MB) made CBL's individual large-doc save path fail, silently dropping the WHOLE record's fields (imageUrl AND blob both empty after restore). NOT a format/schema/priority issue — those were ruled out via a device-backup diff. Fixed by resizing all oversized blobs to max 400px JPEG q85 (40.6 MB -> 2.0 MB). This is now a HARD RULE — see the restore-size invariant under Backup/restore below. Standalone tool `resize_blobs.py` (Pillow) is the post-harvest guard; the harvest workflow is now harvest -> blob -> RESIZE -> restore. The image blobber (`blob_images.js`) still stores full-res and needs the resize built in. (2) Data-quality inference passes cleaned the ~61 retail-dump records that have NO catalog UPC match: junk/blank `franchise` -> 0 (title inference, incl. a deliberate holiday sub-line convention `Property - Holiday`, e.g. "Lilo & Stitch - Christmas"), and 61 blank `category` -> 0 (inference; Disney park attraction figures -> "Pop! Rides", Rudolph -> "Pop! Television", etc.). These are INFERENCE, not golden-source — the affected records have no catalog match, so enrichment supersedes them IF/when their UPCs enter the catalog. Report-code fixes were staged (SeriesSummary `isTracked`/`displayDenominator`/capped `completionPct`; ReportsScreen tracked-vs-untracked card render; FunkoRepository group category = most-common member, not `firstOrNull()`) but NOT confirmed compiled-in on device (the FunkoRepository category change did not appear to land). Decision at session end: stop hand-patching this data; run enrichment and let it overwrite the inferred values. Full session state in the S19 CLAUDE_STATE checkpoint / docs/CONTEXT.md.
 
 are (1) lock the grouping field against final enriched data, (2) add the
 `priceSource` reader, then (3) build the designed-but-unbuilt features in
@@ -386,6 +387,17 @@ No server, no sync subscription, 100% offline. Document types:
 - Only "Backup full" can capture on-device catalog state for diagnostics — the
   collection backup's catalog exclusion is why earlier full-state inspection was
   impossible.
+
+> **CRITICAL (S19): backup docs must never carry oversized blobs.** CBL's
+> restore saves any doc >64 KB (`LARGE_DOC_BYTES`, the photo-blob path in
+> `DatabaseTransferViewModel.streamDocsInto`) individually; a multi-megabyte
+> `thumbnailBlob` makes that save fail and the record lands with EVERY field
+> dropped — no imageUrl, no blob (looks like data loss, not an image bug). Any
+> tool that writes image blobs into a backup MUST downscale first (target ~400px
+> JPEG, well under ~100 KB decoded). `resize_blobs.py` is the standalone guard;
+> run it after any image harvest, before restore. When debugging "restored
+> record has no image AND no imageUrl", check the pre-restore record's byte size
+> first — this, not format or schema, is the usual cause.
 
 All constants in `FunkoDexDatabase.kt`. The Mapper handles `FunkoItem` ↔ Document conversion.
 

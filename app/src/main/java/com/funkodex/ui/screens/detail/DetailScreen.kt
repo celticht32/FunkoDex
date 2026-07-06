@@ -299,15 +299,11 @@ fun DetailScreen(
                     noNewPrice     = noNewPrice,
                     onRefreshPrices= viewModel::refreshPrices,
                     onClearMissingOriginal = viewModel::clearMissingOriginal,
-                    onMarkVariantOnly      = viewModel::markVariantOnly)
-                    SeriesIntentSection(
-                        franchise = s.item.franchise,
-                        setTag = s.item.setTag,
-                        franchiseIntent = franchiseIntent,
-                        setIntent = setIntent,
-                        onFranchiseIntent = viewModel::setFranchiseIntent,
-                        onSetIntent = viewModel::setSetIntent,
-                    )
+                    onMarkVariantOnly      = viewModel::markVariantOnly,
+                    franchiseIntent   = franchiseIntent,
+                    setIntent         = setIntent,
+                    onFranchiseIntent = viewModel::setFranchiseIntent,
+                    onSetIntent       = viewModel::setSetIntent)
                 }
                 is DetailUiState.Editing -> EditContent(
                     draft      = s.draft,
@@ -372,6 +368,10 @@ private fun ViewContent(
     onRefreshPrices:         () -> Unit,
     onClearMissingOriginal:  () -> Unit,
     onMarkVariantOnly:       () -> Unit,
+    franchiseIntent:         GroupIntent?,
+    setIntent:               GroupIntent?,
+    onFranchiseIntent:       (GroupIntent) -> Unit,
+    onSetIntent:             (GroupIntent) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -593,6 +593,18 @@ private fun ViewContent(
         if (item.variants.isNotEmpty()) {
             VariantsSection(variants = item.variants)
         }
+
+        // Collecting-intent picker — part of the scroll flow so it sits below the
+        // content, not overlaid on the hero image. (Was previously a Box sibling
+        // of ViewContent, which painted it on top of the photo and stole taps.)
+        SeriesIntentSection(
+            franchise         = item.franchise,
+            setTag            = item.setTag,
+            franchiseIntent   = franchiseIntent,
+            setIntent         = setIntent,
+            onFranchiseIntent = onFranchiseIntent,
+            onSetIntent       = onSetIntent,
+        )
 
         Spacer(Modifier.height(32.dp))
     }

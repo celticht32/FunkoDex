@@ -281,8 +281,8 @@ private fun SeriesSummaryCard(
                     }
                 }
                 Text(
-                    if (series.isTracked)
-                        "${series.ownedCount} / ${series.displayDenominator}"
+                    if (series.isCompletable)
+                        "${series.ownedCount} / ${series.totalInCatalog}"
                     else
                         "${series.ownedCount}",
                     style = MaterialTheme.typography.titleLarge,
@@ -295,10 +295,10 @@ private fun SeriesSummaryCard(
 
             Spacer(Modifier.height(8.dp))
 
-            // Bar fill: primary (green-ish) when completing; muted gray when
-            // cherry-picking, so an opted-out group doesn't read as "incomplete".
-            // Untracked groups (no catalog denominator) show no bar at all.
-            if (series.isTracked) {
+            // Progress bar: ONLY for real named sets, where a finite denominator
+            // exists. Franchises/user groupings never show a bar. The fraction is
+            // clamped as a guard against a catalog that under-enumerated the set.
+            if (series.isCompletable) {
                 LinearProgressIndicator(
                     progress = { (series.completionPct / 100f).coerceIn(0f, 1f) },
                     color = if (series.intent == GroupIntent.COMPLETE)
@@ -316,39 +316,36 @@ private fun SeriesSummaryCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    if (series.isTracked) "${series.completionPct}% complete"
+                    if (series.isCompletable) "${series.completionPct}% complete"
                     else "${series.ownedCount} in collection",
                     style = MaterialTheme.typography.bodySmall,
                 )
-                // Intent pill — or a muted "Not tracked" tag when the group has
-                // no catalog denominator (custom/holiday franchises).
-                Surface(
-                    color = when {
-                        !series.isTracked -> MaterialTheme.colorScheme.surfaceVariant
-                        series.intent == GroupIntent.COMPLETE -> MaterialTheme.colorScheme.primaryContainer
-                        else -> MaterialTheme.colorScheme.surfaceVariant
-                    },
-                    shape = RoundedCornerShape(6.dp),
-                ) {
-                    Text(
-                        when {
-                            !series.isTracked -> "Not tracked"
-                            series.intent == GroupIntent.COMPLETE -> "Completing"
-                            else -> "Cherry-pick"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (series.isTracked && series.intent == GroupIntent.COMPLETE)
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                    )
+                // Pill: completable sets show their intent (Completing / Cherry-pick).
+                // Non-completable groups show nothing — no "Not tracked" tag, because
+                // "not tracked" was never a real state, just the absence of a set.
+                if (series.isCompletable) {
+                    Surface(
+                        color = if (series.intent == GroupIntent.COMPLETE)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(6.dp),
+                    ) {
+                        Text(
+                            if (series.intent == GroupIntent.COMPLETE) "Completing" else "Cherry-pick",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (series.intent == GroupIntent.COMPLETE)
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
                 }
             }
 
             if (series.missingItems.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 TextButton(onClick = { expanded = !expanded }) {
-                    Text(if (expanded) "Hide want list (${series.missingItems.size})" else "Show want list (${series.missingItems.size})")
+                    Text(if (expanded) "Hide gaps (${series.missingItems.size})" else "Show gaps (${series.missingItems.size})")
                     Icon(
                         if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = null,

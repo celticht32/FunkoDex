@@ -107,12 +107,6 @@ dependencies {
     implementation(libs.compose.activity)
     debugImplementation(libs.compose.ui.tooling)
 
-    // LeakCanary — debug builds only, so it never ships in release. Zero-code: it
-    // auto-installs and watches for retained objects, posting a notification with the
-    // full reference chain when something leaks. Use it to validate the backup/restore
-    // paths (run a full restore, then check for a leak notification).
-    debugImplementation(libs.leakcanary)
-
     // Navigation
     implementation(libs.navigation.compose)
     implementation(libs.hilt.navigation.compose)

@@ -25,10 +25,6 @@ junit              = "4.13.2"
 kotlin-test        = "2.0.21"
 androidx-test-ext  = "1.2.1"
 espresso           = "3.6.1"
-# LeakCanary — debug-only runtime memory-leak detector. 2.14 is the current stable
-# 2.x line; bump to the latest 2.x if Android Studio flags a newer patch. Do NOT use
-# 3.0-alpha here (pre-release). https://square.github.io/leakcanary/
-leakcanary         = "2.14"
 
 datastore           = "1.1.1"
 exifinterface       = "1.3.7"
@@ -108,7 +104,6 @@ junit                  = { group = "junit",               name = "junit",       
 kotlin-test            = { group = "org.jetbrains.kotlin", name = "kotlin-test",                  version.ref = "kotlin-test" }
 androidx-test-ext      = { group = "androidx.test.ext",   name = "junit",                          version.ref = "androidx-test-ext" }
 androidx-test-espresso = { group = "androidx.test.espresso", name = "espresso-core",              version.ref = "espresso" }
-leakcanary = { group = "com.squareup.leakcanary", name = "leakcanary-android", version.ref = "leakcanary" }
 
 [plugins]
 android-application    = { id = "com.android.application",            version.ref = "agp" }

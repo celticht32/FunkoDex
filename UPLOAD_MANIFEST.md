@@ -20,6 +20,7 @@ Run: `gradlew testDebugUnitTest`
 - HANDOFF.md                     (updated — standing state + next focus)
 - CHANGELOG.md                   (updated — S21 [Unreleased] entry)
 - docs/DECISIONS.md              (updated — DEC-020, DEC-021, DEC-022 added)
+- FUNKODEX_TEST_PLAN_v1.0.md      (updated — A10b name-check verified; A3a filter note)
 
 ## Data backup (NOT in this archive — already delivered separately)
 - FunkoDex_LINKED_20260706_linked.zip  (restore via Settings > Restore full)

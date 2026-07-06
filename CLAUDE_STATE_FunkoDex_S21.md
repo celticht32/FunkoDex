@@ -42,7 +42,7 @@ Added a "No barcode? Search by name" fallback to the `prescan` screen for loose 
 ### 5. Tests — added to close out items 3 & 4
 - `FunkoLookupServiceTest.kt` — added cases asserting the actionability predicate used by the `searchByName` filter (keep when any of upc/seriesNumber/pricechartingUrl/franchise present; drop when none; never drop a UPC-bearing row).
 - `PreScanBadgeLogicTest.kt` (new) — asserts the OwnStatus mapping (null collection item → NOT_IN_COLLECTION; isOwned=true → OWNED; isOwned=false → WANTED).
-Note: these are pure-logic unit tests (no CBL/Android runtime). On-device instrumented verification of the prescan UI is a manual device-test-plan item.
+Note: these are pure-logic unit tests (no CBL/Android runtime). On-device verification of the prescan name-search UI: DONE (2026-07-06) — button surfaces, results are actionable-only, all three ownership badges resolve correctly, close returns to scanning. Test plan A10b records it.
 
 ## OPEN / NEXT SESSION
 

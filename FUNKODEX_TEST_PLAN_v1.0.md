@@ -273,6 +273,10 @@ match; bundled-seed fallback still works when the catalog lacks the UPC.
    (`searchByName` applies the category filter) — if a category is disabled in
    **Settings → Collection categories**, matching items won't appear here.
    This is the correct place to observe the category filter working (see A6).
+   **Session 21 (DEC-021):** `searchByName` also drops identify-only rows (no
+   upc / Pop # / PriceCharting / franchise), so no-UPC Pocket Pops, prototypes,
+   and box sets no longer appear here — only actionable figures. Confirm a
+   junk-prone term returns only actionable results.
    **Session 11:** matching is now token-based and punctuation-tolerant —
    "mr toad", "mr. toad", and "toad mr" all return "Mr. Toad". Spot-check a
    punctuated title to confirm.
@@ -609,6 +613,37 @@ A read-only, camera-only "do I already own this?" screen for use in stores.
 
 **Pass:** all four result overlays, the 4-second auto-reset, and immediate
 re-scan all work.
+
+### A10b. Name-based check — loose figures (Session 21, DEC-022)
+
+A name-search fallback on the Check tab for loose figures with no scannable
+barcode. Unlike a UPC (one code → one figure), a name is one-to-many, so it
+shows the matching catalog figures each badged with ownership.
+
+1. On the scanning screen, **expected:** an **"No barcode? Search by name"**
+   button below the bottom hint.
+2. Tap it. **Expected:** a full **"Search by name"** panel — title, close (X),
+   a query field (placeholder "e.g. Stitch, Batman #01"), and helper text
+   noting it's for loose figures.
+3. Type a name that spans owned/wanted/neither (e.g. "Stitch") and submit.
+   **Expected:** a list of matching catalog figures, each row = image + name +
+   (series# · franchise) + an ownership badge:
+   - green **"✓ You have this"** for an owned figure,
+   - orange **"★ On want list"** for a want-list figure,
+   - grey **"Not in collection"** otherwise.
+   Verify each badge against a figure you actually own, one you want, and one
+   you don't — this confirms the catalogRef ownership join.
+4. **Junk filter (DEC-021):** search a term that would surface no-UPC
+   Pocket Pops / prototypes / box sets. **Expected:** those identify-only
+   dead-end rows do NOT appear; only actionable figures (with upc / Pop # /
+   PriceCharting / franchise) are listed. (Same filter backs A3a.)
+5. Empty/no-match search shows **"No matches. Try a different name."**
+6. Tap the close (X). **Expected:** returns to scanning. Results are read-only
+   (tapping a row is inert by design — Option A).
+
+**Pass (verified on-device, 2026-07-06, Session 21):** button surfaces, name
+search returns actionable-only results, all three badges resolve correctly,
+close returns to scanning.
 
 ---
 

@@ -418,4 +418,121 @@ the *name* query so the result set is the right population. UPC-keyed lookups do
 need this (a UPC is already variant-specific) — unless the variant shares the common
 UPC, in which case no query change helps and it's a data-model limit.
 
+---
+
+## Data quality & pipelines (Session 22)
+
+### 37. Verify values, not presence
+A check that asks "is this field populated?" will pass on garbage. A merge script
+reported `funkoNumber present: YES` on a record whose number belonged to a completely
+different Pop — the enricher had stamped a wrong match's identity onto it, so every
+field *was* filled, just wrong. The check was worse than useless: it produced
+confidence. **Lesson:** compare the actual value against something independent (the
+record's own title, a URL slug, a physical box) or don't claim verification.
+
+### 38. Fill-if-blank silently preserves wrong data
+`if (blank(field)) field = source.field` looks reasonable and is exactly wrong when the
+target holds *corrupt* data rather than *missing* data — the guard sees "populated" and
+skips, keeping the bad value. **Lesson:** when a known-good source exists, decide
+per-field whether it is authoritative (overwrite) or supplementary (fill-if-blank), and
+print every overwrite so nothing changes silently.
+
+### 39. Blank beats wrong; a guess is worse than both
+When a value is known-wrong but the right one can't be *verified*, blank it. A blank
+re-resolves on the next pipeline run and is visibly absent in the UI; a plausible guess
+is indistinguishable from real data forever. 22 mis-matched records were blanked rather
+than hand-corrected because correcting meant sourcing 22 numbers that couldn't be
+verified. **Lesson:** the exception is data read off physical packaging or a retail
+listing — that's verified, not guessed, and should be written. (DEC-025)
+
+### 40. Substring matching silently matches the wrong thing
+`rowName.includes("ram")` matched **"Bram Stoker"**. `includes("poe")` matched **"Poet
+Anderson"**. `includes("will")` matched **"Chilly Willy"**. The gate around it was
+well-designed — variant tokens, exclusion rules, an approximate fallback — and one
+`includes()` at the bottom undermined all of it. It shipped for months and surfaced only
+because the user recognised a figure he owned. **Lesson:** when comparing names,
+tokenise and compare whole words.
+
+### 41. Corruption from a bad match is self-consistent
+The first mis-match detector compared a record's `funkoNumber` against the number in its
+`pricechartingUrl`, expecting disagreement on a bad match. They never disagree — the
+enricher writes *both* from the same wrong match. **Lesson:** when hunting bad data,
+compare against something the corrupting process didn't touch (here: the record's own
+title, which enrich never overwrites).
+
+### 42. Some errors are only visible to a human who knows the domain
+"Evil Queen (Snow White Stained Glass)" was matched to "Snow White & Evil Queen" — every
+meaningful word overlaps. No string comparison distinguishes them; you have to know one
+is a Deluxe single and the other a Pop! Minis 2-pack. Character-level collisions are
+fixable in code; variant-level ones aren't. **Lesson:** build the detector, state
+explicitly that it produces a *worklist not a verdict*, and never let a clean run imply
+clean data.
+
+### 43. Test a rescue rule against what it must NOT rescue
+"Castiel FunkO's" was deleted by a title rule matching `funko's` — but it's a real Pop!
+Television Supernatural #95, mis-titled at source. Series and Funko number couldn't save
+it: FunkO's *cereal* boxes legitimately carry a `Pop! Disney` tag and the box number of
+the Pocket Pop inside. Only the HobbyDB image category separated them (`Vinyl_Art_Toys`
+vs `Whatever_Else`). **Lesson:** the first version of that guard rescued Castiel *and*
+nine cereal records. Always test the negative cases.
+
+### 44. Post-processing crashes lose the whole run
+`enrich.js` scraped for an hour then crashed in the final `removeNonPops` because
+`rec.series` was a string where the code assumed an array — after all the network work,
+before the write. **Lesson:** post-process steps should be re-runnable against their own
+output (a salvage script reusing the pipeline's functions *verbatim*, not a
+reimplementation), and the expensive result should hit disk before the cheap transforms.
+
+### 45. Automated rules need a human review band, not a threshold
+The naive UPC rule ("one owner per UPC, blank the rest") would have blanked 619 records,
+destroying ~258 legitimate variant/multipack shared UPCs. The tiered version (blank
+below 0.20 agreement, keep above 0.50, *review* between) blanked 266 automatically and
+put 267 in front of a human, of which 95 needed action. **Lesson:** the middle band is
+where the value is — it's the difference between a rule that works and one that quietly
+deletes good data.
+
+### 46. The user's eyes are ground truth, and they'll catch you
+Every significant error in S22 was caught by the user, not the tooling: Glamrock FNAF are
+action figures not Pops; a "hat" filter was eating real Pops *wearing* hats; Dorbz are
+invisible to any rule; a verification was reporting YES on garbage; a box number was
+correct when the assistant was about to blank it as suspicious. **Lesson:** when the user
+contradicts the data, the data is usually wrong — and the fix belongs in the *rule*, not
+the record.
+
+### 47. A restore bypasses the preloader — test the fresh-install path separately
+`CatalogPreloader.preloadIfNeeded()` checks a marker doc and returns early if the catalog
+is loaded. A restored backup carries its own catalog, so restoring means the asset is
+never read, the gzip never opened, the parse never exercised. Shipping a new preloader and
+confirming "it works after a restore" tests *nothing* about the preloader. **Lesson:** wipe
+data and launch clean (emulator: Device Manager → ⋮ → Wipe Data) — that's the path every
+new user takes and the only one that runs the code.
+
+### 48. A bad asset fails silently, not loudly
+The preloader skips records missing an id or title rather than crashing. Ship a malformed
+catalog and the app starts fine with a partial one — no exception, no log line, just
+missing figures nobody notices. **Lesson:** validate the asset against exactly what the
+loader expects *before* packaging (real booleans vs `"True"` strings, string vs list
+`series`, leaked personal records, missing ids). A successful build proves nothing about
+the data.
+
+### 49. Stream large assets; don't materialise the tree
+`assets.open(f).bufferedReader().use { it.readText() }` + `gson.fromJson` holds the whole
+document tree in memory — fine at 8 MB, an OOM risk at 18 MB. `GZIPInputStream` +
+`JsonReader` + batched writes keeps one record in memory at a time, and gzip took the
+asset 18.1 MB → 2.0 MB. **Lesson:** don't gzip a gzip, though — Android already compresses
+assets at packaging.
+
+### 50. Deprecate rather than delete when disabling code
+The Kenny Chan re-fetch had to stop running (it would re-import exactly the merch and
+duplicates the cleanup removed) but deleting it would have deleted the *reasoning*.
+Renaming it `refreshKennyChanDISABLED()` with the why inline, and marking the unused
+`KennyRecord` `@Deprecated`, keeps the explanation next to the code for two build
+warnings. **Lesson:** the warnings are the annotation doing its job. (DEC-024)
+
+### 51. State the limits of a tool you just built
+`check_mismatches.py` catches blatant mis-matches and cannot catch variant-level ones — it
+missed the very record that motivated it. Handing it over as "run this to validate" would
+imply assurance it doesn't provide. **Lesson:** a zero result means "no obvious problems",
+not "no problems", and the difference matters when someone acts on it.
+
 *Document maintained by Celtic Heart Steamworks. Update after each significant change.*

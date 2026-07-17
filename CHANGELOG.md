@@ -5,7 +5,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased] — Owned↔catalog linking, manual-search filter, name-based check — 2026-07-06 (S21)
+## [Unreleased] — Cleaned catalog shipped to the app; enricher hardened — 2026-07-17 (S22)
+
+Built, installed, and verified on device AND on a clean emulator (fresh-install path). See `CLAUDE_STATE_FunkoDex_S22.md` and DEC-023/024/025.
+
+The headline: **the app had never shipped any of the catalog cleanup.** It was still preloading the deprecated Kenny Chan `funko_data.json` seed while every enrichment and data-quality pass since had been landing in `funkodex_base_catalog.json`. That gap is now closed.
+
+### Added
+- **`funkodex_base_catalog.json.gz`** in `app/src/main/assets/` — the cleaned, enriched 20,580-record catalog (2.0 MB gzipped from 18.1 MB). Replaces `funko_data.json`, which is deleted.
+- **`build_catalog_asset.py`** (funko_enrich) — packages the catalog for the app and validates it against exactly what the Kotlin `BaseRecord` expects *before* writing: real booleans (not `"True"`/`"False"` strings), string `series` (not a list), no `type=funko` records leaked in, every record has a usable id and a title. A malformed asset fails silently at startup — records get skipped, nothing crashes — so this check is the only thing that catches it.
+- **`check_mismatches.py`** (funko_enrich) — audits enrich's PriceCharting matches by comparing each record's title against the slug in its `pricechartingUrl`. Reports blatant mis-matches (no shared word) separately from partial ones (needs human eyes). Explicitly a worklist, not a verdict.
+- **`merge_backup.py`** (funko_enrich) — syncs the backup's catalog section to the enriched base while preserving owned + app-state records byte-for-byte. Refuses to write if the swap would orphan an owned item.
+
+### Changed
+- **`CatalogPreloader.kt`** — now streams `funkodex_base_catalog.json.gz` via `GZIPInputStream` + `JsonReader` in 500-record batches, instead of `readText()` + whole-tree Gson on `funko_data.json` (an OOM risk at 18.1 MB). Reads the enriched `BaseRecord` shape (`_id`, string `series`, `imageUrl`) rather than `KennyRecord`. **Trusts the enricher's derived fields** (`isExclusive`/`isChase`/`seriesNumber`/`category`) rather than recomputing them via `CatalogMapper.deriveSeriesFields` — the enricher had the full series list; the shipped shape has only a flattened string, so recomputing would be lossy. `CATALOG_VER` 1→2 forces a reload. Drops `__unresolved__` funkoNumber sentinels.
+- **`CatalogRefreshWorker.kt`** — Kenny Chan re-fetch DISABLED (DEC-024). Re-importing the raw upstream dataset would undo the cleanup: Kenny handles don't match the enriched ids, so its "not already in the DB" test passes for records that exist under a different key, re-inserting the merch and duplicates that were removed. Community UPC merge and HobbyDB vaulted refresh still run — both additive on existing handles.
+
+### Fixed — catalog data (funko_enrich)
+- **537 non-Pops removed** — pins, shirts, glasses, magnets, FunkO's cereal, Dorbz, ReAction figures, prototypes, ornaments.
+- **361 UPC mis-staples blanked** (266 automatic + 95 reviewed). The tiered agreement rule (blank <0.20, keep ≥0.50, review between) preserved ~258 legitimate variant/multipack shared UPCs that a naive "one owner per UPC" rule would have destroyed — that approach would have blanked 619.
+- **13 duplicate clusters merged**, survivors healed from their dupes.
+- **Evil Queen (Snow White Stained Glass)** consolidated from two half-records (`81681.html` had title+image, `pc-10118182` had #1609+pcId); UPC 889698816816 set from retail listings.
+- **Castiel** restored — a real Pop! Television Supernatural #95 (Hot Topic, 2014) that the FunkO's title rule had wrongly deleted. UPC left blank (never resolved).
+- **Mr. Toad (65th Anniversary)** created — didn't exist in the catalog at all. #814 and UPC 889698511728 read off the physical box.
+- **22 enrich mis-matches blanked** — records carrying a *different* Pop's identity while looking fully populated (DEC-025).
+- **0 orphans** across all 358 owned items (was 3).
+
+### Fixed — enricher (funko_enrich `enrich.js`)
+- **`coreNameCovered` substring bug** — the root cause of the mis-matches. Used raw `rowLc.includes(w)`, so `"ram"` matched `"bram stoker"`, `"poe"` matched `"poet anderson"`, `"will"` matched `"chilly willy"`. Now tokenises the row name and compares whole words. 11/11 tests: blocks all four substring collisions, still allows legitimate fuller-name matches (`Erza`→`erza-scarlet`, `Woody`→`sheriff-woody`).
+- **`isNonPop` crash** on string `series` — did `.map()` assuming an array; the base-catalog shape flattens it to a string. This crashed the final post-process mid-run.
+- **Castiel guard** — a figure image (`Vinyl_Art_Toys`/`Action_Figures`) plus a real funkoNumber now overrides a garbage title, so mis-titled real Pops survive. Deliberately narrow: rescues Castiel, still deletes all 15 FunkO's cereal records (which carry `Whatever_Else` images).
+- Greedy bare apparel words (hat/cap/mug/bag/dress) removed from the non-Pop title rule — a Pop can *wear* a hat. Real apparel is caught by image category.
+
+### Decided (see docs/DECISIONS.md)
+- **DEC-023** — the app ships the enriched catalog as a gzipped, streamed asset.
+- **DEC-024** — the Kenny Chan re-fetch is disabled, not deleted.
+- **DEC-025** — blank a wrong value; never guess a replacement. Verify VALUES, not presence.
+
+### Note — partial correction to S21
+S21 said *"DO NOT run enrich.js again expecting owned-match improvement."* Right about owned-matching (none of the ~1,400 new records fixed an unmatched owned figure; DEC-020 stands), but it generalised into "enrichment is done", which was wrong: the run added ~1,400 current funko.com releases the catalog had never seen, and is what surfaced the Stained Glass line at all. The cost S21 didn't measure is that it also introduced 22 silent identity corruptions — addressed by the `coreNameCovered` fix, not by abstinence. Revised: run enrich for catalog *currency*, always follow with `check_mismatches.py`, never expect it to close the owned-link gap.
+
+---
+
+## [S21] — Owned↔catalog linking, manual-search filter, name-based check — 2026-07-06 (S21)
 
 Built and installed on device (Chris-confirmed). See `CLAUDE_STATE_FunkoDex_S21.md` and DEC-020/021/022.
 

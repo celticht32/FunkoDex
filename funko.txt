@@ -1,0 +1,1014 @@
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+!@ Read_top(KB): com.funkodex(2035) 32 system_server(3257) 16 f2fs_ckpt-254:6(5669) 4
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{9cc8fc1 com.facebook.appmanager/10169} BLOCKED
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+identifyForegroundApp. com.funkodex, mCurrentUserId: 0, callerUserId: 150
+identifyForegroundApp. com.funkodex, mCurrentUserId: 0, callerUserId: 150
+identifyForegroundApp. com.funkodex, mCurrentUserId: 0, callerUserId: 0
+identifyForegroundApp. com.funkodex, mCurrentUserId: 0, callerUserId: 0
+identifyForegroundApp. com.funkodex, mCurrentUserId: 0, callerUserId: 0
+identifyForegroundApp. com.funkodex, mCurrentUserId: 0, callerUserId: 0
+skipping freeze com.funkodex(10314) result : 12
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{ee4fea3 com.facebook.appmanager/10169} BLOCKED
+identifyForegroundApp. com.funkodex, mCurrentUserId: 0, callerUserId: 0
+identifyForegroundApp. com.funkodex, mCurrentUserId: 0, callerUserId: 150
+identifyForegroundApp. com.funkodex, mCurrentUserId: 0, callerUserId: 150
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+identifyForegroundApp. com.funkodex, mCurrentUserId: 0, callerUserId: 150
+skipping freeze com.funkodex(10314) result : 12
+Package [com.funkodex] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [com.funkodex] reported as REPLACED, but missing application info. Assuming REMOVED.
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{a2087a4 com.google.android.apps.restore/10228} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{a2087a4 com.google.android.apps.restore/10228} BLOCKED
+identifyForegroundApp. com.funkodex, mCurrentUserId: 0, callerUserId: 0
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{8ad6cb6 com.google.android.apps.restore/10228} BLOCKED
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{8ad6cb6 com.google.android.apps.restore/10228} BLOCKED
+Package [com.google.android.apps.restore] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [com.google.android.apps.restore] reported as REPLACED, but missing application info. Assuming REMOVED.
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{e0e88d7 com.android.chrome/10244} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{e0e88d7 com.android.chrome/10244} BLOCKED
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{37f2e6a com.android.chrome/10244} BLOCKED
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{37f2e6a com.android.chrome/10244} BLOCKED
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{37f2e6a com.android.chrome/10244} BLOCKED
+Package [com.android.chrome] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [com.android.chrome] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [com.google.android.tts] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [com.google.android.tts] reported as REPLACED, but missing application info. Assuming REMOVED.
+skipping freeze com.funkodex(10314) result : 12
+[1202] Installer package name of package com.funkodex is 
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{96db15a com.brex.mobile/10347} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{96db15a com.brex.mobile/10347} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{64c9e71 com.brex.mobile/10347} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{64c9e71 com.brex.mobile/10347} BLOCKED
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{2fe71be com.brex.mobile/10347} BLOCKED
+Package [com.brex.mobile] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [com.brex.mobile] reported as REPLACED, but missing application info. Assuming REMOVED.
+ViewPostIme pointer 0
+call setFrameRateCategory for touch hint category=high hint, reason=touch, vri=VRI[MainActivity]@26e1cf2
+[com.funkodex/com.funkodex.MainActivity$_2035#55003] setFrameRateCategory: HighHint
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+skipping freeze com.funkodex(10314) result : 12
+ViewPostIme pointer 0
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{a90c6fc epic.mychart.android/10481} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{a90c6fc epic.mychart.android/10481} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{2a3098d epic.mychart.android/10481} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{2a3098d epic.mychart.android/10481} BLOCKED
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{e4c4bb6 epic.mychart.android/10481} BLOCKED
+Package [epic.mychart.android] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [epic.mychart.android] reported as REPLACED, but missing application info. Assuming REMOVED.
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+com.funkodex/com.funkodex.MainActivity$_2035#55003 voted ExplicitCategory with category: HighHint
+com.funkodex/com.funkodex.MainActivity$_2035#55003 voted ExplicitCategory with category: HighHint
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+!@ Read_top(KB): ding:background(5762) 151944 system_server(3257) 7152 com.funkodex(2035) 2060
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 46ms
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 44ms
+skipping freeze com.funkodex(10314) result : 12
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 38ms
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+com.funkodex/com.funkodex.MainActivity$_2035#55003 voted ExplicitCategory with category: HighHint
+ViewPostIme pointer 0
+com.funkodex/com.funkodex.MainActivity$_2035#55003 voted ExplicitCategory with category: HighHint
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 1
+!@ Read_top(KB): stagram.android(5422) 26692 ding:background(5762) 8732 com.funkodex(2035) 2320
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 213ms
+ViewPostIme pointer 0
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+skipping freeze com.funkodex(10314) result : 12
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 1
+com.funkodex/com.funkodex.MainActivity$_2035#55003 voted ExplicitCategory with category: HighHint
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{7349577 com.michaels.michaelsstores/10431} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{7349577 com.michaels.michaelsstores/10431} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{d5e74c2 com.michaels.michaelsstores/10431} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{d5e74c2 com.michaels.michaelsstores/10431} BLOCKED
+com.funkodex/com.funkodex.MainActivity$_2035#55003 voted ExplicitCategory with category: HighHint
+ViewPostIme pointer 0
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{4eb4d58 com.michaels.michaelsstores/10431} BLOCKED
+Package [com.michaels.michaelsstores] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [com.michaels.michaelsstores] reported as REPLACED, but missing application info. Assuming REMOVED.
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+com.funkodex/com.funkodex.MainActivity$_2035#55003 voted ExplicitCategory with category: HighHint
+com.funkodex/com.funkodex.MainActivity$_2035#55003 voted ExplicitCategory with category: HighHint
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+skipping freeze com.funkodex(10314) result : 12
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{a4f8fed com.disney.starwarshub_goo/10465} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{a4f8fed com.disney.starwarshub_goo/10465} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{b00a800 com.disney.starwarshub_goo/10465} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{b00a800 com.disney.starwarshub_goo/10465} BLOCKED
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{c2f9239 com.disney.starwarshub_goo/10465} BLOCKED
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+Package [com.disney.starwarshub_goo] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [com.disney.starwarshub_goo] reported as REPLACED, but missing application info. Assuming REMOVED.
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 46ms
+ViewPostIme pointer 0
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+skipping freeze com.funkodex(10314) result : 12
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 3ms
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 42ms
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 1ms
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+!@ Read_top(KB): ding:background(5762) 7756 com.funkodex(2035) 2560 ng.android.lool(2781) 364
+ViewPostIme pointer 1
+skipping freeze com.funkodex(10314) result : 12
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+com.funkodex/com.funkodex.MainActivity$_2035#55003 voted ExplicitCategory with category: HighHint
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{14efd63 com.discord/10132} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{14efd63 com.discord/10132} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{b42f83c com.discord/10132} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{b42f83c com.discord/10132} BLOCKED
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{b645d12 com.discord/10132} BLOCKED
+Package [com.discord] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [com.discord] reported as REPLACED, but missing application info. Assuming REMOVED.
+com.funkodex/com.funkodex.MainActivity$_2035#55003 voted ExplicitCategory with category: HighHint
+com.funkodex/com.funkodex.MainActivity$_2035#55003 voted ExplicitCategory with category: HighHint
+com.funkodex/com.funkodex.MainActivity$_2035#55003 voted ExplicitCategory with category: HighHint
+call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@26e1cf2
+[com.funkodex/com.funkodex.MainActivity$_2035#55003] setFrameRateCategory: NoPreference
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+skipping freeze com.funkodex(10314) result : 12
+ViewPostIme pointer 0
+call setFrameRateCategory for touch hint category=high hint, reason=touch, vri=VRI[MainActivity]@26e1cf2
+[com.funkodex/com.funkodex.MainActivity$_2035#55003] setFrameRateCategory: HighHint
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 44ms
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{330416b com.hilton.android.hhonors/10365} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{330416b com.hilton.android.hhonors/10365} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{209c876 com.hilton.android.hhonors/10365} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{209c876 com.hilton.android.hhonors/10365} BLOCKED
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+Failed to parse XMP standard metadata.
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{2b8e464 com.hilton.android.hhonors/10365} BLOCKED
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+Package [com.hilton.android.hhonors] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [com.hilton.android.hhonors] reported as REPLACED, but missing application info. Assuming REMOVED.
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+skipping freeze com.funkodex(10314) result : 12
+ViewPostIme pointer 0
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 1
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 55ms
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 31ms
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+Failed to parse XMP standard metadata.
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+Tiff header had invalid endian marker 0x45,0x78,0x69,0x66.
+getPackageName: com.funkodex
+Tiff header had invalid endian marker 0x45,0x78,0x69,0x66.
+ViewPostIme pointer 0
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+com.funkodex/com.funkodex.MainActivity$_2035#55003 voted ExplicitCategory with category: HighHint
+ViewPostIme pointer 0
+com.funkodex/com.funkodex.MainActivity$_2035#55003 voted ExplicitCategory with category: HighHint
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 21ms
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+skipping freeze com.funkodex(10314) result : 12
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 27ms
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 3ms
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 1ms
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{8bd16c2 gbis.gbandroid/10396} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{8bd16c2 gbis.gbandroid/10396} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{ca02660 gbis.gbandroid/10396} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{ca02660 gbis.gbandroid/10396} BLOCKED
+ViewPostIme pointer 0
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{317873 gbis.gbandroid/10396} BLOCKED
+ViewPostIme pointer 1
+Package [gbis.gbandroid] reported as REPLACED, but missing application info. Assuming REMOVED.
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+Package [gbis.gbandroid] reported as REPLACED, but missing application info. Assuming REMOVED.
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 2ms
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+!@ Read_top(KB): com.funkodex(2035) 5316 m.samsung.euicc(10541) 3588 system_server(3257) 2176
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 2ms
+skipping freeze com.funkodex(10314) result : 12
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+Tiff header had invalid endian marker 0x45,0x78,0x69,0x66.
+getPackageName: com.funkodex
+Tiff header had invalid endian marker 0x45,0x78,0x69,0x66.
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 1ms
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+DNS Requested by 217, 10314(com.funkodex), SUCCESS, 2ms
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 1
+getPackageName: com.funkodex
+getPackageName: com.funkodex
+ViewPostIme pointer 0
+ViewPostIme pointer 1
+!@ Read_top(KB): stagram.android(5422) 3916 com.funkodex(2035) 3904 ndroid.systemui(5340) 80
+com.funkodex/com.funkodex.MainActivity$_2035#55003 voted ExplicitCategory with category: HighHint
+com.funkodex/com.funkodex.MainActivity$_2035#55003 voted ExplicitCategory with category: HighHint
+com.funkodex/com.funkodex.MainActivity$_2035#55003 voted ExplicitCategory with category: HighHint
+skipping freeze com.funkodex(10314) result : 12
+call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@26e1cf2
+[com.funkodex/com.funkodex.MainActivity$_2035#55003] setFrameRateCategory: NoPreference
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{d8ef2cf com.google.android.apps.tachyon/10236} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{d8ef2cf com.google.android.apps.tachyon/10236} BLOCKED
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{f8ca534 com.google.android.apps.tachyon/10236} BLOCKED
+Package [com.google.android.apps.tachyon] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [com.google.android.apps.tachyon] reported as REPLACED, but missing application info. Assuming REMOVED.
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{cce2f1a com.disney.wdw.android/10477} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{cce2f1a com.disney.wdw.android/10477} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{d053147 com.disney.wdw.android/10477} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{d053147 com.disney.wdw.android/10477} BLOCKED
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{a3f2360 com.disney.wdw.android/10477} BLOCKED
+Package [com.disney.wdw.android] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [com.disney.wdw.android] reported as REPLACED, but missing application info. Assuming REMOVED.
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{64d2d56 com.google.android.apps.walletnfcrel/10285} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{64d2d56 com.google.android.apps.walletnfcrel/10285} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{3a18b75 com.google.android.apps.walletnfcrel/10285} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{3a18b75 com.google.android.apps.walletnfcrel/10285} BLOCKED
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{12d8a6f com.google.android.apps.walletnfcrel/10285} BLOCKED
+Package [com.google.android.apps.walletnfcrel] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [com.google.android.apps.walletnfcrel] reported as REPLACED, but missing application info. Assuming REMOVED.
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+skipping freeze com.funkodex(10314) result : 12
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{2e6e35a com.ubercab/10072} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{2e6e35a com.ubercab/10072} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{396fa37 com.ubercab/10072} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{396fa37 com.ubercab/10072} BLOCKED
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{ef40e83 com.ubercab/10072} BLOCKED
+Package [com.ubercab] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [com.ubercab] reported as REPLACED, but missing application info. Assuming REMOVED.
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{fa66ba5 com.delta.mobile.android/10540} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{fa66ba5 com.delta.mobile.android/10540} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{5121952 com.delta.mobile.android/10540} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{5121952 com.delta.mobile.android/10540} BLOCKED
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{5686fbf com.delta.mobile.android/10540} BLOCKED
+Package [com.delta.mobile.android] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [com.delta.mobile.android] reported as REPLACED, but missing application info. Assuming REMOVED.
+skipping freeze com.funkodex(10314) result : 12
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{b430ad5 com.einnovation.temu/10039} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{b430ad5 com.einnovation.temu/10039} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{767e61d com.einnovation.temu/10039} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{767e61d com.einnovation.temu/10039} BLOCKED
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{3d9414d com.einnovation.temu/10039} BLOCKED
+Package [com.einnovation.temu] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [com.einnovation.temu] reported as REPLACED, but missing application info. Assuming REMOVED.
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{61dd93a com.fca.myconnect.nafta/10164} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{61dd93a com.fca.myconnect.nafta/10164} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{94c9dfe com.fca.myconnect.nafta/10164} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{94c9dfe com.fca.myconnect.nafta/10164} BLOCKED
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{35ad7eb com.fca.myconnect.nafta/10164} BLOCKED
+Package [com.fca.myconnect.nafta] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [com.fca.myconnect.nafta] reported as REPLACED, but missing application info. Assuming REMOVED.
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+Capture layer list: 	 com.funkodex/com.funkodex.MainActivity$_2035#55003(preserveDisplayColors:0)
+[SEC_SF_EFFECTS] drawLayersInternal,1337, Rendering layer com.funkodex/com.funkodex.MainActivity$_2035#55003 at index 1
+skipping freeze com.funkodex(10314) result : 12
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{aa551f2 org.toshi/10401} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{aa551f2 org.toshi/10401} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{204f92f org.toshi/10401} BLOCKED
+interaction: PackageSetting{567cd20 com.funkodex/10314} -> PackageSetting{204f92f org.toshi/10401} BLOCKED
+interaction: PackageSetting{8433b79 com.funkodex/10314} -> PackageSetting{ef4ae09 org.toshi/10401} BLOCKED
+Package [org.toshi] reported as REPLACED, but missing application info. Assuming REMOVED.
+Package [org.toshi] reported as REPLACED, but missing application info. Assuming REMOVED.
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12
+skipping freeze com.funkodex(10314) result : 12

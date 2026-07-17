@@ -353,6 +353,15 @@ class DatabaseTransferViewModel @Inject constructor(
                 is Double  -> obj.put(key, value)
                 is Float   -> obj.put(key, value.toDouble())
                 is List<*> -> obj.put(key, JSONArray(value))
+                // Couchbase Lite returns its OWN Array/Dictionary types from
+                // getValue(), not kotlin.List/Map, so these fell through to the
+                // `else` branch below and were written as their toString():
+                //     "Array{(..)Pop! Vinyl,Pop! Star Wars}"
+                // That corrupted EVERY array field in EVERY backup, not just
+                // seriesList. Both are fully qualified because
+                // `com.couchbase.lite.Array` collides with `kotlin.Array`.
+                is com.couchbase.lite.Array      -> obj.put(key, JSONArray(value.toList()))
+                is com.couchbase.lite.Dictionary -> obj.put(key, JSONObject(value.toMap()))
                 null       -> obj.put(key, JSONObject.NULL)
                 else       -> obj.put(key, value.toString())
             }

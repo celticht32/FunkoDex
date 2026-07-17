@@ -551,7 +551,11 @@ private fun com.google.gson.JsonObject.optStringList(key: String): List<String> 
 private fun com.google.gson.JsonObject.toEnrichedRecord(): EnrichedRecord = EnrichedRecord(
     handle            = optString("handle"),
     title             = optString("title"),
-    imageName         = optString("imageName"),
+    // The enricher emits `imageUrl`. It formerly emitted `imageName`, which no
+    // field in this app ever read -- every image it scraped was silently
+    // discarded, leaving ~8.5k catalog records with no picture. Read the new key
+    // first and fall back to the old one so a stale enriched file still imports.
+    imageName         = optString("imageUrl") ?: optString("imageName"),
     series            = optStringList("series"),
     upc               = optString("upc"),
     pid               = optString("pid"),

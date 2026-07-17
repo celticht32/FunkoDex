@@ -23,14 +23,15 @@ import java.util.concurrent.TimeUnit
 /**
  * CatalogRefreshWorker
  *
- * Background WorkManager job that periodically fetches the latest Kenny Chan
- * Funko Pop dataset from GitHub and merges new/updated records into the
- * local Couchbase catalog.
+ * Background WorkManager job that keeps the local catalog current.
  *
- * Strategy:
- *   - Only creates documents for handles not already in the DB (new items)
- *   - Never overwrites existing docs (preserves any Channel3 enrichment)
- *   - Updates the refresh marker after each successful run
+ * The Kenny Chan re-fetch that this worker was originally built around is now
+ * DISABLED — the app ships a cleaned, enriched catalog and re-importing the raw
+ * upstream dataset would undo that cleanup (see refreshKennyChanDISABLED).
+ *
+ * What still runs:
+ *   - the community UPC file merge (additive; keyed on existing handles)
+ *   - HobbyDB vaulted-status refresh (when a valid token is present)
  */
 class CatalogRefreshWorker(
     context: Context,
@@ -109,8 +110,8 @@ class CatalogRefreshWorker(
             // Workers can be started in a fresh process; init must be called first.
             CouchbaseLite.init(applicationContext)
             FunkoDexLogger.i(TAG, "Starting catalog refresh…")
-            val newCount = refreshKennyChan()
-            FunkoDexLogger.i(TAG, "Refresh complete: $newCount new catalog records added")
+            // Kenny Chan re-fetch is DISABLED — see refreshKennyChan() below.
+            val newCount = 0
 
             val upcsMerged = refreshCommunityUpcFile()
             FunkoDexLogger.i(TAG, "Community UPC file: $upcsMerged UPCs merged into catalog")
@@ -130,7 +131,29 @@ class CatalogRefreshWorker(
         }
     }
 
-    private suspend fun refreshKennyChan(): Int = withContext(Dispatchers.IO) {
+    /**
+     * DISABLED — do not re-enable without reading this.
+     *
+     * This used to pull the raw Kenny Chan dataset from GitHub and insert any
+     * handle not already present. That is now actively harmful:
+     *
+     *   - The shipped catalog (funkodex_base_catalog.json.gz) is a CLEANED,
+     *     enriched dataset. Hundreds of non-Pop records (cereal, pins, apparel,
+     *     Dorbz, ReAction figures, prototypes) were deliberately removed from it,
+     *     as were mis-stapled UPCs and duplicate records.
+     *   - Kenny Chan handles do not match the enriched catalog's ids, so this
+     *     worker's "not already in the DB" test would pass for records that DO
+     *     exist under a different key — re-inserting the merch and duplicates the
+     *     clean-up removed, plus the Kenny records' missing/incorrect UPCs.
+     *   - It also maps through CatalogMapper.deriveSeriesFields, recomputing
+     *     fields the enricher already resolved more accurately.
+     *
+     * Catalog updates now ship with the app (bump CatalogPreloader.CATALOG_VER)
+     * or arrive via the community UPC file below, which is additive and keyed on
+     * handles that already exist.
+     */
+    @Suppress("unused")
+    private suspend fun refreshKennyChanDISABLED(): Int = withContext(Dispatchers.IO) {
         val response = sharedClient.newCall(
             Request.Builder()
                 .url(KENNY_CHAN_URL)

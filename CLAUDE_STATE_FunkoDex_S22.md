@@ -74,3 +74,83 @@ S21 stated **"DO NOT run enrich.js again expecting owned-match improvement."** T
 - **Presence is not correctness.** A verification that checks whether a field is filled will happily green-light garbage — the Evil Queen record reported "funkoNumber present: YES" while holding a different Pop's number. Compare VALUES.
 - **Scripts read the LIVE original.** Each writes a new file (`.kfix`/`.blank`/`.merged`); rename over the original BEFORE running the next, or they all read the same input and none chain.
 - **PowerShell one-liners with nested quotes fail.** Always ship a downloadable `.py`.
+
+## JUDGEMENT CALLS — the reasoning behind the numbers
+These only existed in the S22 conversation. Written down so a future session doesn't
+re-litigate them from scratch, or worse, quietly reverse them.
+
+### The 22 blanked mis-matches: what was spared and why
+`check_mismatches.py` flagged 6 "no overlap" + 61 "partial" out of 451 matched records.
+22 were blanked. The other ~45 were judged CORRECT and deliberately left alone — they
+trip the detector because PriceCharting names things differently, not because the match
+is wrong:
+- **Accents/punctuation:** `Kylian Mbappé`→`kylian-mbappe`, `De'Aaron Fox`→`de%27aaron-fox`, `Peni Parker's SP//dr`→`peni-parker%27s-spdr`. URL-encoding artefacts, same figure.
+- **Fuller names:** `Erza`→`erza-scarlet`, `Alligator`→`alligator-loki`, `Woody`→`sheriff-woody`, `Rebecca`→`rebecca-cunningham`, `Chopper`→`tony-tony-chopper-flocked`. PriceCharting uses the full character name; ours is the short form. Legitimately "covered".
+- **Expanded qualifier:** `Plo Koon (Glow)`→`plo-koon-glow-in-the-dark`.
+- **`H.E.R.B.I.E.`→`herbie`** — almost certainly a correct match. It now FAILS the fixed
+  word-boundary check (punctuation tokenises to `h,e,r,b,i,e`, which won't match
+  "herbie"), so it will be rejected as uncertain on the next run rather than
+  mis-matched. That is an accepted minor regression: rejecting is the safe failure, and
+  a punctuation-collapsing rule risked opening new holes. Don't "fix" it without
+  testing against the substring cases in lesson 40.
+
+The 22 that WERE blanked split into two kinds — worth knowing, because the second kind
+is the one the fixed code still can't catch:
+- **Substring/character collisions (now fixed in code):** `Ram`→`bram-stoker`, `Poe`→`poet-anderson`, `Will`→`chilly-willy-frozen`, `Venom`→`venomized-doctor-doom`, `Harry (Beanie on Fire)`→`hermione-granger`.
+- **Variant-level (still possible):** `Spider-Man (No Way Home Suit)`→`spider-man-homemade-suit`, `Hulk (Brand New Day)`→`hulk-holiday`, `Maul`→`darth-maul-on-bloodfin-speeder`, `Miles Morales (Vibranium Suit)`→`miles-morales-programmable-matter-suit`, `King Ghidorah`→`mecha-king-ghidorah`, `Batman (DC New Classics)`→`batman-sdcc`, `The Mandalorian with Grogu (On Bantha)`→`the-mandalorian-on-speeder-with-grogu`, and others. Right character, wrong product.
+- **`The Creature`→`creature-from-the-black-lagoon`** was blanked while flagged
+  "possibly right" — over-blanking accepted deliberately (a blank costs pricing until
+  the next run; a wrong value corrupts forever).
+
+### Mr. Toad #814 — nearly blanked on a bad inference
+The assistant reasoned that #814 must be wrong because its Disneyland 65th Anniversary
+siblings are numbered in the 80s-90s (the sibling attraction Pop is #89) and because
+#814 collides with Vegeta, Feyd Rautha, Cousin Itt, Boba Fett and Captain America in
+this catalog. **All of that was wrong.** Chris photographed the box front: #814 is
+correct. Funko reuses numbers across series; a number collision is normal and is NOT
+evidence of bad data. The near-miss is why the record now carries `source:
+MANUAL_VERIFIED` — its number and UPC came off physical packaging, which outranks any
+inference.
+
+Related: the sibling record `catalog::mr.-toad-at-the-mr.-toad's-wild-ride-attraction`
+(#89, UPC 889698511926) is a DIFFERENT figure in the same line — adjacent barcode, not
+a duplicate. Do not merge them.
+
+### Evil Queen — the collection item's UPC is the cereal's, and that is correct
+`funko::889698502702` ("Evil Queen on Throne") scanned UPC 889698502702, which
+genuinely belongs to the FunkO's cereal record. Chris owns the *Pop*, not the cereal —
+the scan hit the wrong barcode at add-time. The cereal's UPC was never mis-stapled, so
+it was NOT corrected; the collection item was re-linked to the real Pop
+(`catalog::81681.html`) instead. The Pop's own UPC (889698816816) was sourced from
+retail listings. Don't "fix" the cereal's UPC on a future pass — it is right.
+
+### Dedup was deliberately NOT extended
+`check_funko_dupes.py` reported 403 normalized-title collision groups. That number is
+almost entirely a normalisation artefact — stripping parentheticals collapses every
+Spider-Man variant into one `spider man` bucket (~80 records), every Batman into
+`batman` (~90). Real duplicates in there are maybe dozens, and separating them needs
+product knowledge (the Evil Queen pair was found by Chris recognising the product, not
+by an algorithm). A fuzzy matcher would either over-merge — it nearly merged the four
+records titled exactly "Winter Soldier" (#838, #44, #701, and one unresolved) into one,
+and likewise the Twinkie variants —
+or generate a 400-item review queue that is ~95% false positives. **Decision: stop at
+the 13 strict-rule merges.** Don't build the fuzzy matcher without a much better signal
+than title normalisation.
+
+### The pc-XXXXX stub records are NOT a problem
+They look alarming (a "pc-10118182"-style id instead of a name slug) but the large
+majority are legitimate PriceCharting-crawl Pops with real data — they are simply keyed
+by PC number rather than name. (Measured on the pre-enrich base: 8,377 stubs, of which
+7,936 (94%) carry a real funkoNumber.) Only the ones that duplicate a funko.com record are an issue,
+and that is the Evil Queen case, handled individually. Don't bulk-delete or bulk-merge
+them.
+
+### Why the enriched base was salvaged rather than re-run
+The crashed run's output (`funkodex_base_catalog.enriched.json`, 20,680 records) was
+mixed-shape: 19,281 in base-catalog shape plus 1,399 still in raw funko.com working
+shape (the crash hit `removeNonPops`, which runs BEFORE `toBaseCatalogShape`).
+`salvage_enriched.js` finishes the run by calling the pipeline's own `removeNonPops`
+and `toBaseCatalogShape` **verbatim** — extracted from enrich.js, not reimplemented —
+so the result is byte-identical to what a clean run would have written, without
+re-scraping for an hour. If a future run crashes in post-processing, salvage rather
+than re-run, and keep the "verbatim, not reimplemented" property.

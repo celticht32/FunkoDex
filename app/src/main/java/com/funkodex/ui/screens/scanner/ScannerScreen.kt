@@ -750,7 +750,7 @@ private fun ManualSearchSheet(
                                         Text(
                                             buildString {
                                                 append(item.franchise)
-                                                if (item.seriesNumber.isNotEmpty()) append("  #${item.seriesNumber}")
+                                                if (item.seriesNumber.isNotEmpty()) append("  ${item.seriesNumber}")
                                             },
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,

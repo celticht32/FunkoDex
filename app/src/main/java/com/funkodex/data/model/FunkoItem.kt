@@ -3,6 +3,22 @@ package com.funkodex.data.model
 import java.time.LocalDate
 
 /**
+ * Canonical Pop-number format for BOTH storage and display: a single leading "#"
+ * (e.g. "#314"), or "" when blank. Apply at every point seriesNumber is written
+ * (catalog import, network lookup, manual scan, and user edit) so no downstream
+ * reader needs to re-add or de-duplicate the "#". This is the single source of
+ * truth for the format — do not hand-roll `if (startsWith("#"))` blocks elsewhere.
+ */
+fun normalizePopNumber(raw: String?): String {
+    val t = raw?.trim().orEmpty()
+    return when {
+        t.isBlank()        -> ""
+        t.startsWith("#")  -> t
+        else               -> "#$t"
+    }
+}
+
+/**
  * Core domain model for a single Funko in the user's COLLECTION.
  *
  * Primary key strategy (based on research):

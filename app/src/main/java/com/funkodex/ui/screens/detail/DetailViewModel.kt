@@ -279,7 +279,7 @@ class DetailViewModel @Inject constructor(
         updateDraft { it.copy(franchise = value) }
         markEdited(com.funkodex.data.db.FunkoDexDatabase.FIELD_FRANCHISE)
     }
-    fun updateNumber(value: String)          = updateDraft { it.copy(seriesNumber = value) }
+    fun updateNumber(value: String)          = updateDraft { it.copy(seriesNumber = com.funkodex.data.model.normalizePopNumber(value)) }
     fun updatePricePaid(value: String)       = updateDraft { it.copy(pricePaid = value.toDoubleOrNull() ?: it.pricePaid) }
     fun updateCondition(value: Condition)    = updateDraft { it.copy(condition = value) }
     fun updateNotes(value: String)           = updateDraft { it.copy(notes = value) }

@@ -187,11 +187,7 @@ class FunkoLookupService @Inject constructor(
             ?.takeIf { it.isNotBlank() }
             ?: doc.getString("seriesNumber")?.takeIf { it.isNotBlank() }
             ?: ""
-        val displayNumber = when {
-            rawNumber.isBlank() -> ""
-            rawNumber.startsWith("#") -> rawNumber
-            else -> "#$rawNumber"
-        }
+        val displayNumber = com.funkodex.data.model.normalizePopNumber(rawNumber)
         return com.funkodex.data.model.FunkoItem(
             id           = docId,
             upc          = doc.getString("upc") ?: "",

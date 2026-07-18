@@ -446,11 +446,7 @@ class FunkoRepository @Inject constructor(
                     ?.takeIf { it.isNotBlank() }
                     ?: doc.getString("seriesNumber")?.takeIf { it.isNotBlank() }
                     ?: ""
-                val dispNum = when {
-                    rawNum.isBlank() -> ""
-                    rawNum.startsWith("#") -> rawNum
-                    else -> "#$rawNum"
-                }
+                val dispNum = com.funkodex.data.model.normalizePopNumber(rawNum)
                 rows.add(
                     CatalogGroupingRow(
                         handle       = id,

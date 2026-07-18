@@ -253,6 +253,42 @@ The gate is deliberately a floor (20,000) not an equality check: `writeChunk` le
 
 **A known benign warning, so no one else chases it:** the marker save logs `W CouchbaseLite/DATABASE: com.couchbase.lite.LiteCoreException: conflict [1, 8]`. It is logged at W by CBL's internal logger, which handles the retry itself; the save lands. Proof: the load reports the true DB count on that same run, and the next launch reads the marker back. Changing the save to `getDocument(MARKER_DOC)?.toMutable() ?: MutableDocument(...)` (the pattern from `GroupPrefRepository.kt:61`) did NOT silence it, and it fires on `pm clear` installs where no marker can pre-exist — so the obvious explanation is wrong. Root cause unknown. Leave it unless it becomes an E.
 
+### DEC-029: Enrich fixes must go to SOURCE and survive re-derivation, not just the output (S23)
+**Status:** Active
+**Context:** The S23 enrich run made 21 wrong PriceCharting matches (short/ambiguous titles
+matched to unrelated Pops — Rowdy→Roddy Piper, Edison→Community, Mark→Iron Man) and its dedup
+removed 6 owned Pop! Disney figures (orphaning the user's collection). Fixing these in the
+enriched OUTPUT is worthless: the next `node enrich.js` regenerates the output and re-breaks
+everything. Three separate mechanisms have to agree or a fix silently reverts.
+
+**Decision:** A durable enrich fix touches all of these:
+1. **The base** (`funkodex_base_catalog.json`) — the corrected numbers/franchises/UPCs live
+   here, because a fresh `--input` build reads the base. Applied via `apply_resolutions.py`
+   from `S23_mismatch_resolutions.json`.
+2. **PC_SKIP_IDS** in enrich.js — the corrected ids, so the PC matcher never re-matches them
+   and dedup never removes them. NOTE the skip-list needs TWO code guards: the index guard
+   (never a merge TARGET) AND a source-loop guard added S23 (never merged AWAY). The second was
+   missing and is why the 6 owned figures were removed despite intent.
+3. **Blank the derivation SOURCES, not just the derived field.** `deriveGroupingFields`
+   unconditionally overwrites `franchiseSuggestion` from `franchiseFromPcSeries(pcSeries) ||
+   franchiseSuggestionFromUrl(pricechartingUrl)`. Repointing the franchise alone is clobbered on
+   the next run. Blank `pcSeries` AND `pricechartingUrl` so the derive finds no source and keeps
+   the hand-set value. 14 of 21 needed this; without it they reverted (Rowdy showed WWE not NFL
+   until both sources were blanked).
+
+**Consequences:** Proven durable — re-ran enrich from the fixed base with `--skip-*` and every
+one of the 21 mismatch fixes, 6 owned figures, and 14 franchise corrections survived. A fix that
+only touches the enriched output is not done. Corollary for triage: the enricher OVERWRITES
+`franchiseSuggestion` to match its (possibly wrong) PC guess, so franchise-agreement between a
+record and its matched slug is NOT evidence the match is correct — it is circular. Only a
+product page decides (DEC-026). Corollary for scripts: BOTH `build_catalog_asset.py` and
+`merge_backup.py` default `--base` to the raw `funkodex_base_catalog.json`; pass the enriched
+file explicitly or you ship the un-deduped base.
+
+**Known unfixed:** the matcher root cause. Short one-word titles still mis-match to longer
+unrelated slugs on every crawl; PC_SKIP_IDS only protects known-bad ids, not new records. The
+matcher itself (`shareAllShortTokens` and the PC candidate filter) needs tightening — deferred.
+
 ---
 
 ## SUPERSEDED / DEPRECATED (kept for reference — never deleted)

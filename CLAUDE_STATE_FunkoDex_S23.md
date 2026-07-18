@@ -46,6 +46,13 @@ await one enrich run to repopulate their images." Every part of that was wrong:
 enrich never refetches images (S22's own data-safety rule, one line further down the
 same doc); the records were not damaged base figures; and one of them was not a Pop.
 
+S23 then grew a second act: the asset bug (catalog had NEVER loaded on any device — see THE
+ASSET BUG), the preload race, and finally the enrich run itself, which surfaced 21 wrong
+PriceCharting matches and 6 orphaned owned figures. All fixed and shipped as CATALOG_VER "4",
+20,552 records, verified on device. The durable fixes went to SOURCE (base + enrich.js
+PC_SKIP_IDS + a dedup source-loop guard + franchise-derivation blanking), so a re-run preserves
+them — proven by re-running and re-verifying.
+
 ## WHAT S23 ACTUALLY DID
 
 ### 1. Verified the `coreNameCovered` fix (the thing the run depended on)
@@ -116,13 +123,17 @@ connection. Recovery was possible only because the pristine tarball was still in
 **If a rename or a delete rests on an inference about a slug, it is not verified.**
 
 ## KNOWN OPEN ITEMS
-1. **THE ENRICH RUN — still not done.** 24 blanked records await it (22 mis-match-blanked
-   from S22 + Black Star's conflicting pricing from S23). It is now safe to run: the
-   `coreNameCovered` fix is verified and `PC_SKIP_IDS` protects the 2 signed editions.
-   Sequence: run enrich → `check_mismatches.py` → `merge_backup.py` → `build_catalog_asset.py`
-   (now writes `.gz_`) → bump `CATALOG_VER` 3→4 → ship → **verify the asset is in the APK AND
-   logcat says `Catalog loaded: <n>` on a fresh install** (a restore bypasses the preloader
-   entirely, and a network fallback makes a failed load look fine — see THE ASSET BUG).
+1. **~~THE ENRICH RUN~~ — DONE.** Full refresh run, 21 wrong PC matches corrected, 6 orphaned
+   owned figures restored, shipped as CATALOG_VER "4" (20,552 records, verified on device). See
+   THE ENRICH RUN + MISMATCH CLEANUP. Remaining enrich follow-ups:
+   - **A full re-crawl (`node enrich.js` with no `--skip`) has NOT been done** — the shipped
+     20,552 came from finishing the captured crawl data with `--skip-*`. A fresh crawl will find
+     new figures and NEW mismatches to triage. Do it when ready; it is a fresh triage cycle, not
+     a quick run.
+   - **The mismatch root cause is unfixed.** `shareAllShortTokens` / the PC candidate matcher
+     mis-matches short one-word titles to longer unrelated slugs. PC_SKIP_IDS protects the 27
+     known-bad ids, but NEW short-title records will mis-match on every future crawl. Fixing the
+     matcher itself is the real fix — deferred, needs careful study of the PC matching pass.
 2. **The id-fixed backup is NOT restored, on purpose.** `funkodex_backup_idfix_S23.json` fixes
    the 2 malformed ids but still carries the **20,580-record S22 catalog**. A restore is wipe +
    import and bypasses the preloader entirely, so restoring it now would revert the device's
@@ -272,6 +283,84 @@ failed. The save was changed to `getDocument(MARKER_DOC)?.toMutable() ?: Mutable
 on a `pm clear` install where no marker can pre-exist, so that was NOT the cause. Cause still
 unknown. Three separate theories about it were wrong. It is a W, the outcome is correct — leave
 it unless it ever becomes an E.
+
+
+## THE ENRICH RUN + MISMATCH CLEANUP — the S23 second act
+The original S23 task ("one enrich run over blanked records") finally happened, and it
+surfaced a cascade the same way the asset bug did. Recorded in full because the pattern —
+a full refresh reshaping a hand-curated catalog — will recur every time enrich runs.
+
+### The run itself
+`node enrich.js` was run (full refresh: funko.com crawl + HobbyDB + PriceCharting). It crashed
+TWICE in post-processing, both the same root cause: `series` is a STRING in base-catalog shape
+but the code assumed an ARRAY.
+- `dedupeAndMerge` L2306: `series.some(...)` — fixed (coerce to array; `|| []` does not catch a
+  string, only null/undefined).
+- `pickSetTag` L2840: `(series || []).filter(...)` — same fix.
+Also hit two Kotlin-style lessons in JS: the crawl checkpoints its output every pass, so a
+re-run RESUMES (line ~3229, only when `--input` is NOT passed). To force a clean rebuild from a
+fixed base you MUST pass `--input funkodex_base_catalog.json` explicitly. To finish WITHOUT
+re-crawling (the network data is already captured), pass
+`--skip-funko --skip-hdb --skip-pc --no-pc-crawl` — the post-processes (dedup, non-Pop removal,
+setTag, reshape) run unconditionally regardless of skip flags.
+
+### The 21 wrong PriceCharting matches
+`check_mismatches.py` flagged 45 records where the PC slug disagreed with the title. Triaged
+each against a live product page (Chris pulled them; the sandbox can't reach PriceCharting):
+- 1 "no overlap" (H.E.R.B.I.E.) + 44 "partial". Of the 45, **20 were genuinely WRONG** — a
+  short/ambiguous title mis-matched to an unrelated Pop, and the enricher had ALSO overwritten
+  the franchise to match its wrong guess (so franchise-agreement is NOT proof of a correct
+  match — this trap caught an early triage call on "Mark").
+- The wrong matches clustered: NFL mascots grabbed pop-culture names (Rowdy→Roddy Piper,
+  Viktor→Viktor Krum), One Piece Amazon exclusives grabbed other anime (Edison→Community,
+  Killer→MHA), solo figures grabbed multi-packs (both Freddies, Minnie, Chun-Li, Mega Man X).
+- Only H.E.R.B.I.E. #1504 was a correct match. Every other "obvious" one was wrong.
+- Fix per record: correct funkoNumber/franchise/UPC from the product page, BLANK the wrong
+  pricing (DEC-025 — the blanked price was always the wrong figure's). Recorded in
+  `S23_mismatch_resolutions.json` (21 entries incl. Kurogiri, see below).
+- Kurogiri signed edition had been RE-PRICED by the run despite PC_SKIP_IDS — the recurrence
+  bug in the flesh. Re-blanked.
+
+### The 6 orphaned owned figures
+`merge_backup.py` REFUSED TO WRITE (correctly) because 6 owned Pop! Disney figures pointed via
+`catalogRef` at catalog records the dedup pass had removed: Mia Thermopolis #1732, Merida #1245,
+Anna #1023, Rapunzel #1641, Maleficent #1648, Mr. Toad (Spinning Eyes) 65th #814. These are
+Chris's collection (owned, pricePaid). The dedup removed them as pricecharting-source records
+merging into canonical twins — but the twins had different UPCs/numbers, so it was really
+dropping distinct variants. The base file STILL HAD all 6, so they were restorable.
+
+### The durable fix (this is the important part)
+Restoring records into the enriched OUTPUT is wiped by the next run. Fixes went to SOURCE:
+1. **Base** (`funkodex_base_catalog.json`): 21 mismatch corrections applied directly. The 6
+   owned figures were already present (never needed restoring — the dedup RUN removed them, the
+   base did not).
+2. **enrich.js PC_SKIP_IDS**: all 27 ids added (21 mismatches + 6 owned). PLUS a new guard in
+   the dedup SOURCE loop (~L2423): `if (PC_SKIP_IDS.has(rec._id)) { pcKept++; return; }`. The
+   existing index guard only stopped skip-listed records being merge TARGETS; the source loop
+   could still merge one AWAY. Both guards now needed.
+3. **Franchise re-derivation**: `deriveGroupingFields` (~L2987) UNCONDITIONALLY overwrites
+   `franchiseSuggestion` from `franchiseFromPcSeries(pcSeries) || franchiseSuggestionFromUrl(
+   pricechartingUrl)`. So repointing the franchise alone did NOT survive a re-run — the derive
+   pass clobbered 14 of the 21 back to the wrong value (Rowdy→WWE etc.). Fix: BLANK BOTH
+   `pcSeries` AND `pricechartingUrl` on those records, so the derive finds no source and keeps
+   the hand-set franchise. Verified all 14 have both sources blank.
+
+### Verified end to end
+Re-ran enrich from the fixed base with `--skip-*` (no re-crawl): 20,565 → 20,552 (13 non-Pops,
+0 dedup removals — the guard worked). All 6 owned figures present, all 21 mismatches intact, all
+14 franchises correct. Built asset (20,552), shipped, fresh install logged
+`Catalog loaded: 20552 items`. "Rowdy" returns #314 NFL Cowboys mascot from the local catalog.
+
+### Pipeline order that actually works (for next time)
+`node enrich.js --input <base>` (or `--skip-*` to finish without re-crawl) →
+`check_mismatches.py` (triage, needs product pages) → apply resolutions to BASE →
+add ids to PC_SKIP_IDS → re-run enrich `--skip-*` → `build_catalog_asset.py --base <enriched>`
+(NOT the default, which reads the raw base) → `merge_backup.py --base <enriched>
+--backup funkodex_backup_idfix_S23.json` (expect 0 orphans) → copy `.gz_` → CATALOG_VER bump →
+clean build → verify asset in APK → fresh install → `Catalog loaded`.
+Two default-input traps bit us: BOTH `build_catalog_asset.py` and `merge_backup.py` default to
+`funkodex_base_catalog.json` (the raw base), so pass `--base <enriched>` explicitly or you ship
+un-deduped 20,565.
 
 
 ## FULL DATA SCAN — catalog + backup (run at Chris's request, end of S23)
@@ -430,22 +519,34 @@ funko_enrich (all run and verified by Chris):
 - `fix_signed_editions.py` (new) — 20,580 → 20,579
 - `merge_kenny_dupes.py` (new) — 20,579 → 20,566
 - `fix_bash_misidentification.py` (new) — 20,566 → 20,565
-- `enrich.js` (modified, +64 lines, 3 additive hunks) — `PC_SKIP_IDS`
+- `enrich.js` (modified) — `PC_SKIP_IDS` now 28 ids (2 signed + 21 mismatch repoints + 6 owned
+  figures); `series` array-coercion fixes at dedupeAndMerge + pickSetTag; NEW dedup source-loop
+  guard so skip-listed records are never merged AWAY (not just never merged INTO)
+- `apply_resolutions.py` (new) — applies `S23_mismatch_resolutions.json` to a catalog (dry-run
+  by default, `--apply` to write). Re-runnable against base or enriched.
+- `S23_mismatch_resolutions.json` (new) — the 21 mismatch fixes, each with a why-note. Audit
+  trail + re-applyable spec. Now also blanks `pcSeries`+`pricechartingUrl` on the 14 whose
+  franchise the derive pass would otherwise clobber.
 - Changelogs: `fix_signed_editions_changelog.txt`, `merge_kenny_dupes_changelog.txt`,
-  `fix_bash_misidentification_changelog.txt`
-- `funkodex_base_catalog.json` — 20,565 records
+  `fix_bash_misidentification_changelog.txt`, `merge_backup_changelog.txt`
+- `funkodex_base_catalog.json` — now carries the 21 mismatch corrections (+ H.E.R.B.I.E. boolean
+  fix). The 6 owned figures were already present. This is the corrected SOURCE.
+- `funkodex_base_catalog.enriched.json` — 20,552, the shipped catalog (deduped, franchises fixed)
+- `funkodex_backup_idfix_S23.merged.json` (in `funkodex_upc_verify\`) — merge output, 0 orphans,
+  Chris's restore file
 
 FunkoDex (all built; asset verified in APK and on device):
 - `app/src/main/assets/funkodex_base_catalog.json.gz_` — renamed from `.gz` (2,012,079 bytes),
-  the 20,565-record S23 catalog
+  the S23 catalog (shipped 20,565 as VER 3, then 20,552 as VER 4 after enrich)
 - `app/build.gradle.kts` — `androidResources { noCompress += "gz_" }`
 - `app/src/main/java/com/funkodex/data/preload/CatalogPreloader.kt` — `ASSET_NAME` → `.gz_`,
-  `CATALOG_VER` 2→3, `MIN_EXPECTED_ROWS` guard + `countCatalogDocs()`, marker save via
+  `CATALOG_VER` 2→3→4 (3=cleanup, 4=post-enrich 20,552), `MIN_EXPECTED_ROWS` guard + `countCatalogDocs()`, marker save via
   `toMutable()`, explicit `import com.couchbase.lite.Function`. BUILT + VERIFIED ON DEVICE.
 - `app/src/main/java/com/funkodex/FunkoDexApp.kt` — `CatalogRefreshWorker.schedule()` moved
   inside the preload coroutine (kills the race); AssetMissing message now names the real asset
   and states it is not cosmetic. BUILT + VERIFIED ON DEVICE.
-- `docs/DECISIONS.md` — DEC-026 added (corollary 2 struck; see the retraction)
+- `docs/DECISIONS.md` — DEC-026 (dupes need a page), DEC-027 (.gz_ asset), DEC-028 (preload
+  ordering); DEC-023 amended. DEC-029 (enrich fixes go to source; franchise re-derivation).
 
 
 ## HOW THE ASSET BUG WAS ACTUALLY FOUND — method worth repeating

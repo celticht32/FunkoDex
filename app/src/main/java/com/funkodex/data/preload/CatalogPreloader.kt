@@ -78,7 +78,7 @@ class CatalogPreloader @Inject constructor(
          *       genuine Toyzilla signed editions, one was the shirt. See DEC-026 and
          *       CLAUDE_STATE_FunkoDex_S23.md.
          */
-        private const val CATALOG_VER   = "3"
+        private const val CATALOG_VER   = "4"
 
         /**
          * The gzipped catalog in assets/.

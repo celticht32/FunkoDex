@@ -59,9 +59,16 @@ class CatalogPreloader @Inject constructor(
         /**
          * Bump to force a reload on update.
          * "1" = Kenny Chan seed (funko_data.json)
-         * "2" = enriched base catalog (funkodex_base_catalog.json.gz)
+         * "2" = enriched base catalog (funkodex_base_catalog.json.gz), 20,580 records
+         * "3" = S23 catalog cleanup, 20,565 records. Net -15: 12 Kenny/PriceCharting
+         *       duplicate pairs merged (survivor keeps its name-slug _id and image,
+         *       the pc-NNNN stub is dropped), 1 pure duplicate removed, and 1 non-Pop
+         *       removed (a shirt carrying a real Pop's mis-stapled UPC/number). Also
+         *       re-homes 3 records that were misfiled as damaged base figures: two are
+         *       genuine Toyzilla signed editions, one was the shirt. See DEC-026 and
+         *       CLAUDE_STATE_FunkoDex_S23.md.
          */
-        private const val CATALOG_VER   = "2"
+        private const val CATALOG_VER   = "3"
 
         internal const val ASSET_NAME   = "funkodex_base_catalog.json.gz"
 

@@ -1,11 +1,20 @@
 # CLAUDE_STATE — FunkoDex — Session 23
 
-STATUS: COMPLETE for catalog work; **the enrich run itself has NOT been done**. S23
-was meant to be "one enrich run over ~25 blanked records." It never got there: the
-first thing checked — the 3 "image-blanked" records — turned out to be misfiled in
-the S22 handoff, and unpicking that consumed the session. The catalog is now
-correct and the guards are in place, so the run is ready to go and is the first
-thing S24 should do.
+STATUS: Catalog work COMPLETE and, for the first time in this app's history, ACTUALLY LOADED
+ON A DEVICE. **The enrich run itself has still NOT been done.** S23 was meant to be "one enrich
+run over ~25 blanked records." It never got there twice over: first the 3 "image-blanked"
+records turned out to be misfiled in the S22 handoff, and unpicking that consumed the middle of
+the session; then shipping the cleaned catalog exposed that the preloader had NEVER worked —
+the shipped catalog had never reached any device, and S22's sign-off had passed on network
+fallback results. Both are now fixed and verified on device. The enrich run is ready and is the
+first thing S24 should do.
+
+**S24: read THE ASSET BUG (DEC-027) and THE PRELOAD RACE (DEC-028) before shipping any
+catalog.** They contain a verification rule that exists because two sessions signed off on a
+catalog that was never loaded. New decisions this session: **DEC-026** (dupes need a product
+page), **DEC-027** (the `.gz_` extension is load-bearing), **DEC-028** (nothing writes
+`catalog::` until the preload finishes). **DEC-023 is amended** — its "verified on a clean
+emulator" claim was false.
 
 Repo: FunkoDex (branch `master`, `C:\Downloads\Development\FunkoDex\`)
 Toolchain (pinned, unchanged): AGP 8.13.2, Gradle 8.13, Kotlin 2.0.21, material3 1.3.0 (BOM 2024.09.00), CBL 3.2.4. package com.funkodex, minSdk 26, targetSdk 36.
@@ -14,13 +23,22 @@ Companion repo: funko_enrich (branch `main`), Node v24, Python/Pillow.
 ## Current authoritative catalog
 `C:\Downloads\Development\funko_enrich\funkodex_base_catalog.json` — **20,565 records**
 (was 20,580 at S22 end; net −15: 15 rows removed, 15 modified, 0 added).
-Shipped asset `app\src\main\assets\funkodex_base_catalog.json.gz` is **STALE** — it still
-holds the 20,580 S22 catalog. Nothing has been rebuilt or shipped. `CATALOG_VER` is still 2.
+Shipped asset: `app\src\main\assets\funkodex_base_catalog.json.gz_` — **note the trailing
+underscore, it is deliberate and load-bearing** (see THE ASSET BUG below). `CATALOG_VER` is now
+"3". Built, shipped, and VERIFIED ON DEVICE: searching "Bash" returns the Fortnite Pop from the
+local catalog.
 
 ## Current authoritative backup
-Unchanged from S22: `FunkoDex_RESTORE.zip` (12.2 MB, 21,211 docs) in
-`C:\Downloads\funkodex_upc_verify\`. **Not touched this session** — `merge_backup.py` has
-not been re-run, so the backup still carries the S22 catalog.
+`C:\Downloads\funkodex_upc_verify\` holds three:
+- `FunkoDex_RESTORE_S22.zip` — the original (12.2 MB, 21,211 docs)
+- `FunkoDex_RESTORE_S23.zip` — **id-fixed** (the 2 owned-on-catalog::-id records re-homed; see
+  FULL DATA SCAN). Output of `fix_backup_ids.py` as `funkodex_backup_idfix_S23.json`.
+- `FunkoDex_FULL_20260717_212053.zip` — a phone export taken during S23
+
+**None has been restored, deliberately.** All still carry the STALE 20,580 S22 catalog, so
+`merge_backup.py` should fold the current catalog in *after* the enrich run. Note a restore
+BYPASSES the preloader entirely (the backup brings its own catalog docs) — which is exactly why
+the asset bug hid for two sessions. Never verify a catalog ship via a restore.
 
 ## THE ONE-LINE VERSION
 S22's handoff said "3 image-blanked records (Bash #623, Kurogiri #789, Android 17 #529)
@@ -102,8 +120,9 @@ connection. Recovery was possible only because the pristine tarball was still in
    from S22 + Black Star's conflicting pricing from S23). It is now safe to run: the
    `coreNameCovered` fix is verified and `PC_SKIP_IDS` protects the 2 signed editions.
    Sequence: run enrich → `check_mismatches.py` → `merge_backup.py` → `build_catalog_asset.py`
-   → bump `CATALOG_VER` 2→3 → ship → **fresh-install test** (a restore bypasses the preloader
-   entirely — see the S22 testing note, it still bites).
+   (now writes `.gz_`) → bump `CATALOG_VER` 3→4 → ship → **verify the asset is in the APK AND
+   logcat says `Catalog loaded: <n>` on a fresh install** (a restore bypasses the preloader
+   entirely, and a network fallback makes a failed load look fine — see THE ASSET BUG).
 2. **The id-fixed backup is NOT restored, on purpose.** `funkodex_backup_idfix_S23.json` fixes
    the 2 malformed ids but still carries the **20,580-record S22 catalog**. A restore is wipe +
    import and bypasses the preloader entirely, so restoring it now would revert the device's
@@ -124,16 +143,136 @@ connection. Recovery was possible only because the pristine tarball was still in
    `coreNameTokens()` and `coreNoParens()` means no title convention can encode a variant
    distinction the matcher will respect. A real fix needs an `isVariant`/`variantOf` field —
    a schema change, deliberately not attempted this session.
-6. **APP DEFECT — `saveItem` does not enforce the owned-id invariant.** Move the
+6. **~~Device missing 1,559 records~~ — FIXED and re-verified.** The race fix landed; a fresh
+   install now loads all 20,565 and a relaunch reports `Catalog already present: 20565 items`.
+   Kept here only as a reminder of the failure mode: a short load that writes its marker becomes
+   PERMANENT. The `MIN_EXPECTED_ROWS` guard now refuses the marker below 20,000 so a bad load
+   retries instead of freezing.
+7. **`##623` display bug** — the UI prepends "#" to a `seriesNumber` that already carries one,
+   so numbers render as `##623`. Cosmetic, pre-existing, only visible now that real catalog data
+   reaches the screen. Fix in the UI, not the data: the catalog's `#623` is correct.
+8. **`FunkoLookupService.loadLocalDb()` is dead code** — it reads `funko_data.json`, deleted
+   from assets in S22, and is the fallback at searchLocalByName's line ~309. It catches, logs,
+   caches emptyList, and never retries. Harmless (the CBL query is primary) but it is the
+   fallback that would have masked a preload failure. Delete it with `KennyRecord`.
+9. **APP DEFECT — `saveItem` does not enforce the owned-id invariant.** Move the
    `catalog::` → `funko::` re-home out of `toggleOwned()` and into
    `FunkoRepository.saveItem()`, so all 15 call sites are covered rather than one. Until then
    the 2-record defect recurs on any edit-then-save of a catalog-backed owned figure. Requires
    a compile; not attempted in S23.
-7. Carried unchanged from S22: `CatalogImporter.kt` still expects the old shape;
-   `FunkoDexApp.kt` ~line 134 logs the wrong filename; `KennyRecord` +
-   `refreshKennyChanDISABLED()` retained for compilation (2 expected warnings); plus the S21
+10. **The benign CBL `conflict [1, 8]` warning at the marker save** — cause unknown, outcome
+   correct, three theories about it were wrong. See the note at the end of THE PRELOAD RACE.
+   Do not spend a session on it unless it becomes an E.
+11. Carried unchanged from S22: `CatalogImporter.kt` still expects the old shape; `KennyRecord`
+   + `refreshKennyChanDISABLED()` retained for compilation (2 expected warnings); plus the S21
    carry-overs (Josh w/Piano link, relink-on-refresh, Option-B tappable rows,
    image-vector-search for the 6,360 filtered rows, S19 report-code re-verification).
+   (S22's "FunkoDexApp logs the wrong filename" item is DONE — the message now names
+   `CatalogPreloader.ASSET_NAME` and says explicitly that AssetMissing is not cosmetic.)
+
+## THE ASSET BUG — the catalog had NEVER loaded on any device
+The single most important finding of S23, and it invalidates S22's sign-off.
+**Filed as DEC-027; DEC-023's false verification claim is amended in place.**
+
+**AGP's asset merger DECOMPRESSES any `.gz` file under `src/main/assets` and STRIPS the
+extension**, during `mergeXxxAssets` — before AAPT2, and `gradlew clean` does not stop it. So
+the 2.0 MB `funkodex_base_catalog.json.gz` DEC-023 shipped arrived in the APK as an 18.1 MB
+*decompressed* `funkodex_base_catalog.json`. `CatalogPreloader` called
+`assets.open("funkodex_base_catalog.json.gz")`, got FileNotFoundException, returned
+`AssetMissing`, and loaded **zero records**. Every launch. On every device. Since S22.
+
+**Why nobody noticed for two sessions:** the failure is silent by design.
+`FunkoLookupService.searchByName()` falls back to a network search when the local Couchbase
+query returns nothing. So the app kept working and search kept returning results — from the
+network, not the catalog. S22's fresh-install verification ("searched Stitch, got results,
+added one") passed while the device held **0** catalog records. The one honest signal was a
+warning S22 recorded as open item #4 and dismissed as *cosmetic*:
+`funko_data.json not found — catalog lookup will use network only`. It was not cosmetic; it
+was the whole bug, wearing a stale filename.
+
+**How it was found:** pulled the CBL SQLite off the emulator (`run-as ... cat` piped through
+.NET — PowerShell's `>` corrupts binary with a UTF-16 BOM) and counted. 8,219 catalog docs,
+ALL of them `source: USER_SCAN` — i.e. written by CatalogRefreshWorker from the network, none
+by the preloader. Then listed the APK's asset entries and found the 18 MB plain `.json`.
+
+**The fix (4 parts — all must agree):**
+| where | change |
+|---|---|
+| `app/src/main/assets/` | asset renamed to `funkodex_base_catalog.json.gz_` |
+| `app/build.gradle.kts` | `androidResources { noCompress += "gz_" }` |
+| `CatalogPreloader.kt` | `ASSET_NAME = "funkodex_base_catalog.json.gz_"` |
+| `build_catalog_asset.py` | `DEF_OUT` writes `.gz_` |
+`.gz_` is not an extension AGP acts on, so the file survives; `noCompress` stops AAPT2
+pointlessly deflating an already-gzipped file. The bytes are unchanged — still gzip, still read
+by `GZIPInputStream`.
+
+**VERIFIED on device**: APK now contains `assets/funkodex_base_catalog.json.gz_` at 2,012,079
+(byte-identical to source), logcat shows `Catalog loaded`, and searching "Bash" returns the
+Fortnite Pop #623 with its llama art from the LOCAL catalog. First time the catalog has ever
+reached a device.
+
+**THE VERIFICATION RULE THIS BUYS (do not skip it again):** after any catalog ship, confirm
+BOTH:
+1. the asset is really in the APK —
+   `[IO.Compression.ZipFile]::OpenRead("app-debug.apk").Entries | ? { $_.FullName -like "assets/funkodex*" }`
+   (call `.Dispose()` — an open handle locks the file and breaks the next `gradlew clean`)
+2. logcat on a FRESH install says `Catalog loaded: <n> items` with n ≈ 20,565.
+"It searched and found something" proves nothing — that is the network answering.
+
+## THE PRELOAD RACE — found immediately after the asset fix
+**Filed as DEC-028.**
+With the asset finally readable, the first load reported `Catalog loaded: 14856 items` and the
+device ended up with 19,006 of 20,565 asset records (1,559 missing).
+
+**Cause:** `FunkoDexApp` scheduled `CatalogRefreshWorker` at step 4a and started the preload at
+5c. On a fresh install the worker runs immediately, and its `refreshCommunityUpcFile()` writes
+`catalog::` docs (logcat: "Community UPC file: 8204 UPCs merged into catalog" at 22:42:31,
+while the preload was still streaming and did not finish until 22:42:45).
+`CatalogPreloader.writeChunk()` **skips any doc id that already exists** — a deliberate,
+correct behaviour (it makes a partial re-run idempotent and stops the preloader clobbering
+user-scanned records) — so every id the worker got to first was dropped by the preloader.
+
+**Made permanent by a second bug:** the version marker was written unconditionally after the
+stream, `count = imported`. So a SHORT load got marked complete, and `preloadIfNeeded()`
+short-circuits forever after — the next launch logged `Catalog already present: 0 items` and
+the 1,559 records were gone for good.
+
+**Fix (2 parts):**
+- `FunkoDexApp`: `CatalogRefreshWorker.schedule()` moved INSIDE the preload coroutine, after
+  `preloadIfNeeded()` returns. Ordering only — do not move it back to 4a.
+- `CatalogPreloader`: the marker is now written only if `countCatalogDocs()` >= 20,000
+  (`MIN_EXPECTED_ROWS`). A short load logs a warning, returns `ParseError`, and RETRIES next
+  launch rather than becoming permanent. The marker/`Loaded` count now reports actual DB rows,
+  not `imported` (which under-counts by design, since writeChunk skips existing ids).
+**BUILT AND VERIFIED ON DEVICE** (23:23 / 23:27 S23):
+- fresh `pm clear` install → `Catalog loaded: 20565 items` (was 14856 with the race)
+- worker now scheduled AFTER the load: `Scheduled: every 7d` at 23:14:10.481, its UPC merge at
+  23:14:19 — the preload finished at 23:14:10.476
+- relaunch → `Catalog already present: 20565 items` (was `0 items` when the marker was written
+  mid-race), so the marker carries the true count and the short-circuit works
+
+**Two Kotlin errors the sandbox could not catch, for future reference** — both were fixed by
+copying the pattern already working elsewhere in this repo rather than reasoning about the API:
+- `Function.count(...)` → *Unresolved reference 'count'*. `import com.couchbase.lite.*` is NOT
+  enough: Kotlin's own `kotlin.Function` is in the default preamble and shadows it. Needs an
+  explicit `import com.couchbase.lite.Function` alongside the wildcard. `FunkoRepository.kt:4`
+  already did this.
+- `rs.next()?.getInt("n")` was invented and does not exist. The working form is
+  `rs.allResults().firstOrNull()?.getInt("n")` — see `FunkoRepository.kt:606`.
+
+**A BENIGN WARNING THAT LOOKS ALARMING — do not chase it.** The marker save logs:
+`W CouchbaseLite/DATABASE: com.couchbase.lite.LiteCoreException: conflict [1, 8]` with a stack
+frame at `CatalogPreloader.preloadIfNeeded` on the `collection.save(markerDoc)` line. It is
+logged at W by CBL's internal logger, which then handles the retry itself; the save lands. Proof
+it is benign: the very next log line is `Catalog loaded: 20565 items` (a count read from the DB
+by `countCatalogDocs()`, not from `imported`), and the NEXT LAUNCH reads the marker back
+successfully — `Catalog already present: 20565 items`. Both would be impossible if the save had
+failed. The save was changed to `getDocument(MARKER_DOC)?.toMutable() ?: MutableDocument(...)`
+(the pattern from `GroupPrefRepository.kt:61`) to carry the revision; the warning persists even
+on a `pm clear` install where no marker can pre-exist, so that was NOT the cause. Cause still
+unknown. Three separate theories about it were wrong. It is a W, the outcome is correct — leave
+it unless it ever becomes an E.
+
 
 ## FULL DATA SCAN — catalog + backup (run at Chris's request, end of S23)
 Scanned the live 20,565-record catalog and a **fresh device backup** (exported from the phone
@@ -296,4 +435,52 @@ funko_enrich (all run and verified by Chris):
   `fix_bash_misidentification_changelog.txt`
 - `funkodex_base_catalog.json` — 20,565 records
 
-FunkoDex: **no code changed.** `docs/DECISIONS.md` gains DEC-026.
+FunkoDex (all built; asset verified in APK and on device):
+- `app/src/main/assets/funkodex_base_catalog.json.gz_` — renamed from `.gz` (2,012,079 bytes),
+  the 20,565-record S23 catalog
+- `app/build.gradle.kts` — `androidResources { noCompress += "gz_" }`
+- `app/src/main/java/com/funkodex/data/preload/CatalogPreloader.kt` — `ASSET_NAME` → `.gz_`,
+  `CATALOG_VER` 2→3, `MIN_EXPECTED_ROWS` guard + `countCatalogDocs()`, marker save via
+  `toMutable()`, explicit `import com.couchbase.lite.Function`. BUILT + VERIFIED ON DEVICE.
+- `app/src/main/java/com/funkodex/FunkoDexApp.kt` — `CatalogRefreshWorker.schedule()` moved
+  inside the preload coroutine (kills the race); AssetMissing message now names the real asset
+  and states it is not cosmetic. BUILT + VERIFIED ON DEVICE.
+- `docs/DECISIONS.md` — DEC-026 added (corollary 2 struck; see the retraction)
+
+
+## HOW THE ASSET BUG WAS ACTUALLY FOUND — method worth repeating
+Recorded because the reasoning was wrong five times and the measurements were right every time.
+
+Wrong theories, in order, each plausible and each killed by one command:
+1. *"Name search reads the deleted `funko_data.json`"* — no: that is only the FALLBACK at
+   `searchLocalByName` ~line 309; the CBL query is primary.
+2. *"The category filter hides Pop! Games"* — no: `getEnabledCategories()` reads `cat_pref` docs,
+   a wiped device has none, and the filter is skipped entirely when the enabled set is empty.
+3. *"The preloader writes `series` but the query reads `primarySeries`"* — no:
+   `CatalogMapper.FIELD_PRIMARY_SERIES` **is** the string `"series"`. They agree.
+4. *"Stale build artifact in `app/build/`"* — no: survived `gradlew clean`.
+5. *"The marker doc's revision causes the conflict"* — no: it persists on a `pm clear` install
+   where no marker can exist.
+
+What actually worked, every time:
+- **Pull the database and count.** `run-as com.funkodex cat files/funkodex.cblite2/db.sqlite3`
+  piped to disk. 8,219 docs, ALL `source: USER_SCAN` → the preloader had written *nothing*, which
+  no amount of code-reading had revealed.
+- **List the APK's assets.** One command showed an 18 MB plain `.json` where a 2 MB `.gz` was
+  expected. That is the whole bug, visible in one line.
+- **Ask for a falsifiable test.** "Rename it and see if it survives" would have settled it in five
+  minutes at any point.
+
+Two Windows gotchas that cost real time:
+- PowerShell's `>` and `Set-Content` **corrupt binary** (UTF-16 BOM, null-padded). Pull binaries
+  with `adb pull`, or stream via .NET:
+  `$p=[Diagnostics.Process]::Start(...); $p.StandardOutput.BaseStream.CopyTo($out)`.
+  `run-as ... cat > /sdcard/x` fails too — the redirect runs as the *shell* user, which the app
+  uid cannot write; you get a 0-byte file and adb cheerfully pulls it.
+- `[IO.Compression.ZipFile]::OpenRead()` **holds the APK open** for the session's life and breaks
+  the next `gradlew clean` with "Unable to delete directory". Always `.Dispose()`.
+
+**The rule this session earns:** a green test that could pass for the wrong reason is not a test.
+S22's "fresh install, searched Stitch, got results" was true, repeatable, and meaningless — the
+network answered. Verify the mechanism (asset in APK, `Catalog loaded: N` in logcat, doc count in
+the DB), not the symptom.

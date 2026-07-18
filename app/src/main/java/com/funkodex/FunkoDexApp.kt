@@ -93,9 +93,15 @@ class FunkoDexApp : Application(), Configuration.Provider {
         // 3. Register connectivity observer for offline UPC queue (A5)
         connectivityObserver.register()
 
-        // 4a. Schedule periodic catalog refresh (default: 7 days, WiFi only)
-        // Uses KEEP policy so existing schedules are not reset on every launch
-        CatalogRefreshWorker.schedule(this, CatalogRefreshConfig())
+        // 4a. Catalog refresh is scheduled AFTER the preload completes — see 5c.
+        // It used to be scheduled here, which raced the preloader on a fresh
+        // install: the worker's community-UPC merge writes catalog:: docs, and
+        // CatalogPreloader.writeChunk() SKIPS any doc id that already exists (that
+        // skip is deliberate — it makes a partial re-run idempotent and stops the
+        // preloader clobbering user-scanned records). So whichever got there first
+        // won, and ~1,559 of 20,565 catalog records were silently dropped while the
+        // preloader still reported success. Ordering is the fix; do not "optimise"
+        // this back up here.
 
         // 4b. Schedule daily price alert check (D3)
         com.funkodex.data.preload.PriceAlertWorker.schedule(this)
@@ -132,10 +138,17 @@ class FunkoDexApp : Application(), Configuration.Provider {
                 is PreloadResult.AlreadyLoaded ->
                     FunkoDexLogger.d("FunkoDexApp", "Catalog already present: ${result.count} items")
                 is PreloadResult.AssetMissing  ->
-                    FunkoDexLogger.w("FunkoDexApp", "funko_data.json not found — catalog lookup will use network only")
+                    FunkoDexLogger.w("FunkoDexApp", "Catalog asset ${CatalogPreloader.ASSET_NAME} not found — " +
+                        "catalog lookup will use network only. This is NOT cosmetic: it means the " +
+                        "shipped catalog never loaded. Check the asset is really in the APK (AGP " +
+                        "eats a .gz extension — see CatalogPreloader.ASSET_NAME).")
                 is PreloadResult.ParseError    ->
                     FunkoDexLogger.e("FunkoDexApp", "Catalog parse error: ${result.message}")
             }
+
+            // Only now schedule the refresh worker. Its community-UPC merge writes
+            // catalog:: docs and would otherwise race the preload above (see 4a).
+            CatalogRefreshWorker.schedule(this@FunkoDexApp, CatalogRefreshConfig())
         }
     }
 

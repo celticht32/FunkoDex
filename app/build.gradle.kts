@@ -64,6 +64,34 @@ android {
         buildConfig = true   // retained for Phase F: BuildConfig.WORKER_URL
     }
 
+    // ── Catalog asset: DO NOT rename back to .gz ─────────────────────────────
+    // The catalog ships as `assets/funkodex_base_catalog.json.gz_` — note the
+    // TRAILING UNDERSCORE. It is a normal gzip file; the odd extension is
+    // deliberate and load-bearing.
+    //
+    // AGP's asset merger DECOMPRESSES any `.gz` file in src/main/assets and
+    // STRIPS the extension during mergeXxxAssets — before AAPT2 ever runs. A
+    // 2.0 MB `funkodex_base_catalog.json.gz` went in and an 18.1 MB
+    // `funkodex_base_catalog.json` came out in the APK, so
+    // `assets.open("funkodex_base_catalog.json.gz")` threw FileNotFoundException,
+    // CatalogPreloader returned AssetMissing, and the catalog silently never
+    // loaded on ANY device — search fell back to the network and looked fine.
+    // (Verified S23 by listing the APK's asset entries; a `gradlew clean` does
+    // NOT fix it — the merger does this every build.)
+    //
+    // `.gz_` is not an extension AGP recognises, so the file passes through
+    // untouched. noCompress then stops AAPT2 deflating an already-gzipped file
+    // (pure waste: no size win, extra CPU).
+    //
+    // If you change this extension, change CatalogPreloader.ASSET_NAME and
+    // build_catalog_asset.py's DEF_OUT to match, and verify the APK actually
+    // contains the .gz_ before shipping:
+    //   [IO.Compression.ZipFile]::OpenRead("app-debug.apk").Entries |
+    //     Where-Object { $_.FullName -like "assets/funkodex*" }
+    androidResources {
+        noCompress += "gz_"
+    }
+
     // ── Apache POI packaging fix ──────────────────────────────────────────────
     // POI ships duplicate META-INF files that cause a Gradle packaging conflict.
     packaging {

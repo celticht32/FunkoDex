@@ -289,6 +289,47 @@ file explicitly or you ship the un-deduped base.
 unrelated slugs on every crawl; PC_SKIP_IDS only protects known-bad ids, not new records. The
 matcher itself (`shareAllShortTokens` and the PC candidate filter) needs tightening — deferred.
 
+### DEC-030: The PriceCharting console crawl (Pass 3b) under-captures large consoles — root cause of "owned but not in catalog" (S23)
+**Status:** Active — root cause identified, FIX DEFERRED to a focused session
+**Context:** ~154 owned, scanned figures have no catalog record to link to (owned items
+show catalogRef=""). They are NOT vaulted-vintage oddities — median Pop# ~1286, 148/154 use
+the current 889698 UPC prefix — and they demonstrably EXIST on funko.com, PriceCharting, and
+eBay (e.g. Stitch 626 #125, funko.com item 4671, PC id 7473576, upc 849803046712). The scan
+found them live at scan time; the enrich crawl never added them.
+
+**Investigation (done, not assumed):**
+- Base catalog has 53 Stitch figures but NOT Stitch 626 #125 — so the base seed never had it.
+- Pass 3b (PriceCharting discovery crawl, `--pc-crawl`, ON by default) DOES add net-new records
+  (`enriched.push({handle: pc-<id>, ...})`, ~L1789) — that is how ~8,359 pc- records exist.
+- Stitch's pcId 7473576 / upc 849803046712 appear in NEITHER the base NOR the pre-dedup
+  enriched file (enr.json, 20,680). So dedup did NOT remove it (cf. DEC-029's 6 owned figures,
+  which dedup DID remove) — **discovery never captured it in the first place.**
+- Pass 3b crawls `/console/funko-pop-disney` (it's in the console list). Disney is one of the
+  largest consoles (~2500+ figures per PC's own "Prices for all N" count). We captured only
+  **654 Disney pc- records** (range #4–#2038, sparse — 75 under #200). Not a clean truncation
+  cutoff: sparse incompleteness.
+- The crawl loads a console page then SCROLL-scrapes a lazy-loaded table until row count
+  reaches the stated target (`targetCount`), with MAX_SCROLLS=200 and a 12-try stall tolerance.
+  On a stall it logs `[warn] loaded X of target — set may be incomplete` and **continues with
+  the partial DOM** rather than failing. Large consoles stall before fully rendering, so figures
+  past the loaded rows are silently absent from the catalog.
+- The 154 absences cluster in exactly the biggest consoles: ~half are Disney-family (21 Lilo &
+  Stitch, 9 Disney-Christmas, 9 Disney, plus Sleeping Beauty/Snow White/WDW50/Hocus Pocus),
+  with Star Wars and Marvel also present. This is the fingerprint of large-console under-capture.
+
+**Decision / fix direction (DEFERRED — needs its own session + a multi-hour re-crawl to prove):**
+The scroll-scrape must not accept a partial lazy-load. Options, best first:
+1. Replace DOM-scroll with PriceCharting's paginated data or CSV/collection-tracker export for
+   each console (deterministic completeness, no lazy-load race).
+2. Make the completeness gate REJECT an incomplete set (loaded < target − margin) and force a
+   real retry / harder scroll, instead of warning-and-continuing.
+Validation: re-crawl, confirm Disney jumps from ~654 toward ~2500 and Stitch 626 #125 appears
+as a pc- record, then it links to the owned figure automatically.
+
+**Do NOT** "fix" this by hand-building the 154 catalog records — that patches symptoms while the
+crawl stays broken and re-misses on the next run. Per-figure creation is only a last resort for
+a figure PriceCharting genuinely lacks (rare). The systemic fix recovers most of the 154 at once.
+
 ---
 
 ## SUPERSEDED / DEPRECATED (kept for reference — never deleted)

@@ -134,6 +134,18 @@ connection. Recovery was possible only because the pristine tarball was still in
      mis-matches short one-word titles to longer unrelated slugs. PC_SKIP_IDS protects the 27
      known-bad ids, but NEW short-title records will mis-match on every future crawl. Fixing the
      matcher itself is the real fix — deferred, needs careful study of the PC matching pass.
+   - **BIG ONE — the PriceCharting console crawl UNDER-CAPTURES large consoles (DEC-030).**
+     ~154 owned, scanned figures have no catalog record to link to. They exist on funko.com +
+     PriceCharting + eBay, but Pass 3b never captured them: the console page scroll-scrape
+     accepts a partial lazy-load (warns "loaded X of target" then continues), so figures past
+     the rendered rows are silently missing. Disney captured ~654 of ~2500+; the 154 absences
+     cluster in Disney-family / Star Wars / Marvel — the biggest consoles. Root cause is fully
+     diagnosed in DEC-030; the fix (paginated/CSV pull, or reject-incomplete-and-retry) is
+     deferred to a focused session with a multi-hour re-crawl to validate. DO NOT hand-build the
+     154 records — that patches symptoms while the crawl re-misses next run. This is very likely
+     why the collection shows so many unlinked owned items (72% / 258 of 358 have catalogRef="";
+     of those, 94 are UPC-linkable to EXISTING catalog records — a cheap separate win — and 154
+     have no catalog record at all because of this crawl gap).
 2. **The id-fixed backup is NOT restored, on purpose.** `funkodex_backup_idfix_S23.json` fixes
    the 2 malformed ids but still carries the **20,580-record S22 catalog**. A restore is wipe +
    import and bypasses the preloader entirely, so restoring it now would revert the device's

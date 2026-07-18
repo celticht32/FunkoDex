@@ -488,9 +488,16 @@ private fun FunkoPreviewSheet(
             // Metadata
             Text(item.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center)
-            if (item.franchise.isNotEmpty()) {
-                Text("${item.franchise}${if (item.seriesNumber.isNotEmpty()) "  ${item.seriesNumber}" else ""}",
-                    color = MaterialTheme.colorScheme.primary)
+            // Show franchise and/or Pop number independently: a figure may have a
+            // number but no franchise (e.g. "Zoltar (6inch)" #796), and the number
+            // must not be hidden just because the franchise is blank.
+            if (item.franchise.isNotEmpty() || item.seriesNumber.isNotEmpty()) {
+                Text(
+                    listOf(item.franchise, item.seriesNumber)
+                        .filter { it.isNotEmpty() }
+                        .joinToString("  "),
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
             if (item.isExclusive) {
                 AssistChip(
@@ -746,12 +753,13 @@ private fun ManualSearchSheet(
                                         maxLines = 1,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                     )
-                                    if (item.franchise.isNotEmpty()) {
+                                    // franchise and/or number, each shown only if present,
+                                    // so a number is never hidden by a missing franchise.
+                                    if (item.franchise.isNotEmpty() || item.seriesNumber.isNotEmpty()) {
                                         Text(
-                                            buildString {
-                                                append(item.franchise)
-                                                if (item.seriesNumber.isNotEmpty()) append("  ${item.seriesNumber}")
-                                            },
+                                            listOf(item.franchise, item.seriesNumber)
+                                                .filter { it.isNotEmpty() }
+                                                .joinToString("  "),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             maxLines = 1,

@@ -38,3 +38,9 @@ google-services.json  # if Firebase/Google added later
 keystore.jks
 *.keystore
 release/
+
+# Forensic DB pulls (debugging artifacts, never commit)
+db*.sqlite3
+db*.sqlite3-wal
+db*.sqlite3-shm
+*.apk

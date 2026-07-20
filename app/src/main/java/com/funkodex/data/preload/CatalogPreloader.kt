@@ -77,8 +77,14 @@ class CatalogPreloader @Inject constructor(
          *       re-homes 3 records that were misfiled as damaged base figures: two are
          *       genuine Toyzilla signed editions, one was the shirt. See DEC-026 and
          *       CLAUDE_STATE_FunkoDex_S23.md.
+         * "4" = S24 rebuild (crawl scroll-to-target + dedup pcId-guard fixes) —
+         *       staged but superseded before ship by "5".
+         * "5" = S24 catalog, 21,672 records: full re-crawl recovered 1,657 figures
+         *       across all consoles, dedup pcId-guard stopped variant deletion, and
+         *       144 terse PriceCharting titles enriched from in-catalog siblings.
+         *       See DEC-030 (RESOLVED) / DEC-031 / DEC-032.
          */
-        private const val CATALOG_VER   = "4"
+        private const val CATALOG_VER   = "5"
 
         /**
          * The gzipped catalog in assets/.

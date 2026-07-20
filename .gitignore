@@ -46,3 +46,4 @@ db*.sqlite3-shm
 *.apk
 app/src/main/assets/funkodex_base_catalog.json.gz_
 app/src/main/java/com/funkodex/data/preload/CatalogPreloader.kt
+app/src/main/assets/funkodex_base_catalog.json.gz_

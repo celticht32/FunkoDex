@@ -285,12 +285,34 @@ product page decides (DEC-026). Corollary for scripts: BOTH `build_catalog_asset
 `merge_backup.py` default `--base` to the raw `funkodex_base_catalog.json`; pass the enriched
 file explicitly or you ship the un-deduped base.
 
+**ROOT CAUSE CONFIRMED (S24) — racy lazy-load, NOT scroll-completeness or dedup.**
+Evidence: in a full 110-console run, big consoles stall at exactly **150 rows** (the initial
+server-rendered batch): `marvel 150/1908`, `disney 150/1681`, `animation 150/2939`,
+`heroes 150/834`. But OTHER big consoles in the SAME run load fully: `movies 2195`,
+`star-wars 1023`, `games 1050`, `television 300`. And `funko-pop-marvel` crawled in ISOLATION
+loads `1908/1908`. So it is neither time/rate-limit (movies=2195 came after several 150-stalls)
+nor console structure (star-wars loads thousands beside marvel stalling). It is a RACE in the
+scroll-triggered lazy-load: PriceCharting serves 150 rows in the initial HTML and loads the rest
+via a scroll-fired AJAX batch; the nudge-scroll re-arm wins the race on some consoles/runs and
+loses on others, dying at exactly the first 150. The code comment already admitted this
+("produced 900-of-1681 on one run and 1681 on the next for the very same page"). Drax #1106
+(pc-7517295) is present after a Marvel-only run, absent after a full run where Marvel stalled at
+150 — same figure, same code, different race outcome. NOT dedup (not in removals), NOT parser
+(never loaded).
+
+**FIX (S24):** in-run retry of stalled sets. The completeness gate already detects a short load
+and leaves the set unmarked for "next run" — change it to retry the set IMMEDIATELY within the
+same run (restart browser, re-crawl the slug, up to N attempts) before moving on. Since the stall
+is a race, a fresh re-attempt usually wins. Validation: full run shows marvel 1908 / disney 1681
+etc., and Drax #1106 appears. A more robust alternative (deferred) is deterministic pagination if
+a working PC offset/page URL param can be found (`?page=` was tried and did not work).
+
 **Known unfixed:** the matcher root cause. Short one-word titles still mis-match to longer
 unrelated slugs on every crawl; PC_SKIP_IDS only protects known-bad ids, not new records. The
 matcher itself (`shareAllShortTokens` and the PC candidate filter) needs tightening — deferred.
 
 ### DEC-030: The PriceCharting console crawl (Pass 3b) under-captures large consoles — root cause of "owned but not in catalog" (S23)
-**Status:** RESOLVED S24 — see RESOLUTION below. Original root-cause hypothesis (accepts partial lazy-load) was CORRECT in mechanism but WRONG in detail; the real defect was the scroll give-up logic, and fixing it exposed a second, worse bug (DEC-031).
+**Status:** Active — root cause identified, FIX DEFERRED to a focused session
 **Context:** ~154 owned, scanned figures have no catalog record to link to (owned items
 show catalogRef=""). They are NOT vaulted-vintage oddities — median Pop# ~1286, 148/154 use
 the current 889698 UPC prefix — and they demonstrably EXIST on funko.com, PriceCharting, and
@@ -329,84 +351,6 @@ as a pc- record, then it links to the owned figure automatically.
 **Do NOT** "fix" this by hand-building the 154 catalog records — that patches symptoms while the
 crawl stays broken and re-misses on the next run. Per-figure creation is only a last resort for
 a figure PriceCharting genuinely lacks (rare). The systemic fix recovers most of the 154 at once.
-
-**RESOLUTION (S24):**
-Diagnosed against live pages and real data (not assumption), the chain was:
-- The completeness gate (loaded < target ⇒ leave set unmarked, retry next run) already existed —
-  DEC-030's "warns and continues, marks done anyway" was stale on that point.
-- The parser (`parsePriceChartingListing`), dedup seed (`havePcId`), and gate were all verified
-  CORRECT against the real Disney console HTML (1681/1681 rows parsed, every pcId present,
-  Stitch 626 = 7473576 extracted). Discovery was not the failure.
-- Real defect: the scroll-to-target loop **gave up after a fixed 12 stalls**, accepting a partial
-  load as terminal when the next lazy-load batch was merely slow/rate-limited. Non-deterministic:
-  the SAME Disney page loaded 1681 rows on one run and stalled at 900 on another.
-- Attempted fix via the `js-next-page` "more results" form FAILED — that form is a no-JS fallback
-  (`method=POST action=""`); submitting it navigates the page and destroys the Puppeteer context.
-  The page accumulates rows via scroll-triggered AJAX; scroll is the correct trigger.
-**Fix (in enrich.js, verified):** replaced the give-up-on-stall logic with keep-scrolling while
-short of target, a scroll "nudge" (jump up then back to bottom) to re-arm debounced lazy-loaders,
-and a generous no-progress budget (~40 idle tries ≈ 30–40s) before accepting a stall. Result:
-Disney loads 1681/1681 in a single pass; Stitch 626 #125 (7473576, upc 849803046712) captured.
-**Also added:** `--pc-crawl-only <slug,slug>` flag to crawl specific consoles (testing/targeted re-runs).
-**Validation:** full all-console crawl produced a clean catalog; base 20,552 → 21,672 (+1,120),
-the recovered records being the previously-missing figures across Disney/Marvel/Star Wars/etc.
-Promoted to funkodex_base_catalog.json S24 (backup: funkodex_base_catalog.BACKUP_preS24_20260719.json).
-
----
-
-### DEC-031: Dedup over-merges distinct variants — the pcId guard (S24)
-**Status:** Active — fix applied and validated offline; exposed by the DEC-030 scroll fix.
-**Context:** Fixing DEC-030 (loading full consoles for the first time) fed `dedupeAndMerge` its
-full diet of variant figures and revealed a pre-existing, silent data-destroying bug. On a clean
-single-run Disney crawl, dedup removed 274 records — and **229 of them (84%) were WRONGFUL**:
-distinct products with DIFFERENT pcIds being merged into each other and deleted. Examples:
-"Ariel [Diamond]" (7488113) merged into "Ariel" (7488112); "Belle [Gold]" (7473821) into
-"Belle (Dancing)" (7473820); "Jack Skellington [Blacklight]" into "Jack Skellington (Prototype)".
-**Root cause:** `coreName()` strips `[brackets]` and `coreNoParens()` strips `(parens)` before
-comparing titles, so every variant (Diamond / Blacklight / GITD / Chase / Gold / SDCC …) reduces
-to the same core as its base figure. Since PriceCharting numbers variants close together, the
-funkoNumber bucket also matches, and the base/variant pair merges — the bracketed variant being
-the one deleted. Why it didn't surface before: past catalogs were built with `--skip` finishing
-partial data, so few variants were ever newly crawled together in one pass. 200 of the 229
-wrongful merges had a `[variant]` tag in the removed title.
-**Decision / fix:** in the PriceCharting merge loop, add a **pcId guard** — if a candidate record
-and its potential merge target BOTH carry a pricechartingId and those ids DIFFER, they are distinct
-products and must never merge (a PriceCharting id uniquely identifies a product). Records with no
-pcId on one side fall through to the existing name test unchanged (e.g. matching a PC row to a
-HobbyDB canonical). This supersedes the "matcher needs tightening" known-unfixed note in DEC-029.
-**Validated (offline, against the real Disney removal log before any code change):** the guard
-blocks exactly the 229 wrongful merges (records saved) and preserves exactly the 45 legitimate
-same-pcId dedups — 0 wrongful merges slip through, 0 legit merges wrongly blocked.
-**Note on shared pcIds:** ~765 pcIds are shared across multiple records in the base catalog
-(pre-existing) — these are PriceCharting's own data shape (prototype clusters, box+redeco families
-filed under one id), NOT duplicates, and are correctly preserved. The guard only blocks merges
-between records with DIFFERENT pcIds.
-
----
-
-### DEC-032: Two data-quality classes logged for a focused session (S24)
-**Status:** Active — quantified, fixes deferred (each needs care, not a rushed pass).
-**Context:** Diagnosing a mis-scan (Peter Pan with Flute #1344 scanned as a plain "Peter Pan")
-surfaced two distinct, pre-existing data-quality classes, both separate from the DEC-030/031 crawl bugs.
-**Class A — genuine UPC collisions (66 real errors):** 1,418 UPCs are shared across 3,210 records,
-but 1,352 are legitimate variant families (prototypes/re-decos that physically share a UPC — Funko
-reused UPCs across variants; correct data, must NOT be touched). Only **66 are genuinely-unrelated
-figures wrongly sharing a UPC** (e.g. Nick Fury/Franken Berry on 830395025421; Winter Soldier/Rhino/
-Red Hulk on 746775305086; Wichita/Witchita typo-dupe on 889698491020; the Toyzilla pair on
-889698451376). Fixing requires per-record UPC verification against source — guessing would invent
-bad data (cf. the S23 invented-Toyzilla-record failure). The better structural fix may be app-side:
-a scan hitting a multi-record UPC should disambiguate (chooser) rather than silently pick one.
-**Class B — under-titled PC records:** PriceCharting's terse titles drop the box's variant descriptor.
-#1344 IS in the catalog (upc 889698706971, pc 7488433, franchise "Peter Pan 70th Anniversary") but
-titled just "Peter Pan" instead of "Peter Pan with Flute" — so it scanned to a bare Peter Pan and
-looked wrong. Two sub-classes: (1) **133 self-fixable** — a richer title already exists in-catalog
-from a non-PC source at the same UPC, just needs applying to the PC record (no external lookup);
-(2) **PC-only under-titled** (like #1344 itself) — PriceCharting is the only source, terse title,
-NOT detectable by cross-source comparison and only fixable via funko.com enrichment (this is what
-Pass 5 / funko.com detail pages are meant to supply). Count of sub-class (2) is open-ended.
-**Decision:** deferred to a focused data-quality session. Do NOT bulk-edit titles or UPCs by
-heuristic — both classes conflate legitimate variant families with real errors, and a naive pass
-would destroy correct data (the recurring lesson of DEC-029/030/031).
 
 ---
 

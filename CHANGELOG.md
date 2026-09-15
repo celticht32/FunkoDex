@@ -5,6 +5,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — Title/price data-quality hardening, id-invariant enforcement, logging that works — 2026-09-13 (S24)
+
+Written and committed but **not yet verified on device**. See DEC-031/032/033.
+
+The headline: **the `catalog::` id corruption was root-caused for the first time.** S17 repaired 8 documents and S18 repaired 86 and guarded `DetailViewModel.toggleOwned()` — but a 2026-09-12 backup showed 11 more, and instrumenting the write boundary proved `toggleOwned` was never the path. Every occurrence was preceded by a PriceCharting hit: `refreshPrices` writes the item back when a price differs, and it runs from `loadItem`, so simply OPENING a catalog-backed figure persisted it under its `catalog::` id.
+
+### Added
+- **`data/preload/TitleDq.kt`** — shared title data-quality rules: `isUsableTitle` (≥2 alphanumerics), `deSlug`, `firstNonBlank`, `displayName`, `searchHaystack`. A degenerate-but-present title is QUALIFIED with the record's property ("V" → "V (BTS)") rather than discarded. 24 tests in `TitleDqTest`.
+- **`util/PriceParse.kt`** — money parsing that refuses ambiguity instead of guessing. Exactly one money token parses; zero or several return null, never 0.0. Extends DEC-025 into the app. 7 tests in `PriceParseTest`.
+- **Settings → Diagnostics → "Save to Downloads"** — writes every retained log file, concatenated, to a timestamped `.txt` in Downloads via MediaStore. Logs live in app-private storage, so sharing was previously the only way to get at them.
+- **eBay client id via the keys file** — `SecureKeyStore` stores it, `funkodex_keys.json` import applies it, `OAuthConfig.eBay.clientId(store)` resolves it, and the sign-in refuses with a clear message when unconfigured instead of sending a placeholder. The importer already parsed `ebay_client_id` and discarded it as "not yet wired"; now it is wired.
+- **`LICENSE`** (MIT, © 2026 Chris Ahrendt) and **`.gitattributes`** — line-ending and binary policy made a property of the repo rather than of one machine's `core.autocrlf`. `gradlew` must stay LF; `*.gz_` must stay binary (DEC-027).
+
+### Fixed
+- **`FunkoRepository.saveItem`** — the DEC-018 invariant now lives at the single write boundary (`normaliseForSave`): re-homes any `catalog::` id, preserves the link into `catalogRef` when blank, logs at WARN, and DELETES the stale original when its type is `funko` (never when it is `catalog`). The first cut copied instead of moving, which pushed owned count 373 → 374 with both ids live for one figure.
+- **`DetailViewModel.refreshPrices`** — persists only for a collection record (`funko::` id, or owned). Browsing a catalog figure no longer writes anything; the price is still shown and still cached as a `price::` snapshot.
+- **`FunkoDexLogger`** — three defects, all producing the same "no log file for today" symptom: two shared `SimpleDateFormat` instances used across caller, writer and UI threads (not thread-safe; replaced with `DateTimeFormatter`); `pruneOldLogs()` submitted to a single-thread executor already occupied forever by the consumer loop, so retention never ran; and no `try`/`catch` in that loop, so one throw killed file logging silently for the process. Added `flushBlocking()` so a save captures the lines that prompted it.
+- **Logging coverage** — relink, catalog import, scanner adds, `toggleOwned` and every `saveItem` now reach the log file. `FunkoLookupService` (3 sites) and `DatabaseTransferViewModel` (4 sites) used `android.util.Log` directly, so lookup, backup and restore failures never reached the exportable file at all.
+- **`CatalogRefreshWorker`** — three OkHttp `Response` objects leaked on error-return paths (LESSON 34, applied to `PriceService`/`FunkoLookupService` in S12 and missed here). One breaks out of a loop rather than returning, which leaks just as thoroughly.
+- **Four live queries** created a `ResultSet` via `query.execute()` and discarded it unclosed — redundant as well, since `addChangeListener` delivers the initial result.
+- **`SettingsViewModel`** — three Kotlin string templates written as `${'$'}{...}`, which emits a literal `$` and rendered the save message as raw `${result.getOrNull()}`. The save itself always worked.
+- **`CatalogImporter`** — net-new records with an unusable title are skipped and counted as `skippedBlankTitle`, surfaced separately in the import dialog. Merges are not filtered: `mergeRecordInto` never writes `FIELD_TITLE`, so a blank incoming title cannot overwrite a good stored one (audited, not assumed).
+
+### Verified, not changed
+- `CATALOG_VER` is already `"6"` and the shipped asset holds **26,654 records**. The device reporting 30,179 is the result of force-restoring older backups, which bypass the preloader — not a stale asset.
+- The shipped asset contains exactly **two** degenerate titles (`v`, `l`). The other nine seen on-device came from enriched imports, so the funko_enrich-side V/L fix covers everything that ships.
+- UPC-A and EAN-13 check-digit weightings in `UpcValidation` are correct (verified by hand against known-good codes). `PriceService`'s median has an empty-list guard; `completionPct` cannot divide by zero. No `!!` anywhere in 18,899 lines; no `GlobalScope`; all `PendingIntent`s immutable; all five `notify()` sites permission-gated.
+
+### Known outstanding
+- The 11 corrupted documents still exist in every backup; force-restoring re-injects them. Repair is a standalone script (deliberately not an in-app migration).
+- `Gotta the hutt` / `Grogu` have transposed UPCs in their `_id`s and share one byte-identical image; needs a three-way swap through a temp id.
+- 23 of 260 `catalogRef` links point at a row whose title does not match the item — the "wrong picture" class. Belle is the worked example: linked to a two-pack row with no image, so the grid falls through to a non-Pop stored URL.
+- DEC-018's build-failing unit test is still owed; S24 delivered the runtime half only.
+- Nothing in this entry has been verified on device.
+
+---
+
 ## [Unreleased] — Cleaned catalog shipped to the app; enricher hardened — 2026-07-17 (S22)
 
 Built, installed, and verified on device AND on a clean emulator (fresh-install path). See `CLAUDE_STATE_FunkoDex_S22.md` and DEC-023/024/025.

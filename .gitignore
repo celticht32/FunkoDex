@@ -43,7 +43,19 @@ release/
 db*.sqlite3
 db*.sqlite3-wal
 db*.sqlite3-shm
-*.apk
-app/src/main/assets/funkodex_base_catalog.json.gz_
-app/src/main/java/com/funkodex/data/preload/CatalogPreloader.kt
-app/src/main/assets/funkodex_base_catalog.json.gz_
+
+# Device log/backup exports pulled for debugging
+FunkoDex_FULL_*.zip
+FunkoDex_log_*.txt
+funkodex_keys.*
+
+# NOTE (2026-09): three dead rules were removed from here.
+#   app/src/main/assets/funkodex_base_catalog.json.gz_   (listed twice)
+#   app/src/main/java/com/funkodex/data/preload/CatalogPreloader.kt
+# Both paths are TRACKED (verified against .git/index), so the rules had no
+# effect -- .gitignore only governs untracked files. They were actively
+# misleading: both are REQUIRED for a clone to build (DEC-027: the trailing
+# underscore on the asset is load-bearing), and had either ever been
+# `git rm --cached`-ed, the rule would have silently kept it out of the repo
+# and left every clone unable to compile. A duplicate `*.apk` was also dropped;
+# the one under "Android build outputs" above already covers it.

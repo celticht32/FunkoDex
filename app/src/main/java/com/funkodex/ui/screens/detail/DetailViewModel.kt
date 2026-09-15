@@ -3,6 +3,7 @@ package com.funkodex.ui.screens.detail
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.funkodex.util.FunkoDexLogger
 import com.funkodex.data.model.Condition
 import com.funkodex.data.model.FunkoItem
 import com.funkodex.data.model.FunkoGenre
@@ -182,10 +183,39 @@ class DetailViewModel @Inject constructor(
             // item.marketAvg / item.effectiveRetail, which were previously never
             // written back after a refresh. resolvedRetail is the price-waterfall
             // fallback used when there's no catalog retailPrice (see FunkoItem.effectiveRetail).
-            val needsUpdate = resolved != ResolvedPrice.UNKNOWN &&
+            //
+            // DEC-018: only a COLLECTION item may be written back here. This
+            // block is reached from loadItem(), so merely OPENING a catalog-backed
+            // figure used to persist it — saving a `catalog::` record through
+            // saveItem() and converting the catalog row into a funko document in
+            // place. That is the path that produced the 11 corrupted documents
+            // (all dated to two browsing sessions, each carrying the catalog row's
+            // own lastUpdated/source), and it is why guarding toggleOwned() in S18
+            // did not stop the recurrence — toggleOwned was never involved.
+            //
+            // The repository guard now re-homes such a save rather than corrupting
+            // the catalog, but re-homing is the wrong outcome too: it would add a
+            // figure the user does not own to their collection just because they
+            // looked at it. A catalog row is reference data and is READ-ONLY on the
+            // browse path; prices belong on owned records. So skip the write-back
+            // entirely for anything that is not already a funko:: document.
+            //
+            // The resolved price is still SHOWN (_priceState above) and still
+            // cached as a price:: snapshot — only the write onto the item is
+            // suppressed, so browsing stays informative and stays read-only.
+            val isCollectionItem = effectiveItem.id.startsWith("funko::")
+            val needsUpdate = isCollectionItem &&
+                resolved != ResolvedPrice.UNKNOWN &&
                 (resolved.marketAvg != effectiveItem.marketAvg ||
                  resolved.retail != effectiveItem.resolvedRetail ||
                  effectiveItem.marketValueIsManual != item.marketValueIsManual)
+            if (!isCollectionItem && resolved != ResolvedPrice.UNKNOWN) {
+                FunkoDexLogger.d(
+                    "DetailVM",
+                    "price refresh: not persisting onto non-collection record " +
+                        "'${effectiveItem.id}' (${effectiveItem.name}) — read-only",
+                )
+            }
             if (needsUpdate) {
                 val result = repository.saveItem(
                     effectiveItem.copy(
@@ -262,6 +292,11 @@ class DetailViewModel @Inject constructor(
             } else {
                 item.copy(isOwned = nowOwned)
             }
+            FunkoDexLogger.i(
+                "DetailVM",
+                "toggleOwned: '${item.name}' owned=$nowOwned " +
+                    "id='${item.id}' -> '${toSave.id}' catalogRef='${toSave.catalogRef}'",
+            )
             val saveResult = repository.saveItem(toSave)
             // D4: disable alert when item moves from want list to owned
             if (nowOwned) alertRepository.disableAlert(itemId)

@@ -106,7 +106,11 @@ class AlertRepository @Inject constructor(
             val alert = change.results?.next()?.getDictionary(0)?.let { alertFromDict(it) }
             trySend(alert)
         }
-        query.execute()
+        // The initial result is delivered by addChangeListener itself, so this
+        // priming call is redundant; it also returned a ResultSet that was
+        // discarded unclosed. Kept as an explicit no-result execute wrapped in
+        // use{} so the query enumerator is released either way.
+        query.execute().use { /* primed; addChangeListener delivers the results */ }
         awaitClose { token.remove() }
     }.flowOn(Dispatchers.IO)
 

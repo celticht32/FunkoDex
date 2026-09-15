@@ -39,7 +39,25 @@ object OAuthConfig {
     object eBay {
         const val AUTH_URL      = "https://auth.ebay.com/oauth2/authorize"
         const val TOKEN_URL     = "https://api.ebay.com/identity/v1/oauth2/token"
-        const val CLIENT_ID     = "FunkoDex-FunkoDex-PRD-xxxxxxxx-xxxxxxxx"  // set via BuildConfig after eBay app approval
+        /**
+         * Unconfigured placeholder. An eBay app id is per-installation
+         * configuration, so it is NOT baked into the APK: it arrives through the
+         * funkodex_keys.json import and lives in SecureKeyStore. This constant
+         * exists only so [isConfigured] has something recognisable to reject.
+         */
+        const val CLIENT_ID_PLACEHOLDER = "FunkoDex-FunkoDex-PRD-xxxxxxxx-xxxxxxxx"
+
+        /** The configured client id, or the placeholder when none was imported. */
+        fun clientId(store: com.funkodex.security.SecureKeyStore): String =
+            store.getEbayClientId().ifBlank { CLIENT_ID_PLACEHOLDER }
+
+        /**
+         * True only when a real client id is present. Guards the OAuth entry
+         * points so an unconfigured install fails with a clear message instead
+         * of sending eBay the placeholder and getting an opaque error back.
+         */
+        fun isConfigured(store: com.funkodex.security.SecureKeyStore): Boolean =
+            clientId(store).let { it.isNotBlank() && !it.contains("xxxxxxxx") }
         const val REDIRECT_URI  = "funkodex://oauth/ebay"
         const val SCOPE         = "https://api.ebay.com/oauth/api_scope/buy.browse"
 

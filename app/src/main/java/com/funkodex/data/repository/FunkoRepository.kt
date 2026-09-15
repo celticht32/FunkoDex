@@ -5,6 +5,7 @@ import com.couchbase.lite.Function
 import android.content.Context
 import android.net.ConnectivityManager
 import com.funkodex.data.db.FunkoDexDatabase
+import com.funkodex.util.FunkoDexLogger
 import com.funkodex.data.db.FunkoMapper
 import com.funkodex.data.model.*
 import com.funkodex.data.repository.CategoryPreferenceRepository
@@ -30,17 +31,113 @@ class FunkoRepository @Inject constructor(
 ) {
     private val collection get() = db.getCollection()
 
+    companion object {
+        private const val TAG            = "FunkoRepo"
+        private const val CATALOG_PREFIX = "catalog::"
+        private const val FUNKO_PREFIX   = "funko::"
+    }
+
     // ─── Write operations ─────────────────────────────────────────────────────
+
+    /**
+     * Normalise a collection item's document id so the DEC-018 invariant holds:
+     * an owned item must NEVER be stored under a `catalog::` id.
+     *
+     * WHY THIS LIVES HERE. A `catalog::` id squats the identifier the catalog's
+     * own record needs, so that catalog row can never be created on import and
+     * relink's UPC index (which queries `type == "catalog"`) can never find it —
+     * a permanent no-match, and no catalog image. S17 repaired 8 such documents
+     * and S18 repaired 86 and guarded `DetailViewModel.toggleOwned()`; it then
+     * recurred a third time (11 documents, all added 2026-08-02 / 08-09, each
+     * carrying the catalog row's own `lastUpdated` — i.e. catalog rows adopted
+     * wholesale). Both previous fixes were in CALLERS, which is why they did not
+     * hold: `FunkoLookupService.catalogDocToFunkoItem` sets `id = docId`, so
+     * EVERY item produced by a catalog lookup or name search arrives here with a
+     * `catalog::` id, and any caller that forgets to re-home corrupts a document.
+     *
+     * [saveItem] is the single write boundary for `funko::` documents, so the
+     * guard belongs here — every caller, present and future, is covered. This is
+     * DEC-018's "fitness function, not just prose".
+     *
+     * The link is not lost: the old catalog id becomes [FunkoItem.catalogRef]
+     * when the item does not already carry a better one.
+     */
+    private fun normaliseForSave(item: FunkoItem): FunkoItem {
+        val incomingId  = item.id
+        val fromCatalog = incomingId.startsWith(CATALOG_PREFIX)
+
+        val id = when {
+            incomingId.isEmpty() -> "$FUNKO_PREFIX${UUID.randomUUID()}"
+            fromCatalog -> if (item.upc.isNotBlank()) "$FUNKO_PREFIX${item.upc}"
+                           else "$FUNKO_PREFIX${UUID.randomUUID()}"
+            else -> incomingId
+        }
+        if (!fromCatalog) return if (id == incomingId) item else item.copy(id = id)
+
+        // Keep an existing catalogRef — it may point at a better-matched row than
+        // the id we are replacing. Only fill it when blank.
+        val catalogRef = item.catalogRef.ifBlank { incomingId }
+
+        // WARN, not silence: this should never happen once callers behave, so the
+        // log line is how the offending path gets identified in the field.
+        FunkoDexLogger.w(
+            TAG,
+            "DEC-018: refused to save an owned item under '$incomingId'; " +
+                "re-homed to '$id' (catalogRef='$catalogRef'). " +
+                "The calling path should re-home before saving.",
+        )
+        return item.copy(id = id, catalogRef = catalogRef)
+    }
+
+    /**
+     * After a DEC-018 re-home, delete the document left behind at the old
+     * `catalog::` id — otherwise the guard COPIES rather than MOVES, and the
+     * corrupted record keeps squatting the catalog's identifier while a second
+     * record for the same figure appears in the collection. (Observed: owned
+     * count 373 -> 374 with both `catalog::pc-7531523` and `funko::889698453431`
+     * present for the same Pop.)
+     *
+     * Deletion is deliberately narrow. The stale document is removed ONLY when
+     * its stored type is `funko` — i.e. it is a corrupted collection record whose
+     * content has just been written to the new id. A document whose type is
+     * `catalog` is legitimate reference data: the new `funko::` record links to
+     * it via catalogRef, and deleting it would destroy a catalog row. When in
+     * doubt, nothing is deleted.
+     */
+    private fun removeStaleOriginal(oldId: String) {
+        if (!oldId.startsWith(CATALOG_PREFIX)) return
+        val stale = collection.getDocument(oldId) ?: return
+        val staleType = stale.getString(FunkoDexDatabase.FIELD_TYPE)
+        if (staleType != FunkoDexDatabase.TYPE_FUNKO) {
+            FunkoDexLogger.d(
+                TAG,
+                "DEC-018: left '$oldId' in place after re-home (type='$staleType' " +
+                    "— reference data, not a corrupted collection record)",
+            )
+            return
+        }
+        collection.delete(stale)
+        FunkoDexLogger.w(
+            TAG,
+            "DEC-018: deleted the corrupted collection document left at '$oldId' " +
+                "after re-homing it; the catalog id is now free for its real row.",
+        )
+    }
 
     suspend fun saveItem(item: FunkoItem): kotlin.Result<FunkoItem> = withContext(Dispatchers.IO) {
         runCatching {
-            val id       = if (item.id.isEmpty()) "funko::${UUID.randomUUID()}" else item.id
-            val existing = collection.getDocument(id)
-            val doc      = FunkoMapper.toDocument(item.copy(id = id), existing)
+            val normalised = normaliseForSave(item)
+            FunkoDexLogger.d(
+                TAG,
+                "saveItem '${normalised.name}' id='${normalised.id}' " +
+                    "upc='${normalised.upc}' owned=${normalised.isOwned}",
+            )
+            val existing   = collection.getDocument(normalised.id)
+            val doc        = FunkoMapper.toDocument(normalised, existing)
             collection.save(doc)
-            val saved = item.copy(id = id)
+            if (normalised.id != item.id) removeStaleOriginal(item.id)
             updateWidget()
-            saved
+            normalised
         }
     }
 
@@ -220,7 +317,11 @@ class FunkoRepository @Inject constructor(
             } ?: emptyList()
             trySend(items)
         }
-        query.execute()
+        // The initial result is delivered by addChangeListener itself, so this
+        // priming call is redundant; it also returned a ResultSet that was
+        // discarded unclosed. Kept as an explicit no-result execute wrapped in
+        // use{} so the query enumerator is released either way.
+        query.execute().use { /* primed; addChangeListener delivers the results */ }
         awaitClose { token.remove() }
     }.buffer(Channel.UNLIMITED)  // SAFE-5: prevents dropped updates on burst writes
      .flowOn(Dispatchers.IO)
@@ -245,7 +346,11 @@ class FunkoRepository @Inject constructor(
             } ?: emptyList()
             trySend(items)
         }
-        query.execute()
+        // The initial result is delivered by addChangeListener itself, so this
+        // priming call is redundant; it also returned a ResultSet that was
+        // discarded unclosed. Kept as an explicit no-result execute wrapped in
+        // use{} so the query enumerator is released either way.
+        query.execute().use { /* primed; addChangeListener delivers the results */ }
         awaitClose { token.remove() }
     }.buffer(Channel.UNLIMITED)  // SAFE-5: prevents dropped updates on burst writes
      .flowOn(Dispatchers.IO)
@@ -438,8 +543,12 @@ class FunkoRepository @Inject constructor(
                             pcUrl,
                         )
                         ?: ""
-                val mkt = doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_MKT_VALUE_COMPLETE)
-                    ?.replace(Regex("[^0-9.]"), "")?.toDoubleOrNull() ?: 0.0
+                // Read-only aggregate: an unparseable price contributes nothing
+                // rather than being guessed at. See PriceParse for why refusing
+                // beats picking a number (DEC-025).
+                val mkt = com.funkodex.util.PriceParse.parse(
+                    doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_MKT_VALUE_COMPLETE)
+                ) ?: 0.0
                 // Pop number: prefer PriceCharting Box Number (funkoNumber) over
                 // the title-regex seriesNumber; normalise to a leading "#".
                 val rawNum = doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_FUNKO_NUMBER)

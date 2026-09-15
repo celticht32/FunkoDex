@@ -83,12 +83,24 @@ class CatalogSettingsViewModel @Inject constructor(
 
     /**
      * Import API keys from a user-picked JSON file (e.g. funkodex_keys.json in
-     * Downloads). Recognised fields: "channel3_api_key" (set now), plus
-     * "ebay_client_id" / "hobbyDB" which are accepted but not yet wired (eBay
-     * client ID is still a compile-time constant; HobbyDB's API is partner-gated).
+     * Downloads). Recognised fields: "channel3_api_key" and "ebay_client_id"
+     * (both applied), plus "hobbyDB" which is accepted but not yet wired (its
+     * API is partner-gated).
      * Only non-blank fields are applied. Returns a short human-readable summary of
      * what was imported, or an error message, for the caller to surface.
      */
+    /**
+     * Start an OAuth sign-in. Routed through the ViewModel rather than calling
+     * OAuthLauncher directly from the UI, so SecureKeyStore (which now holds the
+     * eBay client id) stays out of the composable layer.
+     *
+     * @return null when the flow launched, or a message to show the user.
+     */
+    fun startOAuth(
+        context: android.content.Context,
+        provider: com.funkodex.auth.OAuthProvider,
+    ): String? = com.funkodex.auth.OAuthLauncher.launch(context, provider, secureKeyStore)
+
     fun importKeysFromFile(uri: android.net.Uri): String {
         return try {
             val text = context.contentResolver.openInputStream(uri)
@@ -104,10 +116,13 @@ class CatalogSettingsViewModel @Inject constructor(
                 secureKeyStore.setChannel3Key(it)
                 imported += "Channel3 key"
             }
-            // ebay_client_id / hobbyDB are accepted for forward-compat but not yet
-            // applied; note them so the user knows they were seen but skipped.
+            keys.ebay_client_id?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                secureKeyStore.setEbayClientId(it)
+                imported += "eBay client ID"
+            }
+            // hobbyDB is accepted for forward-compat but not yet applied (its API
+            // is partner-gated); note it so the user knows it was seen but skipped.
             val skipped = mutableListOf<String>()
-            if (!keys.ebay_client_id.isNullOrBlank()) skipped += "eBay (not yet wired)"
             if (!keys.hobbyDB.isNullOrBlank())        skipped += "HobbyDB (not yet wired)"
 
             viewModelScope.launch {

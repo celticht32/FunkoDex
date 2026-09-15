@@ -161,12 +161,15 @@ class CatalogRefreshWorker(
                 .build()
         ).execute()
 
-        if (!response.isSuccessful) {
-            FunkoDexLogger.w(TAG, "Kenny Chan fetch failed: ${response.code}")
-            return@withContext 0
+        // LESSON 34: close the Response on EVERY path, including the early
+        // returns below — body.string() only closes it on the success path.
+        val json = response.use { resp ->
+            if (!resp.isSuccessful) {
+                FunkoDexLogger.w(TAG, "Kenny Chan fetch failed: ${resp.code}")
+                return@withContext 0
+            }
+            resp.body?.string() ?: return@withContext 0
         }
-
-        val json    = response.body?.string() ?: return@withContext 0
         val gson    = Gson()
         val type    = object : TypeToken<List<CatalogPreloader.KennyRecord>>() {}.type
         val records: List<CatalogPreloader.KennyRecord> = gson.fromJson(json, type)
@@ -220,12 +223,14 @@ class CatalogRefreshWorker(
                     .build()
             ).execute()
 
-            if (!response.isSuccessful) {
-                FunkoDexLogger.w(TAG, "Community UPC fetch failed: ${response.code}")
-                return@withContext 0
+            // LESSON 34: close on every path, error returns included.
+            val json = response.use { resp ->
+                if (!resp.isSuccessful) {
+                    FunkoDexLogger.w(TAG, "Community UPC fetch failed: ${resp.code}")
+                    return@withContext 0
+                }
+                resp.body?.string() ?: return@withContext 0
             }
-
-            val json    = response.body?.string() ?: return@withContext 0
             val type    = object : TypeToken<Array<Map<String, Any?>>>() {}.type
             val records = Gson().fromJson<Array<Map<String, Any?>>>(json, type)
                 ?: return@withContext 0
@@ -306,12 +311,16 @@ class CatalogRefreshWorker(
                         .build()
                 ).execute()
 
-                if (!response.isSuccessful) {
-                    FunkoDexLogger.w(TAG, "HobbyDB vaulted endpoint: HTTP ${response.code}")
-                    break
-                }
-
-                val body  = response.body?.string() ?: break
+                // LESSON 34: close on every path. This one breaks out of a loop
+                // rather than returning, which is just as much of a leak.
+                val body = response.use { resp ->
+                    if (!resp.isSuccessful) {
+                        FunkoDexLogger.w(TAG, "HobbyDB vaulted endpoint: HTTP ${resp.code}")
+                        null
+                    } else {
+                        resp.body?.string()
+                    }
+                } ?: break
                 val json  = com.google.gson.JsonParser.parseString(body).asJsonObject
                 val items = json.getAsJsonArray("items") ?: break
 

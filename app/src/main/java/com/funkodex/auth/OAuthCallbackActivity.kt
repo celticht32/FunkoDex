@@ -104,7 +104,7 @@ class OAuthCallbackActivity : ComponentActivity() {
                     )
                     OAuthProvider.EBAY    -> Triple(
                         OAuthConfig.eBay.TOKEN_URL,
-                        OAuthConfig.eBay.CLIENT_ID,
+                        OAuthConfig.eBay.clientId(secureKeyStore),
                         OAuthConfig.eBay.REDIRECT_URI,
                     )
                 }

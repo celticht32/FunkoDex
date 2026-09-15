@@ -49,6 +49,7 @@ fun SettingsScreen(
 ) {
     val currentTheme   by viewModel.currentTheme.collectAsState()
     val logLevel       by viewModel.logLevel.collectAsState()
+    val logSaveMessage by viewModel.logSaveMessage.collectAsState()
     val transferState  by dbTransferViewModel.state.collectAsState()
     val importProgress by viewModel.importProgress.collectAsState()
     val relinkProgress by viewModel.relinkProgress.collectAsState()
@@ -296,7 +297,13 @@ fun SettingsScreen(
                             Text("${result.added} new records added",
                                 style = MaterialTheme.typography.bodyMedium)
                             if (result.skipped > 0)
-                                Text("${result.skipped} records skipped (non-Pop or missing handle/title)",
+                                Text("${result.skipped} records skipped (non-Pop or missing handle)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            // DEC-031: blank/degenerate titles are reported apart
+                            // from the general skip count so the cause is visible.
+                            if (result.skippedBlankTitle > 0)
+                                Text("${result.skippedBlankTitle} records skipped (unusable title)",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if (result.errors > 0)
@@ -846,10 +853,37 @@ fun SettingsScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            // Retained files beyond today — saving exports all of
+                            // them, so show what "Save to Downloads" will include.
+                            val allLogs = FunkoDexLogger.allLogFiles()
+                            if (allLogs.size > 1) {
+                                Text(
+                                    "${allLogs.size} log files retained",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            logSaveMessage?.let { msg ->
+                                Text(
+                                    msg,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (msg.startsWith("Could not"))
+                                        MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.primary,
+                                )
+                            }
                         }
                     },
                     confirmButton = {
                         val logFile = FunkoDexLogger.currentLogFile()
+                        Row {
+                        // Logs live in app-private storage the user cannot browse,
+                        // so offer a real save to Downloads, not just a share sheet.
+                        if (FunkoDexLogger.allLogFiles().isNotEmpty()) {
+                            TextButton(onClick = { viewModel.saveLogsToDownloads() }) {
+                                Text("Save to Downloads")
+                            }
+                        }
                         if (logFile != null) {
                             TextButton(onClick = {
                                 val uri = androidx.core.content.FileProvider.getUriForFile(
@@ -865,9 +899,13 @@ fun SettingsScreen(
                                 showDiagnosticsDialog = false
                             }) { Text("Share log") }
                         }
+                        }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showDiagnosticsDialog = false }) { Text("Close") }
+                        TextButton(onClick = {
+                            showDiagnosticsDialog = false
+                            viewModel.clearLogSaveMessage()
+                        }) { Text("Close") }
                     }
                 )
             }
@@ -1186,7 +1224,10 @@ fun CatalogDataSection(
                             viewModel.disconnectHobbyDb()
                             hobbyDbConnected = false
                         } else {
-                            OAuthLauncher.launch(context, OAuthProvider.HOBBYDB)
+                            viewModel.startOAuth(context, OAuthProvider.HOBBYDB)?.let { msg ->
+                                android.widget.Toast.makeText(
+                                    context, msg, android.widget.Toast.LENGTH_LONG).show()
+                            }
                         }
                     }
                 )
@@ -1203,7 +1244,12 @@ fun CatalogDataSection(
                             viewModel.disconnectEbay()
                             ebayConnected = false
                         } else {
-                            OAuthLauncher.launch(context, OAuthProvider.EBAY)
+                            // Refuses with a message when no eBay client id has
+                            // been imported, instead of sending the placeholder.
+                            viewModel.startOAuth(context, OAuthProvider.EBAY)?.let { msg ->
+                                android.widget.Toast.makeText(
+                                    context, msg, android.widget.Toast.LENGTH_LONG).show()
+                            }
                         }
                     }
                 )

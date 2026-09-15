@@ -55,6 +55,7 @@ class UserPreferencesRepository @Inject constructor(
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val prefs: UserPreferencesRepository,
     private val catalogImporter: CatalogImporter,
     private val collectionRelinkService: CollectionRelinkService,
@@ -74,6 +75,84 @@ class SettingsViewModel @Inject constructor(
 
     fun setLogLevel(level: LogLevel) {
         viewModelScope.launch { prefs.setLogLevel(level) }
+    }
+
+    // ── Save logs to Downloads ─────────────────────────────────────────────
+    // Logs live in filesDir, which is app-private and not browsable by the user,
+    // so sharing was previously the ONLY way to get at them. This writes a plain
+    // .txt copy into the public Downloads folder, where the user can open it,
+    // keep it, or attach it later — the same MediaStore route the backup export
+    // uses (see DatabaseTransferViewModel.saveToDownloads).
+
+    private val _logSaveMessage = MutableStateFlow<String?>(null)
+    val logSaveMessage: StateFlow<String?> = _logSaveMessage.asStateFlow()
+
+    fun clearLogSaveMessage() { _logSaveMessage.value = null }
+
+    /**
+     * Concatenate every retained log file (oldest first) into one timestamped
+     * .txt in Downloads. A single text file rather than a zip: it opens in any
+     * viewer on the phone with no unzip step, which is the point of having it
+     * outside the share sheet.
+     */
+    fun saveLogsToDownloads() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val result = runCatching {
+                // Writes are queued on a background thread, so flush first or the
+                // most recent lines — usually the reason for saving — are missed.
+                FunkoDexLogger.flushBlocking()
+
+                val files = FunkoDexLogger.allLogFiles().sortedBy { it.lastModified() }
+                if (files.isEmpty()) return@runCatching null
+
+                val stamp = java.time.LocalDateTime.now()
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+                val fileName = "FunkoDex_log_$stamp.txt"
+                val body = buildString {
+                    append("FunkoDex log export — ")
+                    append(java.time.LocalDateTime.now())
+                    append("\nlevel=").append(FunkoDexLogger.currentLevel.name)
+                    append("  files=").append(files.size).append("\n")
+                    files.forEach { f ->
+                        append("\n===== ").append(f.name)
+                        append("  (").append(f.length() / 1024).append(" KB) =====\n")
+                        append(runCatching { f.readText() }
+                            .getOrElse { "<unreadable: ${'$'}{it.message}>\n" })
+                    }
+                }
+                writeTextToDownloads(fileName, body)
+                fileName
+            }
+            _logSaveMessage.value = when {
+                result.isFailure -> "Could not save log: ${'$'}{result.exceptionOrNull()?.message}"
+                result.getOrNull() == null -> "No log files to save yet"
+                else -> "Saved to Downloads/${'$'}{result.getOrNull()}"
+            }
+        }
+    }
+
+    private fun writeTextToDownloads(fileName: String, text: String) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            val values = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Downloads.DISPLAY_NAME, fileName)
+                put(android.provider.MediaStore.Downloads.MIME_TYPE, "text/plain")
+                put(android.provider.MediaStore.Downloads.IS_PENDING, 1)
+            }
+            val resolver = context.contentResolver
+            val uri = resolver.insert(
+                android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: error("MediaStore refused the insert")
+            resolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) }
+                ?: error("Could not open the output stream")
+            values.clear()
+            values.put(android.provider.MediaStore.Downloads.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+        } else {
+            val dir = android.os.Environment.getExternalStoragePublicDirectory(
+                android.os.Environment.DIRECTORY_DOWNLOADS)
+            dir.mkdirs()
+            java.io.File(dir, fileName).writeText(text)
+        }
     }
 
     // ── Enriched catalog import ────────────────────────────────────────────

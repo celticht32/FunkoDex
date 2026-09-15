@@ -7,6 +7,7 @@ import com.couchbase.lite.QueryBuilder
 import com.couchbase.lite.SelectResult
 import com.couchbase.lite.UnitOfWork
 import com.funkodex.data.db.FunkoDexDatabase
+import com.funkodex.util.FunkoDexLogger
 import com.funkodex.data.model.FunkoGenre
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -69,11 +70,15 @@ class CollectionRelinkService @Inject constructor(
         const val CHUNK = 500
     }
 
-    /** Parse a "$NN.NN" (optionally with thousands separators) string to a positive Double, or null. */
+    /**
+     * Parse a money string to a positive Double, or null when it cannot be read
+     * unambiguously. Delegates to [com.funkodex.util.PriceParse], which refuses
+     * ranges and mixed separators instead of silently yielding a wrong number —
+     * this method's callers are fill-only, so a null correctly leaves the stored
+     * value untouched (DEC-025).
+     */
     private fun parseMoney(raw: String?): Double? =
-        raw?.replace(Regex("[^0-9.]"), "")
-            ?.toDoubleOrNull()
-            ?.takeIf { it > 0.0 }
+        com.funkodex.util.PriceParse.parsePositive(raw)
 
     /**
      * Build UPC → catalog docId index for the UPC-fallback match. UPCs mapping to
@@ -320,6 +325,12 @@ class CollectionRelinkService @Inject constructor(
             emit(RelinkProgress(processed = processed, total = total, enriched = enriched, done = false))
         }
 
+        FunkoDexLogger.i(
+            "Relink",
+            "Re-link complete: enriched=$enriched unchanged=$unchanged " +
+                "unmatched=$unmatched errors=$errors processed=$processed/$total " +
+                "in ${System.currentTimeMillis() - startMs}ms",
+        )
         emit(
             RelinkProgress(
                 processed = processed,

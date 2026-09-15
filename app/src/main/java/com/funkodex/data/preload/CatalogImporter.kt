@@ -11,6 +11,7 @@ import com.couchbase.lite.QueryBuilder
 import com.couchbase.lite.SelectResult
 import com.couchbase.lite.UnitOfWork
 import com.funkodex.data.db.FunkoDexDatabase
+import com.funkodex.util.FunkoDexLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -170,6 +171,12 @@ class CatalogImporter @Inject constructor(
      *               across sources, so we don't risk regressing a good image.
      *               (funkoImageUrl, the funko.com image, IS refreshed below.)
      *
+     * DEC-031 audit: this function never writes FIELD_TITLE. `record.title` is
+     * used only as a fallback argument to deriveSeriesFields, so a blank or
+     * degenerate incoming title cannot overwrite a good stored one. No guard is
+     * needed here — but if a title write is ever added, gate it on
+     * TitleDq.isUsableTitle(record.title).
+     *
      * This never touches funko:: user docs — the importer doesn't open them.
      * Owned items pick up these catalog improvements via the separate re-link
      * pass (run after import).
@@ -204,11 +211,11 @@ class CatalogImporter @Inject constructor(
         record.funkoNumber?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_FUNKO_NUMBER, it) }
         record.popType?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_POP_TYPE, it) }
         record.upc?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_UPC, it) }
-        record.price?.let { raw ->
-            val parsed = raw.replace(Regex("[^0-9.]"), "").toDoubleOrNull()
-            if (parsed != null && parsed > 0.0) {
-                mutable.setDouble(CatalogMapper.FIELD_RETAIL_PRICE, parsed)
-            }
+        // Fill-only, and PriceParse returns null rather than 0.0 for anything it
+        // cannot read unambiguously — so an unparseable incoming price leaves the
+        // stored one alone instead of overwriting it with a guess (DEC-025).
+        com.funkodex.util.PriceParse.parsePositive(record.price)?.let {
+            mutable.setDouble(CatalogMapper.FIELD_RETAIL_PRICE, it)
         }
         record.marketValueLoose?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_MKT_VALUE_LOOSE, it) }
         record.marketValueComplete?.takeIf { it.isNotBlank() }?.let { mutable.setString(CatalogMapper.FIELD_MKT_VALUE_COMPLETE, it) }
@@ -266,6 +273,10 @@ class CatalogImporter @Inject constructor(
         var enriched = 0
         var added    = 0
         var skipped  = 0
+        // DEC-031: net-new records rejected for a blank/degenerate title,
+        // counted apart from the general `skipped` so the import dialog can
+        // name the cause.
+        var skippedBlankTitle = 0
         var errors   = 0
         var processed = 0
 
@@ -370,16 +381,27 @@ class CatalogImporter @Inject constructor(
                                 return@forEach
                             }
 
-                            val title = record.title?.trim()
-                            if (title.isNullOrBlank()) {
-                                skipped++
+                            // DEC-031: a net-new record needs a usable title.
+                            // Blank or degenerate titles ("", "#", a single
+                            // letter) make the record unfindable by name search
+                            // and produce a nameless item on a UPC scan, so they
+                            // are never inserted. Merges are NOT filtered — an
+                            // existing good title must survive a bad incoming one.
+                            // .orEmpty() matters: the old isNullOrBlank() check
+                            // smart-cast `title` to non-null for the rest of this
+                            // block, and a function call can't. slugify(title) and
+                            // mapRecord(title = title) below both need String.
+                            val title = record.title?.trim().orEmpty()
+                            if (!TitleDq.isUsableTitle(title)) {
+                                skippedBlankTitle++
                                 processed++
                                 return@forEach
                             }
 
-                            val parsedPrice = record.price
-                                ?.replace(Regex("[^0-9.]"), "")
-                                ?.toDoubleOrNull() ?: 0.0
+                            // Insert path: there is no stored value to protect, so
+                            // an unreadable price becomes 0.0 — the existing meaning
+                            // of "no retail price recorded" for a new record.
+                            val parsedPrice = com.funkodex.util.PriceParse.parse(record.price) ?: 0.0
 
                             // Repair funko.com page-name handles with a title slug.
                             val insertHandle =
@@ -488,6 +510,12 @@ class CatalogImporter @Inject constructor(
         }
 
         // ── 4. Final emission ─────────────────────────────────────────────
+        FunkoDexLogger.i(
+            "CatalogImport",
+            "Import complete: enriched=$enriched added=$added skipped=$skipped " +
+                "skippedBlankTitle=$skippedBlankTitle errors=$errors " +
+                "processed=$processed/$total in ${System.currentTimeMillis() - startMs}ms",
+        )
         emit(ImportProgress(
             processed  = processed,
             total      = total,
@@ -500,6 +528,7 @@ class CatalogImporter @Inject constructor(
                 skipped    = skipped,
                 errors     = errors,
                 durationMs = System.currentTimeMillis() - startMs,
+                skippedBlankTitle = skippedBlankTitle,
             ),
         ))
 
@@ -524,6 +553,11 @@ data class ImportResult(
     val skipped:    Int,
     val errors:     Int,
     val durationMs: Long,
+    /**
+     * DEC-031: net-new records rejected for a blank/degenerate title. Last in
+     * the list, with a default, so existing positional construction is unaffected.
+     */
+    val skippedBlankTitle: Int = 0,
 )
 
 // ── Explicit JSON → EnrichedRecord mapping ────────────────────────────────────

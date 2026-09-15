@@ -147,7 +147,7 @@ class FunkoLookupService @Inject constructor(
             }
             records.also { localDb = it }
         } catch (e: Exception) {
-            android.util.Log.e("FunkoLookup", "Failed to load funko_data.json: ${e.message}")
+            com.funkodex.util.FunkoDexLogger.e("FunkoLookup", "Failed to load funko_data.json: ${e.message}")
             emptyList<LocalFunkoRecord>().also { localDb = it }
         }
     }
@@ -191,7 +191,20 @@ class FunkoLookupService @Inject constructor(
         return com.funkodex.data.model.FunkoItem(
             id           = docId,
             upc          = doc.getString("upc") ?: "",
-            name         = doc.getString("title") ?: "",
+            // DEC-031: never surface a blank name. A catalog doc with a blank or
+            // degenerate title falls back to its series, then to a name de-slugged
+            // from its handle. docId here is the full `catalog::...` Meta.id;
+            // TitleDq.deSlug strips that prefix.
+            name         = com.funkodex.data.preload.TitleDq.displayName(
+                doc.getString("title"),
+                doc.getString("series"),
+                docId,
+                // The PROPERTY, not the Pop! line. pcSeries first (it is what the
+                // enricher read off PriceCharting), franchiseSuggestion as backup.
+                doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_PC_SERIES)
+                    ?: doc.getString(
+                        com.funkodex.data.preload.CatalogMapper.FIELD_FRANCHISE_SUGGESTION),
+            ),
             franchise    = franchiseSeed,
             seriesNumber = displayNumber,
             setTag       = doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_SET_TAG) ?: "",
@@ -243,7 +256,7 @@ class FunkoLookupService @Inject constructor(
             val doc = db.getCollection().getDocument(docId) ?: return null
             catalogDocToFunkoItem(docId, doc)
         } catch (e: Exception) {
-            android.util.Log.e("FunkoLookup", "Catalog UPC lookup failed: ${e.message}")
+            com.funkodex.util.FunkoDexLogger.e("FunkoLookup", "Catalog UPC lookup failed: ${e.message}")
             null
         }
     }
@@ -285,6 +298,36 @@ class FunkoLookupService @Inject constructor(
                                     com.couchbase.lite.Expression.property("series"))
                                     .like(com.couchbase.lite.Expression.string("%$coarse%"))
                             )
+                            // DEC-031: match the handle too, so a record with a
+                            // blank title stays reachable by its handle-derived
+                            // name. Handles are hyphenated slugs and the coarse
+                            // token is a single normalized word, so a plain
+                            // substring LIKE hits it ("holiday" in
+                            // "holiday-piglet"). The de-slugged form is what the
+                            // in-memory refine below then matches all tokens against.
+                            .or(
+                                com.couchbase.lite.Function.lower(
+                                    com.couchbase.lite.Expression.property("handle"))
+                                    .like(com.couchbase.lite.Expression.string("%$coarse%"))
+                            )
+                            // Match the PROPERTY too. Without this a search for
+                            // "BTS" never reaches the refine below: those rows
+                            // have title "V", series "Pop! Rocks" (the line, not
+                            // the property) and an opaque pc-NNNNNNN handle, so
+                            // nothing above matches. The refine's haystack and
+                            // this pre-filter must test the same columns.
+                            .or(
+                                com.couchbase.lite.Function.lower(
+                                    com.couchbase.lite.Expression.property(
+                                        com.funkodex.data.preload.CatalogMapper.FIELD_PC_SERIES))
+                                    .like(com.couchbase.lite.Expression.string("%$coarse%"))
+                            )
+                            .or(
+                                com.couchbase.lite.Function.lower(
+                                    com.couchbase.lite.Expression.property(
+                                        com.funkodex.data.preload.CatalogMapper.FIELD_FRANCHISE_SUGGESTION))
+                                    .like(com.couchbase.lite.Expression.string("%$coarse%"))
+                            )
                         )
                 )
                 .execute()
@@ -292,10 +335,18 @@ class FunkoLookupService @Inject constructor(
                 .mapNotNull { result ->
                     val docId = result.getString("id") ?: return@mapNotNull null
                     val doc = db.getCollection().getDocument(docId) ?: return@mapNotNull null
-                    val title  = doc.getString("title") ?: ""
-                    val series = doc.getString("series") ?: ""
-                    // Require ALL query tokens to match against title + series combined.
-                    if (!matchesAllTokens(query, "$title $series")) return@mapNotNull null
+                    // DEC-031: match against title + series + the de-slugged
+                    // handle, so a blank-title record is still findable by the
+                    // name its handle encodes. Require ALL query tokens to hit.
+                    val haystack = com.funkodex.data.preload.TitleDq.searchHaystack(
+                        doc.getString("title"),
+                        doc.getString("series"),
+                        doc.getString("handle") ?: docId,
+                        doc.getString(com.funkodex.data.preload.CatalogMapper.FIELD_PC_SERIES)
+                            ?: doc.getString(
+                                com.funkodex.data.preload.CatalogMapper.FIELD_FRANCHISE_SUGGESTION),
+                    )
+                    if (!matchesAllTokens(query, haystack)) return@mapNotNull null
                     catalogDocToFunkoItem(docId, doc)
                 }
                 .take(200)
@@ -314,7 +365,7 @@ class FunkoLookupService @Inject constructor(
                     .toList()
             } else candidates
         } catch (e: Exception) {
-            android.util.Log.e("FunkoLookup", "Couchbase search failed: ${e.message}")
+            com.funkodex.util.FunkoDexLogger.e("FunkoLookup", "Couchbase search failed: ${e.message}")
             emptyList()
         }
     }

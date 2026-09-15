@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import com.funkodex.util.FunkoDexLogger
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -101,7 +102,7 @@ class DatabaseTransferViewModel @Inject constructor(
                         zos.closeEntry()
                     }
 
-                    android.util.Log.d("DatabaseTransfer",
+                    FunkoDexLogger.i("DatabaseTransfer",
                         "Exported ${jsonArray.length()} documents to $fileName")
 
                     // Save to Downloads
@@ -179,7 +180,7 @@ class DatabaseTransferViewModel @Inject constructor(
                             )
                         }
 
-                        android.util.Log.d("DatabaseTransfer", "Restored $count documents")
+                        FunkoDexLogger.i("DatabaseTransfer", "Restored $count documents")
                     } finally {
                         tmp.delete()
                     }
@@ -250,7 +251,7 @@ class DatabaseTransferViewModel @Inject constructor(
                         zos.closeEntry()
                     }
 
-                    android.util.Log.d("DatabaseTransfer",
+                    FunkoDexLogger.i("DatabaseTransfer",
                         "FULL backup streamed $count documents to $fileName")
 
                     saveToDownloads(fileName, zipFile)
@@ -316,7 +317,7 @@ class DatabaseTransferViewModel @Inject constructor(
 
                     if (!sawEntry) error("Backup file does not contain funkodex_backup.json — this may be an old-format backup.")
 
-                    android.util.Log.d("DatabaseTransfer", "Force restore: streamed $count documents. If the backup had no catalog, it reloads from assets on next start.")
+                    FunkoDexLogger.i("DatabaseTransfer", "Force restore: streamed $count documents. If the backup had no catalog, it reloads from assets on next start.")
                 }
             }.fold(
                 onSuccess = { _state.value = DatabaseTransferState.ForceRestoreSuccess },

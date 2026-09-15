@@ -117,7 +117,7 @@ class TokenRefreshManager @Inject constructor(
             runCatching {
                 val (tokenUrl, clientId) = when (provider) {
                     OAuthProvider.HOBBYDB -> Pair(OAuthConfig.HobbyDb.TOKEN_URL, OAuthConfig.HobbyDb.CLIENT_ID)
-                    OAuthProvider.EBAY    -> Pair(OAuthConfig.eBay.TOKEN_URL,    OAuthConfig.eBay.CLIENT_ID)
+                    OAuthProvider.EBAY    -> Pair(OAuthConfig.eBay.TOKEN_URL,    OAuthConfig.eBay.clientId(secureKeyStore))
                 }
 
                 val body = FormBody.Builder()

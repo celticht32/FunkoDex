@@ -1,0 +1,42 @@
+# Line-ending and binary policy.
+#
+# Today this repo behaves correctly only because the maintainer's git has
+# core.autocrlf=true. A contributor without it would commit CRLF into blobs and
+# break things quietly. This file makes the policy a property of the REPO, so it
+# holds regardless of anyone's local git config.
+#
+# Verified before writing this (against .git/index and the stored blob hashes):
+#   - gradlew is stored LF (blob 20913298..., 5321 bytes; the CRLF form would be
+#     5490 bytes and a different hash). CRLF here means "bad interpreter: /bin/sh^M"
+#     on Linux/macOS, so the eol=lf below is load-bearing, not cosmetic.
+#   - funkodex_base_catalog.json.gz_ is real gzip (magic 1f8b) and contains NUL
+#     bytes, so git's heuristic already treats it as binary. Declaring it binary
+#     makes that guaranteed rather than inferred -- eol conversion would corrupt
+#     the archive, and DEC-027 already establishes that this asset's exact bytes
+#     (including the trailing-underscore name) are load-bearing.
+
+# Normalise text to LF in the repository; check out per the platform.
+* text=auto
+
+# Scripts whose ending is functional, not stylistic.
+gradlew     text eol=lf
+*.sh        text eol=lf
+gradlew.bat text eol=crlf
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+
+# Never touch these.
+*.gz_   binary
+*.gz    binary
+*.zip   binary
+*.jar   binary
+*.apk   binary
+*.aab   binary
+*.keystore binary
+*.jks   binary
+*.png   binary
+*.jpg   binary
+*.webp  binary
+*.ttf   binary
+*.otf   binary
+*.sqlite3 binary

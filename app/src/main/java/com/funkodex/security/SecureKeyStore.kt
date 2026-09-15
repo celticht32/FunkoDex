@@ -51,6 +51,7 @@ class SecureKeyStore @Inject constructor(
         private const val KEY_CHANNEL3      = "channel3_api_key"
         private const val KEY_HOBBYDB       = "hobbydb_api_token"
         private const val KEY_EBAY_OAUTH    = "ebay_oauth_token"
+        private const val KEY_EBAY_CLIENT_ID = "ebay_client_id"
         private const val KEY_INSTALL_ID    = "community_install_id"
         private const val KEY_LAST_BACKUP   = "drive_last_backup"
         private const val KEY_DRIVE_CONNECTED = "drive_connected"
@@ -153,6 +154,16 @@ class SecureKeyStore @Inject constructor(
     fun clearEbayOAuthToken()        { prefs.edit().remove(KEY_EBAY_OAUTH).apply() }
     fun hasEbayOAuthToken(): Boolean = getEbayOAuthToken().isNotEmpty()
     fun getEbayAccessToken(): String = getEbayOAuthToken().substringBefore("|")
+
+    // -- eBay application client id -------------------------------------------
+    // Not a secret (eBay uses PKCE with a public client, so there is no client
+    // secret), but it IS per-installation configuration and must not be baked
+    // into the APK -- same rule as the Channel3 key. Supplied through the
+    // funkodex_keys.json import and stored encrypted like everything else here.
+    fun getEbayClientId(): String    = getEncryptedString(KEY_EBAY_CLIENT_ID)
+    fun setEbayClientId(id: String)  { setEncryptedString(KEY_EBAY_CLIENT_ID, id.trim()) }
+    fun hasEbayClientId(): Boolean   = getEbayClientId().isNotEmpty()
+    fun clearEbayClientId()          { prefs.edit().remove(KEY_EBAY_CLIENT_ID).apply() }
     // ─── Community install ID (anon UUID for rate-limiting) ─────────────────────
     fun getInstallId(): String {
         val stored = getEncryptedString(KEY_INSTALL_ID)

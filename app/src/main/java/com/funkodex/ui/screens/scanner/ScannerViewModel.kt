@@ -2,6 +2,7 @@ package com.funkodex.ui.screens.scanner
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.funkodex.util.FunkoDexLogger
 import com.funkodex.data.model.FunkoItem
 import com.funkodex.data.model.Condition
 import com.funkodex.data.model.PendingUpcScan
@@ -208,6 +209,8 @@ class ScannerViewModel @Inject constructor(
      */
     fun selectNotFoundMatch(item: FunkoItem, upc: String) {
         val enriched = item.copy(id = "funko::$upc", upc = upc)
+        FunkoDexLogger.i("ScannerVM",
+            "not-found match picked: '${item.name}' catalogId='${item.id}' -> '${enriched.id}'")
         _state.value = ScanState.Preview(enriched, alreadyOwned = false)
 
         // F1: Queue this UPC→catalog mapping as a community contribution
@@ -360,6 +363,8 @@ class ScannerViewModel @Inject constructor(
                     id      = "funko::${java.util.UUID.randomUUID()}",
                     isOwned = true,
                 )
+                FunkoDexLogger.i("ScannerVM",
+                    "batch add: '${item.name}' upc='${item.upc}' -> '${collectionItem.id}'")
                 repository.saveItem(collectionItem).fold(
                     onSuccess = { saved ->
                         addedCount++

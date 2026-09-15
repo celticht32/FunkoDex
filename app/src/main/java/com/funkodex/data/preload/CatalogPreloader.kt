@@ -84,7 +84,7 @@ class CatalogPreloader @Inject constructor(
          *       144 terse PriceCharting titles enriched from in-catalog siblings.
          *       See DEC-030 (RESOLVED) / DEC-031 / DEC-032.
          */
-        private const val CATALOG_VER   = "5"
+        private const val CATALOG_VER   = "6"
 
         /**
          * The gzipped catalog in assets/.
